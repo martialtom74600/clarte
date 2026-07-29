@@ -1,6 +1,7 @@
 "use client";
 
 import { cn, formatEuro } from "@/lib/utils";
+import { clarte } from "@/lib/clarte-design";
 import type { SimulationResult } from "@separation/schemas";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 
@@ -110,7 +111,7 @@ export function WowMoment({ result }: WowMomentProps) {
   const soulte = result.soulte;
 
   return (
-    <div className="rounded-3xl gradient-hero p-8 text-white shadow-xl">
+    <div className={cn(clarte.radiusLg, clarte.hero, "p-8 text-white shadow-xl")}>
       <p className="text-brand-100 text-sm font-medium uppercase tracking-wide">
         Votre estimation
       </p>

@@ -1,7 +1,9 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { Check, Circle } from "lucide-react";
+import { Check } from "lucide-react";
+import { spring } from "@/lib/motion";
 
 const TIMELINE_STEPS = [
   { id: 0, label: "Comprendre", desc: "Statut & situation" },
@@ -21,29 +23,39 @@ export function SeparationTimeline({ currentStep }: SeparationTimelineProps) {
   const timelineStep = stepToTimeline(currentStep);
 
   return (
-    <div className="mb-8">
+    <div className="mb-2">
       <div className="hidden md:flex items-center justify-between gap-1">
-        {TIMELINE_STEPS.map((s, i) => {
+        {TIMELINE_STEPS.map((s) => {
           const done = timelineStep > s.id;
           const active = timelineStep === s.id;
           return (
             <div key={s.id} className="flex flex-1 flex-col items-center text-center">
-              <div
+              <motion.div
+                layout
+                transition={spring.soft}
                 className={cn(
                   "flex h-8 w-8 items-center justify-center rounded-full border-2 transition-colors",
                   done && "border-emerald-500 bg-emerald-500 text-white",
-                  active && !done && "border-brand-600 bg-brand-50 text-brand-700",
-                  !done && !active && "border-slate-200 bg-white text-slate-400"
+                  active && !done && "border-brand-600 bg-brand-50 text-brand-700 shadow-[0_0_0_3px_rgba(0,111,199,0.15)]",
+                  !done && !active && "border-slate-200 bg-white/80 text-slate-400"
                 )}
               >
-                {done ? <Check className="h-4 w-4" /> : <Circle className="h-3 w-3 fill-current" />}
-              </div>
-              <p className={cn("mt-2 text-xs font-medium", active ? "text-brand-700" : "text-slate-600")}>
+                {done ? (
+                  <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={spring.snappy}>
+                    <Check className="h-4 w-4" />
+                  </motion.div>
+                ) : (
+                  <span className="h-2 w-2 rounded-full bg-current" />
+                )}
+              </motion.div>
+              <p
+                className={cn(
+                  "mt-2 text-xs font-medium",
+                  active ? "text-brand-700" : "text-slate-500"
+                )}
+              >
                 {s.label}
               </p>
-              {i < TIMELINE_STEPS.length - 1 && (
-                <div className="absolute hidden" />
-              )}
             </div>
           );
         })}
@@ -52,10 +64,12 @@ export function SeparationTimeline({ currentStep }: SeparationTimelineProps) {
         <p className="text-sm text-slate-500">
           Étape {timelineStep + 1}/{TIMELINE_STEPS.length} — {TIMELINE_STEPS[timelineStep]?.label}
         </p>
-        <div className="mt-2 h-1.5 rounded-full bg-slate-200">
-          <div
-            className="h-full rounded-full bg-brand-600 transition-all"
-            style={{ width: `${((timelineStep + 1) / TIMELINE_STEPS.length) * 100}%` }}
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200/80">
+          <motion.div
+            className="h-full rounded-full bg-brand-600"
+            initial={false}
+            animate={{ width: `${((timelineStep + 1) / TIMELINE_STEPS.length) * 100}%` }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
           />
         </div>
       </div>

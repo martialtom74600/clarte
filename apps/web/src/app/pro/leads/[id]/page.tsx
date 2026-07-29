@@ -2,8 +2,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requirePartnerSession } from "@/lib/partner-auth";
 import { getMarketplaceLeadById } from "@/lib/supabase";
-import { PurchaseLeadButton } from "@/components/partner/purchase-lead-button";
+import { PurchaseSequence } from "@/components/pro/purchase-sequence";
+import { MotionCard, FadeIn } from "@/components/ui";
+import { clarte } from "@/lib/clarte-design";
 import { scenarioLabel, tierLabel } from "@separation/marketplace";
+import { complexityDots, isLeadHot } from "@/lib/lead-utils";
+import { cn } from "@/lib/utils";
+import { Lock } from "lucide-react";
 
 export default async function PartnerLeadDetailPage({
   params,
@@ -20,27 +25,52 @@ export default async function PartnerLeadDetailPage({
   }
 
   const preview = lead.preview;
+  const hot = isLeadHot(preview);
+  const dots = complexityDots(preview.complexity_score);
 
   return (
-    <div className="max-w-2xl">
-      <Link href="/pro/leads" className="text-sm text-brand-600 hover:underline">
+    <FadeIn className="max-w-2xl">
+      <Link
+        href="/pro/leads"
+        className="text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors"
+      >
         ← Retour au mur
       </Link>
-      <h1 className="mt-4 text-2xl font-bold text-slate-900">Fiche lead</h1>
-      <p className="mt-1 text-slate-600">Données qualifiantes — contact masqué jusqu&apos;à l&apos;achat</p>
+      <h1 className="mt-4 text-2xl font-bold tracking-tight text-slate-900">Fiche lead</h1>
+      <p className="mt-1 text-slate-600">
+        Données qualifiantes — contact masqué jusqu&apos;à l&apos;achat
+      </p>
 
-      <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 space-y-4">
+      <MotionCard
+        layoutId={`lead-card-${id}`}
+        className={cn("mt-8 p-6 space-y-4", hot && `border-amber-400/50 ${clarte.hotPulse}`)}
+      >
         <div className="flex justify-between">
           <span className="text-slate-500">Localisation</span>
-          <span className="font-medium">Dept. {preview.dept} ({preview.postal_code_prefix})</span>
+          <span className="font-medium">
+            Dept. {preview.dept} ({preview.postal_code_prefix})
+          </span>
         </div>
         <div className="flex justify-between">
           <span className="text-slate-500">Tier</span>
           <span className="font-medium">{tierLabel(preview.tier)}</span>
         </div>
-        <div className="flex justify-between">
+        <div className="flex justify-between items-center">
           <span className="text-slate-500">Complexité</span>
-          <span className="font-medium">{preview.complexity_score}/100</span>
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <span
+                  key={i}
+                  className={cn(
+                    "h-1.5 w-1.5 rounded-full",
+                    i < dots ? "bg-brand-600" : "bg-slate-200"
+                  )}
+                />
+              ))}
+            </div>
+            <span className="font-medium">{preview.complexity_score}/100</span>
+          </div>
         </div>
         <div className="flex justify-between">
           <span className="text-slate-500">Statut</span>
@@ -48,7 +78,9 @@ export default async function PartnerLeadDetailPage({
         </div>
         <div className="flex justify-between">
           <span className="text-slate-500">Patrimoine immo</span>
-          <span className="font-medium">{preview.has_real_estate ? preview.property_value_range : "Non"}</span>
+          <span className="font-medium">
+            {preview.has_real_estate ? preview.property_value_range : "Non"}
+          </span>
         </div>
         <div className="flex justify-between">
           <span className="text-slate-500">Scénario</span>
@@ -58,26 +90,32 @@ export default async function PartnerLeadDetailPage({
           <span className="text-slate-500">Enfants mineurs</span>
           <span className="font-medium">{preview.has_minor_children ? "Oui" : "Non"}</span>
         </div>
-        <div className="flex justify-between blur-sm select-none">
-          <span className="text-slate-500">Email</span>
+        <div className="flex justify-between items-center blur-[3px] select-none">
+          <span className="flex items-center gap-1.5 text-slate-500">
+            <Lock className="h-3.5 w-3.5" />
+            Email
+          </span>
           <span>••••@••••.fr</span>
         </div>
-        <div className="flex justify-between blur-sm select-none">
-          <span className="text-slate-500">Téléphone</span>
+        <div className="flex justify-between items-center blur-[3px] select-none">
+          <span className="flex items-center gap-1.5 text-slate-500">
+            <Lock className="h-3.5 w-3.5" />
+            Téléphone
+          </span>
           <span>06 •• •• •• ••</span>
         </div>
-      </div>
+      </MotionCard>
 
       <div className="mt-8">
-        <PurchaseLeadButton
+        <PurchaseSequence
           leadId={id}
           creditPrice={lead.credit_price}
           creditBalance={session.partner.credit_balance}
         />
       </div>
-      <p className="mt-4 text-xs text-slate-500 text-center">
-        Achat exclusif — ce lead ne sera vendu qu&apos;à un seul partenaire.
+      <p className="mt-4 text-center text-[10px] uppercase tracking-widest text-slate-400">
+        Achat exclusif — 1 seul partenaire
       </p>
-    </div>
+    </FadeIn>
   );
 }

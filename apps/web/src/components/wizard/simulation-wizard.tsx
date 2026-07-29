@@ -2,8 +2,11 @@
 
 import { useEffect, useMemo } from "react";
 import { useWizardStore } from "@/store/wizard-store";
-import { StepShell, SelectCard, InputField } from "./wizard-ui";
+import { StepShell, SelectCard, InputField, WizardStepContainer } from "./wizard-ui";
 import { SeparationTimeline } from "./separation-timeline";
+import { TrustStrip, OptInCard, FloatingInput } from "@/components/ui";
+import { clarte, clarteWizardShell } from "@/lib/clarte-design";
+import { toast } from "sonner";
 import {
   CashflowPanel,
   ChildSupportPanel,
@@ -129,6 +132,11 @@ export function SimulationWizard() {
     }).then(async (res) => {
       const data = await res.json();
       if (data.shareToken) update({ shareToken: data.shareToken });
+      if (res.ok) {
+        toast.success("Rapport en route", {
+          description: "Consultez votre boîte mail dans quelques instants.",
+        });
+      }
     });
 
     nextStep();
@@ -164,6 +172,9 @@ export function SimulationWizard() {
           const publishData = await publishRes.json();
           if (publishData.listed) {
             trackEvent("marketplace_lead_published");
+            toast.success("Mise en relation activée", {
+              description: "Un professionnel pourra vous contacter sous 48h ouvrées.",
+            });
           }
         }
       }
@@ -224,22 +235,25 @@ export function SimulationWizard() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
-      <EmotionalSandboxBanner discreteMode={discreteMode} />
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex-1">
-          <SeparationTimeline currentStep={step} />
-        </div>
-        <button
-          type="button"
-          onClick={() => update({ discreteMode: !discreteMode })}
-          className="ml-4 rounded-lg p-2 text-slate-400 hover:bg-slate-100"
-          title="Mode discret"
-        >
-          {discreteMode ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-        </button>
-      </div>
+    <div className={`${clarte.mesh} min-h-screen py-6 md:py-10`}>
+      <div className={clarte.containerNarrow}>
+        <div className={clarteWizardShell}>
+          <EmotionalSandboxBanner discreteMode={discreteMode} />
+          <div className="mb-6 flex items-center justify-between">
+            <div className="flex-1">
+              <SeparationTimeline currentStep={step} />
+            </div>
+            <button
+              type="button"
+              onClick={() => update({ discreteMode: !discreteMode })}
+              className="ml-4 rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100/80"
+              title="Mode discret"
+            >
+              {discreteMode ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+            </button>
+          </div>
 
+          <WizardStepContainer step={step}>
       {step === 0 && (
         <StepShell
           title="Quelle est votre situation ?"
@@ -554,29 +568,32 @@ export function SimulationWizard() {
           onPrev={prevStep}
           nextLabel="Recevoir mon rapport certifié"
           nextDisabled={!email.includes("@")}
+          conversion
         >
-          <div className="rounded-xl bg-brand-50 border border-brand-200 p-4 mb-4 text-sm text-brand-800">
-            Votre rapport inclura un identifiant unique de preuve (instant T) pour sécuriser vos échanges.
+          <TrustStrip />
+          <div className="mt-6 space-y-5">
+            <div className="rounded-xl border border-brand-200/60 bg-brand-50/50 px-4 py-3 text-sm text-brand-800">
+              Votre rapport inclura un identifiant unique de preuve (instant T) pour sécuriser vos
+              échanges.
+            </div>
+            <FloatingInput
+              label="Votre email"
+              type="email"
+              value={email}
+              onChange={(v) => update({ email: v })}
+              validate={(v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)}
+              hint="Nous ne partageons jamais votre email sans votre accord."
+            />
+            <InputField
+              label="Téléphone mobile"
+              type="tel"
+              value={phone}
+              onChange={(v) => update({ phone: v })}
+              placeholder="06 12 34 56 78"
+              optional
+              hint="Pour qu'un professionnel puisse vous conseiller si vous le souhaitez — jamais partagé sans votre accord explicite."
+            />
           </div>
-          <InputField
-            label="Votre email"
-            type="email"
-            value={email}
-            onChange={(v) => update({ email: v })}
-            placeholder="vous@exemple.com"
-            hint="Nous ne partageons jamais votre email sans votre accord."
-          />
-          <InputField
-            label="Téléphone mobile"
-            type="tel"
-            value={phone}
-            onChange={(v) => update({ phone: v })}
-            placeholder="06 12 34 56 78"
-            hint="Pour qu'un professionnel puisse vous conseiller si vous le souhaitez — jamais partagé sans votre accord explicite."
-          />
-          <p className="mt-2 text-xs text-slate-500">
-            Le téléphone reste privé tant que vous n&apos;acceptez pas d&apos;être mis en relation avec un professionnel.
-          </p>
         </StepShell>
       )}
 
@@ -616,17 +633,18 @@ export function SimulationWizard() {
           subtitle="Des experts près de chez vous peuvent valider votre situation."
           onNext={handlePartnerStepNext}
           onPrev={prevStep}
-          nextLabel="Voir les options premium"
+          nextLabel="Continuer"
           nextDisabled={optInPartnerMatch && !phone.trim()}
-          showPrev={true}
+          conversion
         >
-          <div className="mb-6">
+          <TrustStrip variant="compact" />
+          <div className="mb-6 mt-6">
             <ComplexityBadge score={lastResult.complexityScore} />
           </div>
           {optInPartnerMatch && !phone.trim() && (
-            <div className="mb-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+            <div className="mb-4 rounded-xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
               Pour être recontacté par un professionnel, un numéro de téléphone est nécessaire.{" "}
-              <button type="button" onClick={() => setStep(5)} className="underline font-medium">
+              <button type="button" onClick={() => setStep(5)} className="font-medium underline">
                 Ajouter mon téléphone
               </button>
             </div>
@@ -639,24 +657,14 @@ export function SimulationWizard() {
               />
             </div>
           )}
-          <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-5">
-            <input
-              type="checkbox"
-              checked={optInPartnerMatch}
-              onChange={(e) => update({ optInPartnerMatch: e.target.checked })}
-              className="mt-1 h-5 w-5 rounded border-slate-300"
-            />
-            <div>
-              <p className="font-medium text-slate-900">
-                Je souhaite être mis en relation avec un professionnel
-              </p>
-              <p className="mt-1 text-sm text-slate-600">
-                Notaire, courtier ou agence selon votre profil. Opt-in explicite, sans engagement.
-              </p>
-            </div>
-          </label>
+          <OptInCard
+            checked={optInPartnerMatch}
+            onChange={(v) => update({ optInPartnerMatch: v })}
+            title="Je souhaite être mis en relation avec un professionnel"
+            description="Notaire, courtier ou agence selon votre profil. Opt-in explicite, sans engagement."
+          />
           {optInPartnerMatch && (
-            <p className="mt-4 text-sm text-brand-700">
+            <p className="mt-4 text-sm font-medium text-brand-700">
               Merci ! Un professionnel pourra vous contacter sous 48h ouvrées.
             </p>
           )}
@@ -670,9 +678,9 @@ export function SimulationWizard() {
           onNext={handlePremiumCheckout}
           onPrev={prevStep}
           nextLabel="Obtenir le rapport premium — 29 €"
-          showPrev={true}
+          conversion
         >
-          <div className="rounded-2xl border-2 border-brand-200 bg-brand-50 p-6">
+          <div className="rounded-2xl border-2 border-brand-300/60 bg-gradient-to-br from-brand-50 to-white p-6 shadow-[0_0_40px_rgba(12,140,233,0.08)]">
             <ul className="space-y-3 text-sm text-slate-700">
               <li>✓ PDF détaillé avec tous les scénarios</li>
               <li>✓ Historique et modifications illimitées</li>
@@ -684,12 +692,15 @@ export function SimulationWizard() {
           <button
             type="button"
             onClick={() => setStep(0)}
-            className="mt-6 text-sm text-slate-500 hover:text-brand-600"
+            className="mt-6 text-sm text-slate-500 transition-colors hover:text-brand-600"
           >
             Recommencer une simulation
           </button>
         </StepShell>
       )}
+          </WizardStepContainer>
+        </div>
+      </div>
     </div>
   );
 }

@@ -2,23 +2,31 @@
 
 import { createBrowserClient } from "@supabase/ssr";
 import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
+import { FloatingInput, DrawCheck } from "@/components/ui";
+import { clarte } from "@/lib/clarte-design";
+import { cn } from "@/lib/utils";
+import { spring } from "@/lib/motion";
+
+const emailValid = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
 export function PartnerLoginForm() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!emailValid(email)) return;
+
     setLoading(true);
-    setError("");
 
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     if (!url || !key) {
-      setError("Configuration Supabase manquante.");
+      toast.error("Configuration manquante");
       setLoading(false);
       return;
     }
@@ -33,51 +41,61 @@ export function PartnerLoginForm() {
 
     setLoading(false);
     if (authError) {
-      setError("Accès réservé aux partenaires invités. Contactez Clarté si vous pensez qu'il s'agit d'une erreur.");
+      toast.error("Accès réservé aux partenaires invités", {
+        description: "Contactez Clarté si vous pensez qu'il s'agit d'une erreur.",
+      });
       return;
     }
     setSent(true);
+    toast.success("Lien envoyé", {
+      description: "Consultez votre boîte mail professionnelle.",
+    });
   };
 
-  if (sent) {
-    return (
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center">
-        <p className="font-semibold text-emerald-900">Lien envoyé</p>
-        <p className="mt-2 text-sm text-emerald-700">
-          Consultez votre boîte mail professionnelle pour accéder à Clarté Pro.
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      <div>
-        <label className="block text-sm font-medium text-slate-700">Email professionnel</label>
-        <input
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="vous@etude-notaire.fr"
-          className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3"
-        />
-        <p className="mt-2 text-xs text-slate-500">
-          Accès sur invitation uniquement. Aucune inscription publique.
-        </p>
-      </div>
-      {error && (
-        <div className="rounded-xl bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-800">
-          {error}
-        </div>
+    <AnimatePresence mode="wait">
+      {sent ? (
+        <motion.div
+          key="sent"
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={spring.snappy}
+          className="rounded-2xl border border-emerald-200/80 bg-emerald-50/80 p-8 text-center backdrop-blur-sm"
+        >
+          <DrawCheck className="mx-auto h-10 w-10" />
+          <p className="mt-4 font-semibold text-emerald-900">Lien envoyé</p>
+          <p className="mt-2 text-sm text-emerald-700">
+            Consultez votre boîte mail professionnelle pour accéder à Clarté Pro.
+          </p>
+        </motion.div>
+      ) : (
+        <motion.form
+          key="form"
+          onSubmit={handleSubmit}
+          className="space-y-5"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <FloatingInput
+            label="Email professionnel"
+            type="email"
+            value={email}
+            onChange={setEmail}
+            validate={emailValid}
+            hint="Accès sur invitation uniquement. Aucune inscription publique."
+          />
+          <motion.button
+            type="submit"
+            disabled={loading || !emailValid(email)}
+            whileHover={emailValid(email) ? { scale: 1.008 } : undefined}
+            whileTap={emailValid(email) ? { scale: 0.992 } : undefined}
+            transition={spring.snappy}
+            className={cn("w-full py-3 font-medium disabled:cursor-not-allowed disabled:opacity-40", clarte.btnPrimary)}
+          >
+            {loading ? "Envoi…" : "Recevoir le lien magique →"}
+          </motion.button>
+        </motion.form>
       )}
-      <button
-        type="submit"
-        disabled={loading}
-        className="w-full rounded-full bg-brand-600 py-3 font-medium text-white hover:bg-brand-700 disabled:opacity-50"
-      >
-        {loading ? "Envoi..." : "Recevoir le lien de connexion"}
-      </button>
-    </form>
+    </AnimatePresence>
   );
 }

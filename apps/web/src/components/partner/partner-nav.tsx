@@ -22,7 +22,8 @@ export function PartnerNav() {
           href={link.href}
           className={cn(
             "hover:text-white transition-colors",
-            pathname === link.href || pathname.startsWith(link.href + "/")
+            pathname === link.href ||
+              (link.href !== "/pro" && pathname.startsWith(link.href))
               ? "text-white font-medium"
               : "text-slate-400"
           )}

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { AnalyticsProvider } from "@/components/analytics-provider";
-import { Header, Footer } from "@/components/layout";
+import { ClarteProviders, ClartePublicChrome } from "@/components/ui";
+import { clarte } from "@/lib/clarte-design";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -30,11 +31,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr">
-      <body className="min-h-screen flex flex-col antialiased">
+      <body className={`flex min-h-screen flex-col antialiased ${clarte.mesh}`}>
         <AnalyticsProvider>
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
+          <ClarteProviders>
+            <ClartePublicChrome>{children}</ClartePublicChrome>
+          </ClarteProviders>
         </AnalyticsProvider>
       </body>
     </html>

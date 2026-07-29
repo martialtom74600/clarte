@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════════════════
+   Clarté Design System — charte unique B2C + B2B
+   Tous les composants héritent de ces tokens sémantiques.
+   ═══════════════════════════════════════════════════════════ */
+
 @theme {
   --color-brand-50: #f0f7ff;
   --color-brand-100: #e0effe;
@@ -13,6 +18,19 @@
   --color-brand-900: #0b406e;
   --color-brand-950: #072849;
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  /* Rayons */
+  --radius-clarte-sm: 0.75rem;
+  --radius-clarte-md: 1rem;
+  --radius-clarte-lg: 1.5rem;
+
+  /* Ombres */
+  --shadow-clarte-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.06);
+  --shadow-clarte-card-hover: 0 4px 8px rgba(0, 0, 0, 0.06), 0 12px 32px rgba(0, 0, 0, 0.08);
+  --shadow-clarte-cta: 0 4px 14px rgba(0, 111, 199, 0.25);
+
+  /* Focus ring (inputs, boutons) */
+  --clarte-focus-ring: 0 0 0 3px rgba(0, 111, 199, 0.2);
 }
 
 html {
@@ -20,13 +38,151 @@ html {
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply text-slate-900 antialiased;
+}
+
+/* ── Surfaces ── */
+
+.clarte-mesh {
+  background-color: #f8fafc;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 100% 0%, rgba(12, 140, 233, 0.08), transparent),
+    radial-gradient(ellipse 60% 40% at 0% 100%, rgba(12, 140, 233, 0.05), transparent);
+}
+
+.clarte-surface-dark {
+  background-color: #0f172a;
+  background-image:
+    radial-gradient(ellipse 70% 60% at 80% 10%, rgba(12, 140, 233, 0.15), transparent),
+    radial-gradient(ellipse 50% 50% at 10% 90%, rgba(1, 89, 161, 0.12), transparent);
+}
+
+.clarte-hero {
+  background: linear-gradient(135deg, #072849 0%, #0159a1 50%, #0c8ce9 100%);
+}
+
+/* ── Glass ── */
+
+.clarte-glass {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: var(--shadow-clarte-card), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.clarte-glass-header-dark {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(12px) saturate(180%);
+}
+
+.clarte-glass-header-light {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(12px) saturate(180%);
+}
+
+/* ── Composants ── */
+
+.clarte-btn-primary {
+  @apply rounded-full bg-brand-600 font-semibold text-white transition-colors hover:bg-brand-700;
+  box-shadow: var(--shadow-clarte-cta);
+}
+
+.clarte-btn-primary:disabled {
+  @apply cursor-not-allowed opacity-40;
+  box-shadow: none;
+}
+
+.clarte-btn-ghost {
+  @apply rounded-full px-6 py-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100/80;
+}
+
+.clarte-input {
+  @apply w-full rounded-xl border border-slate-200/80 bg-white/80 px-4 py-3 text-slate-900 outline-none transition-shadow placeholder:text-slate-400;
+}
+
+.clarte-input:focus {
+  border-color: rgb(96 165 250);
+  box-shadow: var(--clarte-focus-ring);
+}
+
+.clarte-card-hover {
+  @apply transition-all duration-300 hover:-translate-y-0.5;
+}
+
+.clarte-card-hover:hover {
+  box-shadow: var(--shadow-clarte-card-hover);
+}
+
+/* ── Animations ── */
+
+@keyframes clarte-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.clarte-shimmer {
+  animation: clarte-shimmer 1.8s ease-in-out infinite;
+}
+
+@keyframes clarte-hot-pulse {
+  0%, 100% { border-color: rgba(251, 191, 36, 0.35); }
+  50% { border-color: rgba(251, 191, 36, 0.65); }
+}
+
+.clarte-hot-pulse {
+  animation: clarte-hot-pulse 2.4s ease-in-out infinite;
+}
+
+/* ── Alias legacy (même rendu, préférer clarte-*) ── */
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: var(--shadow-clarte-card), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.pro-mesh-bg,
+.b2c-mesh-bg {
+  background-color: #f8fafc;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 100% 0%, rgba(12, 140, 233, 0.08), transparent),
+    radial-gradient(ellipse 60% 40% at 0% 100%, rgba(12, 140, 233, 0.05), transparent);
+}
+
+.pro-login-bg {
+  background-color: #0f172a;
+  background-image:
+    radial-gradient(ellipse 70% 60% at 80% 10%, rgba(12, 140, 233, 0.15), transparent),
+    radial-gradient(ellipse 50% 50% at 10% 90%, rgba(1, 89, 161, 0.12), transparent);
 }
 
 .gradient-hero {
   background: linear-gradient(135deg, #072849 0%, #0159a1 50%, #0c8ce9 100%);
 }
 
+.glass-header {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(12px) saturate(180%);
+}
+
+.glass-header-light {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(12px) saturate(180%);
+}
+
+.animate-shimmer {
+  animation: clarte-shimmer 1.8s ease-in-out infinite;
+}
+
+.animate-hot-pulse {
+  animation: clarte-hot-pulse 2.4s ease-in-out infinite;
+}
+
 .card-hover {
-  @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-lg;
+  @apply transition-all duration-300 hover:-translate-y-0.5;
+}
+
+.card-hover:hover {
+  box-shadow: var(--shadow-clarte-card-hover);
 }

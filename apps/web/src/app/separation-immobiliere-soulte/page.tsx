@@ -1,5 +1,5 @@
-import Link from "next/link";
 import type { Metadata } from "next";
+import { SeoPageShell } from "@/components/b2c/seo-page-shell";
 
 export const metadata: Metadata = {
   title: "Séparation immobilière et soulte — Guide complet",
@@ -9,17 +9,16 @@ export const metadata: Metadata = {
 
 export default function SeparationImmobilierePage() {
   return (
-    <article className="mx-auto max-w-3xl px-4 py-16">
-      <h1 className="text-4xl font-bold text-slate-900">
-        Séparation immobilière : soulte et partage
-      </h1>
-      <p className="mt-6 text-lg text-slate-600">
-        Le logement est souvent l&apos;enjeu principal d&apos;une séparation. Que vous
-        soyez concubins, pacsés ou mariés, les règles de partage diffèrent.
+    <SeoPageShell title="Séparation immobilière : soulte et partage">
+      <p className="text-lg leading-relaxed">
+        Le logement est souvent l&apos;enjeu principal d&apos;une séparation. Que vous soyez
+        concubins, pacsés ou mariés, les règles de partage diffèrent selon votre statut et votre
+        régime matrimonial.
       </p>
-      <Link href="/simulation" className="mt-8 inline-block text-brand-600 font-semibold hover:underline">
-        Lancer la simulation →
-      </Link>
-    </article>
+      <p>
+        Notre simulateur vous aide à estimer la soulte, comparer les scénarios (rachat, vente,
+        location) et préparer vos échanges en toute clarté.
+      </p>
+    </SeoPageShell>
   );
 }
