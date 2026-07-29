@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { requirePartnerSession } from "@/lib/partner-auth";
 import { getPurchasedLeadsForPartner } from "@/lib/supabase";
 import { FadeIn, StaggerList, StaggerItem } from "@/components/ui";
-import { clarteGlassCard } from "@/lib/clarte-design";
+import { clarte, clarteGlassCard } from "@/lib/clarte-design";
 import { cn } from "@/lib/utils";
 
 export default async function PartnerPurchasesPage() {
@@ -46,7 +46,7 @@ export default async function PartnerPurchasesPage() {
                 <StaggerItem key={p.id}>
                   <Link
                     href={`/pro/purchases/${lead?.id}`}
-                    className={cn(clarteGlassCard, "block p-6 transition-shadow hover:shadow-lg")}
+                    className={cn(clarteGlassCard, clarte.cardHover, "block p-6")}
                   >
                     <div className="flex items-start justify-between">
                       <div>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Coins, LayoutGrid, ShoppingBag } from "lucide-react";
 import { StaggerList, StaggerItem } from "@/components/ui";
-import { clarteGlassCard } from "@/lib/clarte-design";
+import { clarte, clarteGlassCard } from "@/lib/clarte-design";
 import { cn } from "@/lib/utils";
 import { scaleTap } from "@/lib/motion";
 
@@ -46,7 +46,7 @@ export function DashboardCards({
         </StaggerItem>
         <StaggerItem>
           <motion.div {...scaleTap}>
-            <Link href="/pro/leads" className={cn(clarteGlassCard, "block p-6 hover:shadow-lg transition-shadow")}>
+            <Link href="/pro/leads" className={cn(clarteGlassCard, clarte.cardHover, "block p-6")}>
               <LayoutGrid className="mb-3 h-8 w-8 text-brand-600" />
               <p className="font-semibold text-slate-900">Mur de leads</p>
               <p className="mt-1 text-sm text-slate-600">Prospects qualifiés dans votre zone</p>
@@ -55,7 +55,7 @@ export function DashboardCards({
         </StaggerItem>
         <StaggerItem>
           <motion.div {...scaleTap}>
-            <Link href="/pro/purchases" className={cn(clarteGlassCard, "block p-6 hover:shadow-lg transition-shadow")}>
+            <Link href="/pro/purchases" className={cn(clarteGlassCard, clarte.cardHover, "block p-6")}>
               <ShoppingBag className="mb-3 h-8 w-8 text-brand-600" />
               <p className="font-semibold text-slate-900">Mes achats</p>
               <p className="mt-1 text-sm text-slate-600">Contacts débloqués</p>

@@ -1,6 +1,7 @@
 "use client";
 
-import { formatEuro } from "@/lib/utils";
+import { cn, formatEuro } from "@/lib/utils";
+import { clarte, clarteGlassCard } from "@/lib/clarte-design";
 import type {
   CashflowResult,
   ChildSupportResult,
@@ -14,7 +15,7 @@ interface CashflowPanelProps {
 
 export function CashflowPanel({ cashflow }: CashflowPanelProps) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6">
+    <div className={cn(clarteGlassCard, "p-6")}>
       <h3 className="font-semibold text-slate-900">Budget mensuel post-séparation</h3>
       <p className="mt-1 text-sm text-slate-600">
         Anticipez le choc du quotidien : loyers, charges, pension alimentaire.
@@ -159,7 +160,7 @@ interface MediationLinkProps {
 
 export function MediationLinkPanel({ onGenerate, link }: MediationLinkProps) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6">
+    <div className={cn(clarteGlassCard, "p-6")}>
       <h3 className="font-semibold text-slate-900">Mode médiation asynchrone</h3>
       <p className="mt-2 text-sm text-slate-600">
         Envoyez un lien à l&apos;autre partie. Chacun remplit sa version séparément — l&apos;outil
@@ -169,7 +170,7 @@ export function MediationLinkPanel({ onGenerate, link }: MediationLinkProps) {
         <button
           type="button"
           onClick={onGenerate}
-          className="mt-4 rounded-full bg-brand-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-700"
+          className={cn("mt-4 px-6 py-2.5 text-sm", clarte.btnPrimary)}
         >
           Générer un lien de médiation
         </button>

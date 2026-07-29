@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { InputField } from "@/components/wizard/wizard-ui";
+import { FadeIn, ShimmerSkeleton } from "@/components/ui";
+import { clarte, clarteGlassCard } from "@/lib/clarte-design";
 import type { MediationComparison } from "@separation/engine";
-import { formatEuro } from "@/lib/utils";
+import { cn, formatEuro } from "@/lib/utils";
 
 export default function MediationPage() {
   const params = useParams();
@@ -44,13 +46,19 @@ export default function MediationPage() {
   };
 
   if (status === "loading") {
-    return <div className="mx-auto max-w-xl px-4 py-16 text-center text-slate-600">Chargement...</div>;
+    return (
+      <div className={`${clarte.containerNarrow} py-16`}>
+        <ShimmerSkeleton className="h-8 w-48" />
+        <ShimmerSkeleton className="mt-4 h-4 w-full max-w-md" />
+        <ShimmerSkeleton className={`mt-8 h-64 ${clarte.radiusMd}`} />
+      </div>
+    );
   }
 
   if (comparison || status === "compared") {
     const comp = comparison!;
     return (
-      <div className="mx-auto max-w-2xl px-4 py-16">
+      <FadeIn className={`${clarte.containerNarrow} py-16`}>
         <h1 className="text-2xl font-bold text-slate-900">Points de désaccord</h1>
         <p className="mt-2 text-slate-600">
           Accord sur {comp?.agreementRate ?? 0}% des champs — seuls les écarts sont affichés.
@@ -90,25 +98,25 @@ export default function MediationPage() {
             Plusieurs écarts significatifs : un notaire ou médiateur peut vous aider à converger.
           </p>
         )}
-      </div>
+      </FadeIn>
     );
   }
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-16">
+    <FadeIn className={`${clarte.containerNarrow} py-16`}>
       <h1 className="text-2xl font-bold text-slate-900">Votre vision des finances</h1>
       <p className="mt-2 text-slate-600">
         Remplissez votre version. L&apos;autre partie ne verra que les différences — pas vos chiffres complets.
       </p>
-      <div className="mt-8 space-y-5">
+      <div className={cn(clarteGlassCard, "mt-8 space-y-5 p-6")}>
         <InputField label="Valeur du bien (€)" type="number" value={propertyValue || ""} onChange={(v) => setPropertyValue(Number(v) || 0)} />
         <InputField label="Crédit restant (€)" type="number" value={mortgageRemaining || ""} onChange={(v) => setMortgageRemaining(Number(v) || 0)} />
         <InputField label="Votre revenu mensuel (€)" type="number" value={incomeA || ""} onChange={(v) => setIncomeA(Number(v) || 0)} />
         <InputField label="Revenu de l'autre (€)" type="number" value={incomeB || ""} onChange={(v) => setIncomeB(Number(v) || 0)} optional />
-        <button type="button" onClick={handleSubmit} className="rounded-full bg-brand-600 px-8 py-3 text-white font-medium hover:bg-brand-700">
+        <button type="button" onClick={handleSubmit} className={cn("px-8 py-3", clarte.btnPrimary)}>
           Comparer les versions
         </button>
       </div>
-    </div>
+    </FadeIn>
   );
 }

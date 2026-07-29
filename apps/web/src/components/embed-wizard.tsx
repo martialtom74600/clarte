@@ -9,12 +9,6 @@ export function EmbedWizard({ tenantId }: { tenantId: string }) {
 
   useEffect(() => {
     update({ tenantId });
-    document.querySelector("header")?.setAttribute("style", "display:none");
-    document.querySelector("footer")?.setAttribute("style", "display:none");
-    return () => {
-      document.querySelector("header")?.removeAttribute("style");
-      document.querySelector("footer")?.removeAttribute("style");
-    };
   }, [tenantId, update]);
 
   return <SimulationWizard />;

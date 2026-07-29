@@ -1,7 +1,9 @@
 import { getSimulationByToken } from "@/lib/supabase";
-import { formatEuro } from "@/lib/utils";
+import { cn, formatEuro } from "@/lib/utils";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { FadeIn } from "@/components/ui";
+import { clarte, clarteGlassCard } from "@/lib/clarte-design";
 
 export default async function SharePage({
   params,
@@ -26,7 +28,7 @@ export default async function SharePage({
   const netB = result.netWorthByPerson?.B?.amount;
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-16">
+    <FadeIn className={`${clarte.containerNarrow} py-16`}>
       <h1 className="text-2xl font-bold text-slate-900">
         Simulation partagée
       </h1>
@@ -34,7 +36,7 @@ export default async function SharePage({
         Aperçu partiel — inscrivez-vous pour voir le détail complet.
       </p>
 
-      <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-8">
+      <div className={cn(clarteGlassCard, clarte.radiusLg, "mt-8 p-8")}>
         {soulteVisible !== undefined && (
           <div className="mb-6">
             <p className="text-sm text-slate-500">Soulte estimée</p>
@@ -66,10 +68,10 @@ export default async function SharePage({
 
       <Link
         href="/simulation"
-        className="mt-8 inline-block rounded-full bg-brand-600 px-8 py-3 text-white font-medium hover:bg-brand-700"
+        className={cn("mt-8 inline-block px-8 py-3", clarte.btnPrimary)}
       >
         Voir le détail complet
       </Link>
-    </div>
+    </FadeIn>
   );
 }

@@ -20,7 +20,7 @@ export function SeoPageShell({
         <div className="prose prose-slate mt-6 max-w-none text-slate-600">{children}</div>
         <Link
           href="/simulation"
-          className="mt-10 inline-flex items-center gap-2 rounded-full bg-brand-600 px-8 py-4 font-semibold text-white shadow-lg shadow-brand-600/20 hover:bg-brand-700 transition-colors"
+          className={`mt-10 inline-flex items-center gap-2 px-8 py-4 ${clarte.btnPrimary}`}
         >
           {ctaLabel}
           <ArrowRight className="h-5 w-5" />

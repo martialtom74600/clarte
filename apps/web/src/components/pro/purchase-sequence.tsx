@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { Copy, Phone } from "lucide-react";
 import { DrawCheck } from "@/components/ui";
-import { clarteGlassCard } from "@/lib/clarte-design";
+import { clarte, clarteGlassCard } from "@/lib/clarte-design";
 import { cn } from "@/lib/utils";
 import { duration, ease, spring } from "@/lib/motion";
 
@@ -184,7 +184,7 @@ export function PurchaseSequence({
               {contact.phone && (
                 <a
                   href={`tel:${contact.phone}`}
-                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-brand-600 py-2.5 text-sm font-medium text-white hover:bg-brand-700"
+                  className={cn("inline-flex flex-1 items-center justify-center gap-2 py-2.5 text-sm", clarte.btnPrimary)}
                 >
                   <Phone className="h-4 w-4" />
                   Appeler
@@ -244,14 +244,14 @@ export function PurchaseSequence({
               <button
                 type="button"
                 onClick={() => setPhase("idle")}
-                className="flex-1 rounded-full border border-slate-200 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className={cn("flex-1 py-3 text-sm", clarte.btnGhost, "border border-slate-200 text-slate-700 hover:bg-slate-50")}
               >
                 Annuler (Esc)
               </button>
               <button
                 type="button"
                 onClick={executePurchase}
-                className="flex-1 rounded-full bg-brand-600 py-3 text-sm font-semibold text-white hover:bg-brand-700"
+                className={cn("flex-1 py-3 text-sm font-semibold", clarte.btnPrimary)}
               >
                 Confirmer (↵)
               </button>
@@ -269,10 +269,8 @@ export function PurchaseSequence({
               whileTap={canAfford ? { scale: 0.992 } : undefined}
               transition={spring.snappy}
               className={cn(
-                "w-full rounded-full py-3.5 font-semibold text-white transition-colors",
-                canAfford
-                  ? "bg-brand-600 hover:bg-brand-700"
-                  : "cursor-not-allowed bg-slate-300"
+                "w-full py-3.5 font-semibold text-white transition-colors",
+                canAfford ? clarte.btnPrimary : "cursor-not-allowed rounded-full bg-slate-300"
               )}
             >
               Acheter ce lead — {creditPrice} crédit{creditPrice > 1 ? "s" : ""}

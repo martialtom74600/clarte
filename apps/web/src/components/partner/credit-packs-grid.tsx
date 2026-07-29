@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { CREDIT_PACKS } from "@separation/marketplace";
 import { scaleTap, spring } from "@/lib/motion";
-import { clarteGlassCard } from "@/lib/clarte-design";
+import { clarte, clarteGlassCard } from "@/lib/clarte-design";
 
 export function CreditPacksGrid({ currentBalance }: { currentBalance: number }) {
   const [loading, setLoading] = useState<string | null>(null);
@@ -55,7 +55,7 @@ export function CreditPacksGrid({ currentBalance }: { currentBalance: number }) 
               onClick={() => handleBuy(pack.id)}
               disabled={loading === pack.id}
               {...scaleTap}
-              className="mt-4 w-full rounded-full bg-brand-600 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+              className={`mt-4 w-full py-2.5 text-sm ${clarte.btnPrimary}`}
             >
               {loading === pack.id ? "Redirection…" : "Acheter"}
             </motion.button>

@@ -1,7 +1,7 @@
 "use client";
 
 import { cn, formatEuro } from "@/lib/utils";
-import { clarte } from "@/lib/clarte-design";
+import { clarte, clarteGlassCard } from "@/lib/clarte-design";
 import type { SimulationResult } from "@separation/schemas";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 
@@ -56,7 +56,7 @@ export function ScenarioCards({ result, onSelect }: ScenarioCardsProps) {
           key={scenario.scenario}
           type="button"
           onClick={() => onSelect?.(scenario.scenario)}
-          className="card-hover rounded-2xl border border-slate-200 bg-white p-6 text-left"
+          className={cn(clarteGlassCard, clarte.cardHover, "p-6 text-left")}
         >
           <h3 className="font-semibold text-slate-900">{scenario.label}</h3>
           <p className="mt-2 text-sm text-slate-600">{scenario.description}</p>
@@ -90,7 +90,7 @@ export function DoubleMirror({ result }: DoubleMirrorProps) {
       {(["A", "B"] as const).map((person) => (
         <div
           key={person}
-          className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-brand-50 p-6"
+          className={cn(clarteGlassCard, "bg-gradient-to-br from-white to-brand-50 p-6")}
         >
           <p className="text-sm font-medium text-slate-500">Personne {person}</p>
           <p className="mt-2 text-3xl font-bold text-slate-900">

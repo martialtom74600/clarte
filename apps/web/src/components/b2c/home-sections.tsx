@@ -11,7 +11,7 @@ export function HomeHero() {
   return (
     <section className={`${clarte.hero} relative overflow-hidden text-white`}>
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_80%_20%,rgba(255,255,255,0.08),transparent)]" />
-      <div className="relative mx-auto max-w-6xl px-4 py-20 md:py-28">
+      <div className={`relative ${clarte.container} py-20 md:py-28`}>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -83,7 +83,7 @@ export function HomeFeatures() {
           <motion.div
             key={f.title}
             variants={staggerItem}
-            className={cn(clarteGlassCard, "p-8 transition-shadow hover:shadow-lg")}
+            className={cn(clarteGlassCard, clarte.cardHover, "p-8")}
           >
             <f.icon className="mb-4 h-10 w-10 text-brand-600" />
             <h3 className="text-lg font-semibold text-slate-900">{f.title}</h3>
@@ -103,7 +103,7 @@ export function HomeCta() {
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.4 }}
-        className="mx-auto max-w-6xl px-4 py-16 text-center"
+        className={`${clarte.container} py-16 text-center`}
       >
         <h2 className="text-2xl font-bold tracking-tight text-slate-900">
           Concubinage, PACS ou Mariage
@@ -114,7 +114,7 @@ export function HomeCta() {
         <motion.div className="mt-8" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
           <Link
             href="/simulation"
-            className="inline-flex items-center gap-2 rounded-full bg-brand-600 px-8 py-4 font-semibold text-white shadow-lg shadow-brand-600/20 hover:bg-brand-700"
+            className={`inline-flex items-center gap-2 px-8 py-4 ${clarte.btnPrimary}`}
           >
             Démarrer gratuitement
             <ArrowRight className="h-5 w-5" />

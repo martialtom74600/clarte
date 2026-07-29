@@ -2,7 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requirePartnerSession } from "@/lib/partner-auth";
 import { getMarketplaceLeadById, getPurchasedLeadsForPartner } from "@/lib/supabase";
-import { formatEuro } from "@/lib/utils";
+import { FadeIn } from "@/components/ui";
+import { clarteGlassCard } from "@/lib/clarte-design";
+import { cn, formatEuro } from "@/lib/utils";
 
 export default async function PartnerPurchaseDetailPage({
   params,
@@ -34,11 +36,11 @@ export default async function PartnerPurchaseDetailPage({
   const pdfLink = contact.pdf_url ?? (contact.share_token ? `${appUrl}/partage/${contact.share_token}` : null);
 
   return (
-    <div className="max-w-2xl">
-      <Link href="/pro/purchases" className="text-sm text-brand-600 hover:underline">
+    <FadeIn className="max-w-2xl">
+      <Link href="/pro/purchases" className="text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors">
         ← Mes achats
       </Link>
-      <h1 className="mt-4 text-2xl font-bold text-slate-900">Contact débloqué</h1>
+      <h1 className="mt-4 text-2xl font-bold tracking-tight text-slate-900">Contact débloqué</h1>
 
       <div className="mt-8 rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-6 space-y-4">
         <div>
@@ -70,7 +72,7 @@ export default async function PartnerPurchaseDetailPage({
       </div>
 
       {contact.simulation_summary && (
-        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 text-sm space-y-2">
+        <div className={cn(clarteGlassCard, "mt-6 space-y-2 p-6 text-sm")}>
           <p className="font-semibold text-slate-900">Résumé simulation</p>
           {"soulteAmount" in contact.simulation_summary && contact.simulation_summary.soulteAmount != null && (
             <p>Soulte estimée : {formatEuro(contact.simulation_summary.soulteAmount as number)}</p>
@@ -86,6 +88,6 @@ export default async function PartnerPurchaseDetailPage({
           )}
         </div>
       )}
-    </div>
+    </FadeIn>
   );
 }
