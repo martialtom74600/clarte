@@ -45,24 +45,34 @@ export function PatrimonyChart({ result, className }: PatrimonyChartProps) {
 
 interface ScenarioCardsProps {
   result: SimulationResult;
+  selectedScenario?: string;
   onSelect?: (scenario: string) => void;
 }
 
-export function ScenarioCards({ result, onSelect }: ScenarioCardsProps) {
+export function ScenarioCards({ result, selectedScenario, onSelect }: ScenarioCardsProps) {
   return (
     <div className="grid gap-4 md:grid-cols-3">
-      {result.scenarios.map((scenario) => (
-        <button
-          key={scenario.scenario}
-          type="button"
-          onClick={() => onSelect?.(scenario.scenario)}
-          className={cn(clarteGlassCard, clarte.cardHover, "p-6 text-left")}
-        >
+      {result.scenarios.map((scenario) => {
+        const selected = selectedScenario === scenario.scenario;
+        return (
+          <button
+            key={scenario.scenario}
+            type="button"
+            onClick={() => onSelect?.(scenario.scenario)}
+            className={cn(
+              clarteGlassCard,
+              clarte.cardHover,
+              "border-2 p-6 text-left transition-colors",
+              selected
+                ? "border-brand-500 bg-brand-50/80 shadow-[0_0_0_3px_rgba(0,111,199,0.1)]"
+                : "border-slate-200/80"
+            )}
+          >
           <h3 className="font-semibold text-slate-900">{scenario.label}</h3>
           <p className="mt-2 text-sm text-slate-600">{scenario.description}</p>
           <div className="mt-4 space-y-1 text-sm">
             <p>A : <strong>{formatEuro(scenario.netWorthByPerson.A.amount)}</strong></p>
-            <p>B : <strong>{formatEuro(scenario.netWorthByPerson.B.amount)}</strong></p>
+            <p>Autre : <strong>{formatEuro(scenario.netWorthByPerson.B.amount)}</strong></p>
             {scenario.soulte && (
               <p className="text-brand-700 font-medium mt-2">
                 Soulte : {formatEuro(scenario.soulte.amount.amount)}
@@ -74,8 +84,9 @@ export function ScenarioCards({ result, onSelect }: ScenarioCardsProps) {
               </p>
             )}
           </div>
-        </button>
-      ))}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -92,7 +103,9 @@ export function DoubleMirror({ result }: DoubleMirrorProps) {
           key={person}
           className={cn(clarteGlassCard, "bg-gradient-to-br from-white to-brand-50 p-6")}
         >
-          <p className="text-sm font-medium text-slate-500">Personne {person}</p>
+          <p className="text-sm font-medium text-slate-500">
+            {person === "A" ? "Vous" : "Autre partie"}
+          </p>
           <p className="mt-2 text-3xl font-bold text-slate-900">
             {formatEuro(result.netWorthByPerson[person].amount)}
           </p>
@@ -111,38 +124,40 @@ export function WowMoment({ result }: WowMomentProps) {
   const soulte = result.soulte;
 
   return (
-    <div className={cn(clarte.radiusLg, clarte.hero, "p-8 text-white shadow-xl")}>
-      <p className="text-brand-100 text-sm font-medium uppercase tracking-wide">
-        Votre estimation
+    <div className="rounded-xl border border-brand-200/60 bg-brand-50/40 p-6 md:p-8">
+      <p className="text-xs font-medium uppercase tracking-wide text-brand-700">
+        Projection indicative
       </p>
       {soulte ? (
         <>
-          <p className="mt-4 text-4xl md:text-5xl font-bold">
+          <p className="mt-3 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
             {formatEuro(soulte.amount.amount)}
           </p>
-          <p className="mt-2 text-brand-100 text-lg">
+          <p className="mt-2 text-base text-slate-600">
             Soulte estimée pour racheter la part de l&apos;autre ({soulte.assetLabel})
           </p>
           {soulte.totalCashNeeded && (
-            <p className="mt-4 text-sm text-brand-200">
+            <p className="mt-4 text-sm text-slate-500">
               Cash total estimé (soulte + frais notaire) :{" "}
-              {formatEuro(soulte.totalCashNeeded.amount)}
+              <span className="font-medium text-slate-800">
+                {formatEuro(soulte.totalCashNeeded.amount)}
+              </span>
             </p>
           )}
         </>
       ) : (
         <>
-          <p className="mt-4 text-4xl md:text-5xl font-bold">
+          <p className="mt-3 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
             {formatEuro(result.netWorthByPerson.A.amount + result.netWorthByPerson.B.amount)}
           </p>
-          <p className="mt-2 text-brand-100 text-lg">Patrimoine net total estimé</p>
+          <p className="mt-2 text-base text-slate-600">Patrimoine net total estimé</p>
         </>
       )}
-      <div className="mt-6 flex flex-wrap gap-3">
-        <span className="rounded-full bg-white/20 px-4 py-1.5 text-sm">
+      <div className="mt-6 flex flex-wrap gap-2">
+        <span className="rounded-full border border-brand-200/60 bg-white/70 px-3 py-1 text-xs font-medium text-brand-800">
           Complexité : {result.complexityScore}/100
         </span>
-        <span className="rounded-full bg-white/20 px-4 py-1.5 text-sm">
+        <span className="rounded-full border border-slate-200/80 bg-white/70 px-3 py-1 text-xs font-medium text-slate-600">
           Simulation indicative
         </span>
       </div>

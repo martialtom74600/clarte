@@ -11,15 +11,20 @@ import type {
 
 interface CashflowPanelProps {
   cashflow: CashflowResult;
+  embedded?: boolean;
 }
 
-export function CashflowPanel({ cashflow }: CashflowPanelProps) {
+export function CashflowPanel({ cashflow, embedded }: CashflowPanelProps) {
   return (
-    <div className={cn(clarteGlassCard, "p-6")}>
-      <h3 className="font-semibold text-slate-900">Budget mensuel post-séparation</h3>
-      <p className="mt-1 text-sm text-slate-600">
-        Anticipez le choc du quotidien : loyers, charges, pension alimentaire.
-      </p>
+    <div className={embedded ? undefined : cn(clarteGlassCard, "p-6")}>
+      {!embedded && (
+        <>
+          <h3 className="font-semibold text-slate-900">Budget mensuel post-séparation</h3>
+          <p className="mt-1 text-sm text-slate-600">
+            Anticipez le choc du quotidien : loyers, charges, pension alimentaire.
+          </p>
+        </>
+      )}
       {cashflow.warning && (
         <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
           {cashflow.warning}
@@ -87,13 +92,16 @@ export function ImbalanceAlert({ imbalance }: ImbalanceAlertProps) {
 
 interface ChildSupportPanelProps {
   support: ChildSupportResult;
+  embedded?: boolean;
 }
 
-export function ChildSupportPanel({ support }: ChildSupportPanelProps) {
+export function ChildSupportPanel({ support, embedded }: ChildSupportPanelProps) {
   return (
-    <div className="rounded-2xl border border-brand-200 bg-brand-50 p-6">
-      <h3 className="font-semibold text-brand-900">Pension alimentaire indicative</h3>
-      <p className="mt-2 text-3xl font-bold text-brand-800">
+    <div className={embedded ? undefined : "rounded-2xl border border-brand-200 bg-brand-50 p-6"}>
+      {!embedded && (
+        <h3 className="font-semibold text-brand-900">Pension alimentaire indicative</h3>
+      )}
+      <p className={cn("text-3xl font-bold text-brand-800", !embedded && "mt-2")}>
         {formatEuro(support.monthlyAmount.amount)}/mois
       </p>
       <p className="mt-1 text-sm text-brand-700">
@@ -108,12 +116,13 @@ export function ChildSupportPanel({ support }: ChildSupportPanelProps) {
 interface ResolutionCompareProps {
   comparison: ResolutionComparison;
   onChooseAmiable?: () => void;
+  embedded?: boolean;
 }
 
-export function ResolutionCompare({ comparison, onChooseAmiable }: ResolutionCompareProps) {
+export function ResolutionCompare({ comparison, onChooseAmiable, embedded }: ResolutionCompareProps) {
   return (
     <div className="space-y-4">
-      <h3 className="font-semibold text-slate-900">Amiable vs contentieux</h3>
+      {!embedded && <h3 className="font-semibold text-slate-900">Amiable vs contentieux</h3>}
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-5">
           <p className="font-semibold text-emerald-900">{comparison.amiable.label}</p>
@@ -156,16 +165,27 @@ export function ResolutionCompare({ comparison, onChooseAmiable }: ResolutionCom
 interface MediationLinkProps {
   onGenerate: () => void;
   link?: string;
+  embedded?: boolean;
 }
 
-export function MediationLinkPanel({ onGenerate, link }: MediationLinkProps) {
+export function MediationLinkPanel({ onGenerate, link, embedded }: MediationLinkProps) {
   return (
-    <div className={cn(clarteGlassCard, "p-6")}>
-      <h3 className="font-semibold text-slate-900">Mode médiation asynchrone</h3>
-      <p className="mt-2 text-sm text-slate-600">
-        Envoyez un lien à l&apos;autre partie. Chacun remplit sa version séparément — l&apos;outil
-        ne montre que les écarts, sans émotion ni confrontation.
-      </p>
+    <div className={embedded ? undefined : cn(clarteGlassCard, "p-6")}>
+      {!embedded && (
+        <>
+          <h3 className="font-semibold text-slate-900">Mode médiation asynchrone</h3>
+          <p className="mt-2 text-sm text-slate-600">
+            Envoyez un lien à l&apos;autre partie. Chacun remplit sa version séparément — l&apos;outil
+            ne montre que les écarts, sans émotion ni confrontation.
+          </p>
+        </>
+      )}
+      {embedded && (
+        <p className="text-sm text-slate-600">
+          Chacun remplit sa version séparément — l&apos;outil ne montre que les écarts, sans
+          confrontation.
+        </p>
+      )}
       {!link ? (
         <button
           type="button"
@@ -190,7 +210,7 @@ interface EmotionalSandboxBannerProps {
 
 export function EmotionalSandboxBanner({ discreteMode }: EmotionalSandboxBannerProps) {
   return (
-    <div className="mb-6 rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
+    <div className={cn(clarteGlassCard, "mb-6 border-slate-200/80 px-4 py-3 text-sm text-slate-600")}>
       <p>
         <span className="font-medium text-slate-700">Approche factuelle.</span> Cet outil ne juge
         personne — il traduit votre situation en chiffres neutres pour faciliter des décisions

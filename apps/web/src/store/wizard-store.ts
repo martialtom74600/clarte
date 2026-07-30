@@ -22,7 +22,7 @@ export const useWizardStore = create<WizardStore>()(
     (set, get) => ({
       ...initialWizardState,
       setStep: (step) => set({ step }),
-      nextStep: () => set((s) => ({ step: s.step + 1 })),
+      nextStep: () => set((s) => ({ step: Math.min(4, s.step + 1) })),
       prevStep: () => set((s) => ({ step: Math.max(0, s.step - 1) })),
       update: (partial) => set(partial),
       computeResult: () => {
