@@ -17,7 +17,7 @@ const STATUS_LABELS: Record<string, string> = {
 export function computeDossierProgress(state: WizardState): {
   percent: number;
   lines: DossierLine[];
-  readyForRevelation: boolean;
+  readyForScenarios: boolean;
 } {
   const cadreComplete = Boolean(state.status);
   const bienComplete = state.propertyValue > 0 && state.postalCode.length >= 5;
@@ -38,7 +38,13 @@ export function computeDossierProgress(state: WizardState): {
       label: "Logement commun",
       detail:
         bienComplete
-          ? `${state.postalCode} · ${formatEuro(state.propertyValue)}`
+          ? [
+              state.postalCode,
+              state.propertySurface > 0 ? `${state.propertySurface} m²` : null,
+              formatEuro(state.propertyValue),
+            ]
+              .filter(Boolean)
+              .join(" · ")
           : state.postalCode
             ? state.postalCode
             : "À renseigner",
@@ -75,9 +81,9 @@ export function computeDossierProgress(state: WizardState): {
   const required = [cadreComplete, bienComplete, vousComplete, autreComplete, foyerComplete];
   const done = required.filter(Boolean).length;
   const percent = Math.round((done / required.length) * 100);
-  const readyForRevelation = done === required.length;
+  const readyForScenarios = done === required.length;
 
-  return { percent, lines, readyForRevelation };
+  return { percent, lines, readyForScenarios };
 }
 
 type StepResolutionInput = Pick<
@@ -95,11 +101,11 @@ type StepResolutionInput = Pick<
 
 /** Ramène l'utilisateur à l'acte cohérent avec ses données (localStorage legacy). */
 export function resolveWizardStep(state: StepResolutionInput, hasResult: boolean): number {
-  const { readyForRevelation } = computeDossierProgress(state as WizardState);
+  const { readyForScenarios } = computeDossierProgress(state as WizardState);
 
   if (!state.status) return 0;
   if (state.propertyValue <= 0 || state.postalCode.length < 5) return 1;
-  if (!readyForRevelation) return Math.min(state.step, 2);
+  if (!readyForScenarios) return Math.min(state.step, 2);
 
   if (!hasResult) return Math.min(state.step, 2);
 
@@ -113,14 +119,14 @@ export function isWizardActComplete(
   state: WizardState,
   hasResult: boolean
 ): boolean {
-  const { readyForRevelation } = computeDossierProgress(state);
+  const { readyForScenarios } = computeDossierProgress(state);
   switch (actId) {
     case 0:
       return Boolean(state.status);
     case 1:
       return state.propertyValue > 0 && state.postalCode.length >= 5;
     case 2:
-      return readyForRevelation;
+      return readyForScenarios;
     case 3:
       return hasResult;
     default:

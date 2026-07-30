@@ -8,6 +8,7 @@ import {
   computePostSeparationCashflow,
 } from "@separation/engine";
 import type { SimulationResult } from "@separation/schemas";
+import { computeNewLifeCapFromState } from "./new-life-cap";
 
 export function computePainPointInsights(state: WizardState, result?: SimulationResult | null) {
   const simulationResult = result ?? (state.propertyValue > 0 && state.status
@@ -21,6 +22,7 @@ export function computePainPointInsights(state: WizardState, result?: Simulation
       childSupport: null,
       cashflow: null,
       resolution: null,
+      newLifeCap: null,
     };
   }
 
@@ -39,24 +41,39 @@ export function computePainPointInsights(state: WizardState, result?: Simulation
         })
       : null;
 
-  const scenario = state.selectedScenario === "compare_all" ? "sell" : state.selectedScenario;
+  const scenarioForCashflow =
+    state.selectedScenario === "compare_all" ? "keep_a" : state.selectedScenario;
   const cashflow =
     state.incomeAMonthly > 0 || state.incomeBMonthly > 0
       ? computePostSeparationCashflow({
           incomeAMonthly: state.incomeAMonthly,
           incomeBMonthly: state.incomeBMonthly,
           postalCode: state.postalCode,
-          scenario,
+          scenario: scenarioForCashflow,
           monthlyMortgageOrRent: state.monthlyMortgagePayment,
           childSupportMonthly: childSupport?.monthlyAmount.amount,
           childSupportPayer: childSupport?.payerId,
           numberOfChildren: state.numberOfChildren,
           custodyType: state.custodyType,
-          selectedKeeper: scenario === "keep_a" ? "A" : scenario === "keep_b" ? "B" : undefined,
+          selectedKeeper:
+            scenarioForCashflow === "keep_a"
+              ? "A"
+              : scenarioForCashflow === "keep_b"
+                ? "B"
+                : undefined,
         })
       : null;
 
   const resolution = compareResolutionPaths(simulationResult.complexityScore);
+
+  const soulte = simulationResult.soulte;
+  const newLifeCap = computeNewLifeCapFromState(
+    state,
+    simulationResult.netWorthByPerson.A.amount,
+    simulationResult.netWorthByPerson.B.amount,
+    soulte?.amount.amount,
+    soulte?.payer
+  );
 
   return {
     result: simulationResult,
@@ -64,6 +81,7 @@ export function computePainPointInsights(state: WizardState, result?: Simulation
     childSupport,
     cashflow,
     resolution,
+    newLifeCap,
   };
 }
 

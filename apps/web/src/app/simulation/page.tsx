@@ -1,10 +1,10 @@
-import { SimulationWizard } from "@/components/wizard/simulation-wizard";
+import { EmpreinteShell } from "@/components/separation/empreinte/empreinte-shell";
 
 export const metadata = {
   title: "Simulation — Clarté",
-  description: "Simulez votre répartition patrimoniale en quelques minutes.",
+  description: "Estimez votre situation en moins d'une minute.",
 };
 
 export default function SimulationPage() {
-  return <SimulationWizard />;
+  return <EmpreinteShell />;
 }

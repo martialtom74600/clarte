@@ -89,6 +89,7 @@ export function scenarioLabel(scenario: string): string {
     keep_a: "Rachat par A",
     keep_b: "Rachat par B",
     sell: "Vente",
+    rent_out: "Garder et louer",
     compare_all: "Comparaison",
   };
   return labels[scenario] ?? scenario;

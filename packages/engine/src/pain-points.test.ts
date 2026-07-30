@@ -7,18 +7,32 @@ import {
   compareMediationInputs,
 } from "../src/index.js";
 
-describe("estimateChildSupport", () => {
-  it("calcule une pension indicative pour 1 enfant garde classique", () => {
+describe("estimateChildSupport — barème Justice 2026", () => {
+  it("applique (revenu − 652) × 13,5 % pour 1 enfant garde classique", () => {
     const result = estimateChildSupport({
       payerIncomeMonthly: 3000,
       recipientIncomeMonthly: 1500,
       numberOfChildren: 1,
       custodyType: "classic",
     });
-    expect(result?.monthlyAmount.amount).toBe(405);
+    // (3000 − 652) × 0.135 = 316.98 → 316.98
+    expect(result?.monthlyAmount.amount).toBe(316.98);
+    expect(result?.availableIncome).toBe(2348);
   });
 
-  it("réduit le montant en garde alternée", () => {
+  it("utilise le taux dégressif pour 2 enfants (11,5 %, pas 23 %)", () => {
+    const result = estimateChildSupport({
+      payerIncomeMonthly: 5000,
+      recipientIncomeMonthly: 2000,
+      numberOfChildren: 2,
+      custodyType: "classic",
+    });
+    // (5000 − 652) × 0.115 = 500.02
+    expect(result?.monthlyAmount.amount).toBe(500.02);
+    expect(result?.percentageApplied).toBeCloseTo(11.5);
+  });
+
+  it("réduit le montant en garde alternée (9 %)", () => {
     const classic = estimateChildSupport({
       payerIncomeMonthly: 3000,
       recipientIncomeMonthly: 1500,
@@ -32,6 +46,7 @@ describe("estimateChildSupport", () => {
       custodyType: "alternate",
     });
     expect(alternate!.monthlyAmount.amount).toBeLessThan(classic!.monthlyAmount.amount);
+    expect(alternate!.percentageApplied).toBeCloseTo(9);
   });
 });
 

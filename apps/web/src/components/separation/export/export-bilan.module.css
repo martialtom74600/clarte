@@ -1,0 +1,182 @@
+.page {
+  min-height: 100dvh;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.document {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 4rem;
+}
+
+.header {
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 2rem;
+  margin-bottom: 2.5rem;
+}
+
+.title {
+  font-size: 1.75rem;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.date {
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.section {
+  margin-bottom: 2.5rem;
+}
+
+.sectionTitle {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 1rem;
+}
+
+.fieldRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.9375rem;
+}
+
+.fieldLabel {
+  color: #475569;
+}
+
+.fieldValue {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: #0f172a;
+}
+
+.leverRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.9375rem;
+}
+
+.leverLabel {
+  color: #0f172a;
+}
+
+.leverValue {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: #334155;
+  white-space: nowrap;
+}
+
+.emptyLevers {
+  font-size: 0.9375rem;
+  color: #64748b;
+  font-style: italic;
+}
+
+.ledgerRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.625rem 0;
+  font-size: 0.9375rem;
+}
+
+.ledgerRowTotal {
+  border-top: 1px solid #cbd5e1;
+  margin-top: 0.75rem;
+  padding-top: 1rem;
+  font-weight: 500;
+}
+
+.ledgerAmount {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ledgerFooter {
+  margin-top: 1.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: #64748b;
+}
+
+.disclaimer {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e2e8f0;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: #94a3b8;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 2.5rem;
+}
+
+@media print {
+  @page {
+    margin: 1.5cm;
+    size: A4;
+  }
+
+  .page {
+    min-height: auto;
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .document {
+    max-width: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .noPrint {
+    display: none !important;
+  }
+
+  .header,
+  .sectionTitle,
+  .fieldLabel,
+  .fieldValue,
+  .leverLabel,
+  .leverValue,
+  .title,
+  .date,
+  .ledgerRow,
+  .ledgerAmount,
+  .ledgerFooter,
+  .disclaimer {
+    color: #000000 !important;
+  }
+
+  .header,
+  .fieldRow,
+  .leverRow,
+  .ledgerRowTotal {
+    border-color: #cccccc !important;
+  }
+
+  .disclaimer {
+    border-color: #cccccc !important;
+  }
+}

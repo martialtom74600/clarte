@@ -1,7 +1,27 @@
-import type { SimulationInput, SimulationResult } from "@separation/schemas";
+import type {
+  AtelierEntity,
+  DataTier,
+  FlowPhase,
+  PropertyValueMode,
+  QuickEstimateResult,
+  SimulationInput,
+  SimulationResult,
+  UserIntent,
+} from "@separation/schemas";
 
 export interface WizardState {
   step: number;
+  flowPhase: FlowPhase;
+  intent: UserIntent | null;
+  dataTier: DataTier;
+  quickEstimate: QuickEstimateResult | null;
+  atelierEntities: AtelierEntity[];
+  propertyValueAdjustment: number;
+  propertySurface: number;
+  propertyValueMode: PropertyValueMode;
+  dvfMedianPricePerSqm: number | null;
+  contributionA: number;
+  contributionB: number;
   status: SimulationInput["status"] | null;
   marriageRegime: SimulationInput["marriageRegime"];
   marriageDate: string;
@@ -39,8 +59,73 @@ export interface WizardState {
   lastInput: SimulationInput | null;
 }
 
+export function intentToScenario(intent: UserIntent): SimulationInput["options"]["scenario"] {
+  switch (intent) {
+    case "keep_home":
+      return "keep_a";
+    case "walk_away":
+      return "keep_b";
+    case "amiable_path":
+      return "compare_all";
+  }
+}
+
+export function computeDataTier(
+  state: Pick<
+    WizardState,
+    | "quickEstimate"
+    | "incomeAMonthly"
+    | "incomeBMonthly"
+    | "hasMinorChildren"
+    | "numberOfChildren"
+    | "custodyType"
+    | "propertyValue"
+    | "postalCode"
+    | "status"
+  >,
+  readyForScenarios: boolean
+): DataTier {
+  if (readyForScenarios) return "complete";
+  if (state.incomeAMonthly > 0 || state.incomeBMonthly > 0) return "partial";
+  if (state.quickEstimate) return "snapshot";
+  if (state.status || state.propertyValue > 0) return "partial";
+  return "empty";
+}
+
+export function buildInitialAtelierEntities(
+  state: Pick<WizardState, "propertyValue" | "mortgageRemaining" | "postalCode">
+): AtelierEntity[] {
+  return [
+    {
+      id: "logement",
+      type: "logement",
+      zoneId: "patrimoine",
+      label: "Logement",
+      complete: state.propertyValue > 0 && state.postalCode.length >= 5,
+    },
+    {
+      id: "credit",
+      type: "credit",
+      zoneId: "patrimoine",
+      label: "Crédit immo",
+      complete: true,
+    },
+  ];
+}
+
 export const initialWizardState: WizardState = {
   step: 0,
+  flowPhase: "narrative",
+  intent: null,
+  dataTier: "empty",
+  quickEstimate: null,
+  atelierEntities: [],
+  propertyValueAdjustment: 0,
+  propertySurface: 0,
+  propertyValueMode: "dvf",
+  dvfMedianPricePerSqm: null,
+  contributionA: 0,
+  contributionB: 0,
   status: null,
   marriageRegime: "communaute_legale",
   marriageDate: "",

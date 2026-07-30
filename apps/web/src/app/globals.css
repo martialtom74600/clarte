@@ -132,3 +132,48 @@ body {
 .clarte-hot-pulse {
   animation: clarte-hot-pulse 2.4s ease-in-out infinite;
 }
+
+/* ── Narrative form (letter / iA Writer minimal) ── */
+
+.clarte-narrative-shell {
+  @apply mx-auto w-full max-w-[42rem] overflow-visible px-2 md:px-0;
+}
+
+.clarte-narrative-letter {
+  @apply font-sans text-2xl font-light leading-[1.65] tracking-[-0.01em] text-slate-800 md:text-3xl md:leading-[1.6] lg:text-4xl lg:leading-[1.55];
+}
+
+.clarte-narrative-prose {
+  @apply font-sans text-xl font-light leading-relaxed text-slate-800 md:text-2xl md:leading-relaxed;
+}
+
+.clarte-narrative-prose-secondary {
+  @apply font-sans text-base font-light leading-relaxed text-slate-500 md:text-lg;
+}
+
+.clarte-narrative-slot-blank {
+  @apply mx-0.5 inline cursor-pointer border-0 border-b border-slate-300/70 bg-transparent p-0 font-light text-inherit outline-none transition-colors duration-200;
+  border-bottom-width: 1px;
+  min-width: 2.5ch;
+  vertical-align: baseline;
+}
+
+.clarte-narrative-slot-empty-text {
+  @apply min-w-[5ch] text-slate-300/50;
+}
+
+.clarte-narrative-slot-filled-text {
+  @apply border-slate-400/50 text-slate-800;
+}
+
+.clarte-narrative-whisper-link {
+  @apply inline border-0 bg-transparent p-0 text-[0.72em] font-light text-slate-400 underline decoration-slate-300/60 underline-offset-[0.2em] transition-colors hover:text-slate-600;
+}
+
+.clarte-glass-popover {
+  @apply min-w-[12rem] max-w-[22rem] rounded-2xl border border-white/60 bg-white/75 p-2 shadow-[0_8px_32px_rgba(15,23,42,0.08)] backdrop-blur-xl backdrop-saturate-150;
+}
+
+.clarte-narrative-scenario-selected {
+  @apply rounded-lg bg-brand-50/80 px-1.5 py-0.5 text-brand-900 ring-1 ring-brand-200/60;
+}

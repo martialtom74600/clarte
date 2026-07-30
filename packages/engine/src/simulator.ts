@@ -18,38 +18,17 @@ import {
   getShareForPerson,
   multiplyMoney,
   normalizePatrimony,
+  round,
   subtractMoney,
 } from "./utils.js";
+import { computeSoulteCore } from "./soulte-core.js";
+import { rentPerSqm } from "./affordability.js";
+
+const CHARGES_ESTIMATE_MONTHLY = 180;
 
 export interface Strategy {
   computeBaseNetWorth(input: SimulationInput): Record<PersonId, import("@separation/schemas").Money>;
   classifyAsset(asset: Asset, input: SimulationInput): "community" | "own_a" | "own_b" | "indivision";
-}
-
-function computeSoulte(
-  asset: Asset,
-  liabilities: SimulationInput["liabilities"],
-  keeper: PersonId,
-  input: SimulationInput
-): SoulteResult {
-  const receiver: PersonId = keeper === "A" ? "B" : "A";
-  const net = getNetAssetValue(asset, liabilities);
-  const receiverShare = getShareForPerson(asset.ownership, receiver);
-  const soulteAmount = multiplyMoney(net, receiverShare);
-  const notaryRate = input.options.notaryFeesRate ?? 0.075;
-  const notaryFees = multiplyMoney(soulteAmount, notaryRate);
-  const totalCashNeeded = addMoney(soulteAmount, notaryFees);
-
-  return {
-    payer: keeper,
-    receiver,
-    amount: soulteAmount,
-    assetId: asset.id,
-    assetLabel: asset.label,
-    netAssetValue: net,
-    notaryFeesEstimate: notaryFees,
-    totalCashNeeded,
-  };
 }
 
 function applyKeepScenario(
@@ -58,7 +37,7 @@ function applyKeepScenario(
   baseNet: Record<PersonId, import("@separation/schemas").Money>,
   primaryAsset: Asset
 ): { netWorth: Record<PersonId, import("@separation/schemas").Money>; soulte: SoulteResult } {
-  const soulte = computeSoulte(primaryAsset, input.liabilities, keeper, input);
+  const soulte = computeSoulteCore(primaryAsset, input.liabilities, keeper, input);
   const netWorth = { ...baseNet };
 
   netWorth[soulte.payer] = subtractMoney(netWorth[soulte.payer], soulte.amount);
@@ -67,14 +46,64 @@ function applyKeepScenario(
   return { netWorth, soulte };
 }
 
+function buildRentOutScenario(
+  input: SimulationInput,
+  baseNet: Record<PersonId, import("@separation/schemas").Money>,
+  primaryAsset: Asset
+): ScenarioComparison {
+  const shareA = getShareForPerson(primaryAsset.ownership, "A");
+  const shareB = getShareForPerson(primaryAsset.ownership, "B");
+  const mortgage = input.liabilities.find((l) => l.type === "mortgage");
+  const mortgageRate = input.options.mortgageRate ?? 0.0385;
+  const mortgageYears = input.options.mortgageDurationYears ?? 20;
+  const mortgagePay =
+    input.monthlyMortgagePayment && input.monthlyMortgagePayment > 0
+      ? input.monthlyMortgagePayment
+      : mortgage
+        ? estimateMonthlyPayment(
+            mortgage.remainingBalance.amount,
+            mortgageRate,
+            mortgageYears
+          ).amount
+        : 0;
+
+  const postalCode = input.postalCode ?? "75000";
+  const surface = input.propertySurface ?? 65;
+  const grossRent =
+    input.options.monthlyRentOverride && input.options.monthlyRentOverride > 0
+      ? round(input.options.monthlyRentOverride)
+      : round(rentPerSqm(postalCode) * surface);
+  const netRent = grossRent - mortgagePay - CHARGES_ESTIMATE_MONTHLY;
+  const monthlyNetCashflow = {
+    A: eur(netRent * shareA),
+    B: eur(netRent * shareB),
+  };
+
+  return {
+    scenario: "rent_out",
+    label: "Garder et louer",
+    netWorthByPerson: baseNet,
+    monthlyNetCashflow,
+    monthlyPaymentEstimate: eur(netRent),
+    description:
+      netRent >= 0
+        ? `Location estimée (${postalCode}, ${surface} m²) : excédent net ~${Math.round(netRent).toLocaleString("fr-FR")} €/mois après crédit (réparti selon quote-part).`
+        : `Location estimée (${postalCode}, ${surface} m²) : le loyer ne couvre pas le crédit (~${Math.round(netRent).toLocaleString("fr-FR")} €/mois).`,
+  };
+}
+
 function buildScenario(
   input: SimulationInput,
-  scenario: "keep_a" | "keep_b" | "sell",
+  scenario: "keep_a" | "keep_b" | "sell" | "rent_out",
   baseNet: Record<PersonId, import("@separation/schemas").Money>,
   primaryAsset?: Asset
 ): ScenarioComparison {
-  const mortgageRate = input.options.mortgageRate ?? 0.035;
+  const mortgageRate = input.options.mortgageRate ?? 0.0385;
   const mortgageYears = input.options.mortgageDurationYears ?? 20;
+
+  if (scenario === "rent_out" && primaryAsset) {
+    return buildRentOutScenario(input, baseNet, primaryAsset);
+  }
 
   if (scenario === "sell" && primaryAsset) {
     const net = getNetAssetValue(primaryAsset, input.liabilities);
@@ -111,8 +140,44 @@ function buildScenario(
 
   const keeper: PersonId = scenario === "keep_a" ? "A" : "B";
   const { netWorth, soulte } = applyKeepScenario(input, keeper, baseNet, primaryAsset);
+  const soulteCash =
+    soulte.totalCashNeeded?.amount ?? soulte.amount.amount;
+  const fullRefinance =
+    soulte.refinanceAmount?.amount ?? soulteCash;
+
+  // Levier « garder mon crédit » : monthlyMortgagePayment > 0 → on conserve le CRD
+  // aux conditions actuelles et on ne refinance que le rachat + frais.
+  const keepExistingLoan =
+    input.monthlyMortgagePayment != null && input.monthlyMortgagePayment > 0;
+
+  if (keepExistingLoan) {
+    const newLoanAmount = soulteCash;
+    const newLoanMonthly = estimateMonthlyPayment(
+      newLoanAmount,
+      mortgageRate,
+      mortgageYears
+    );
+    const keptMonthly = input.monthlyMortgagePayment!;
+    const totalMonthly = eur(keptMonthly + newLoanMonthly.amount);
+
+    return {
+      scenario,
+      label: keeper === "A" ? "Personne A rachète" : "Personne B rachète",
+      netWorthByPerson: netWorth,
+      soulte,
+      monthlyPaymentEstimate: totalMonthly,
+      cashNeeded: eur(newLoanAmount),
+      keepFinancingMode: "keep_existing_loan",
+      keptMortgageMonthly: eur(keptMonthly),
+      newLoanAmount: eur(newLoanAmount),
+      newLoanMonthly,
+      description: `${keeper === "A" ? "A" : "B"} conserve le logement et le crédit actuel (${Math.round(keptMonthly).toLocaleString("fr-FR")} €/mois), et finance uniquement le rachat (~${Math.round(newLoanAmount).toLocaleString("fr-FR")} €).`,
+    };
+  }
+
+  // Défaut C4 — refinancement global CRD + soulte + frais aux taux marché.
   const monthlyPayment = estimateMonthlyPayment(
-    soulte.totalCashNeeded?.amount ?? soulte.amount.amount,
+    fullRefinance,
     mortgageRate,
     mortgageYears
   );
@@ -123,8 +188,11 @@ function buildScenario(
     netWorthByPerson: netWorth,
     soulte,
     monthlyPaymentEstimate: monthlyPayment,
-    cashNeeded: soulte.totalCashNeeded ?? soulte.amount,
-    description: `${keeper === "A" ? "A" : "B"} conserve le logement et verse une soulte de ${soulte.amount.amount.toLocaleString("fr-FR")} € à l'autre partie.`,
+    cashNeeded: soulte.refinanceAmount ?? soulte.totalCashNeeded ?? soulte.amount,
+    keepFinancingMode: "full_refinance",
+    newLoanAmount: eur(fullRefinance),
+    newLoanMonthly: monthlyPayment,
+    description: `${keeper === "A" ? "A" : "B"} conserve le logement et verse une soulte de ${soulte.amount.amount.toLocaleString("fr-FR")} € à l'autre partie (refinancement estimé ${Math.round(fullRefinance).toLocaleString("fr-FR")} €).`,
   };
 }
 
@@ -329,6 +397,13 @@ export function runSimulation(input: SimulationInput): SimulationResult {
     input.options.scenario === "sell"
   ) {
     scenarios.push(buildScenario(input, "sell", baseNet, primaryAsset));
+  }
+
+  if (
+    input.options.scenario === "compare_all" ||
+    input.options.scenario === "rent_out"
+  ) {
+    scenarios.push(buildScenario(input, "rent_out", baseNet, primaryAsset));
   }
 
   const primaryScenario =

@@ -1,0 +1,164 @@
+import { describe, it, expect } from "vitest";
+import {
+  computeSoulteCore,
+  resolveEffectiveShares,
+  usesRecompenseModel,
+  droitDePartageRate,
+  DEFAULT_EMOLUMENTS_RATE_ON_NET,
+  DROIT_PARTAGE_RATE_CONCUBINAGE,
+  DROIT_PARTAGE_RATE_MARRIAGE_PACS,
+  eur,
+} from "../src/index.js";
+import type { SimulationInput } from "@separation/schemas";
+
+const baseAsset = {
+  id: "house",
+  type: "real_estate" as const,
+  label: "Appartement",
+  grossValue: eur(400000),
+  ownership: { kind: "indivision" as const, shares: { A: 0.5, B: 0.5 } },
+  isPrimaryResidence: true,
+  linkedLiabilityIds: ["mortgage"],
+};
+
+const communityAsset = {
+  ...baseAsset,
+  ownership: { kind: "community" as const },
+};
+
+const baseLiabilities: SimulationInput["liabilities"] = [
+  {
+    id: "mortgage",
+    type: "mortgage",
+    remainingBalance: eur(200000),
+    responsibility: { kind: "indivision", shares: { A: 0.5, B: 0.5 } },
+    linkedAssetId: "house",
+  },
+];
+
+function baseInput(overrides: Partial<SimulationInput> = {}): SimulationInput {
+  return {
+    status: "concubinage",
+    persons: [{ id: "A" }, { id: "B" }],
+    assets: [baseAsset],
+    liabilities: baseLiabilities,
+    options: { primaryResidenceId: "house", scenario: "keep_a" },
+    ...overrides,
+  };
+}
+
+describe("resolveEffectiveShares", () => {
+  it("utilise la quote-part légale sans apports", () => {
+    const shares = resolveEffectiveShares(baseAsset, baseInput());
+    expect(shares.shareA).toBe(0.5);
+    expect(shares.shareB).toBe(0.5);
+    expect(shares.contributionAdjusted).toBe(false);
+    expect(shares.mode).toBe("none");
+  });
+
+  it("en indivision, ajuste la quote-part selon les apports (proxy créance)", () => {
+    const shares = resolveEffectiveShares(
+      baseAsset,
+      baseInput({ contributionA: 20000, contributionB: 30000 })
+    );
+    expect(shares.shareA).toBeCloseTo(0.4);
+    expect(shares.shareB).toBeCloseTo(0.6);
+    expect(shares.mode).toBe("share_rewrite");
+  });
+
+  it("en communauté, conserve le 50/50 (récompense, pas rewrite)", () => {
+    const shares = resolveEffectiveShares(
+      communityAsset,
+      baseInput({
+        status: "marriage",
+        marriageRegime: "communaute_legale",
+        contributionA: 20000,
+        contributionB: 30000,
+        assets: [communityAsset],
+      })
+    );
+    expect(shares.shareA).toBe(0.5);
+    expect(shares.shareB).toBe(0.5);
+    expect(shares.mode).toBe("recompense");
+    expect(usesRecompenseModel(communityAsset, baseInput({
+      status: "marriage",
+      marriageRegime: "communaute_legale",
+      contributionA: 20000,
+      contributionB: 30000,
+      assets: [communityAsset],
+    }))).toBe(true);
+  });
+});
+
+describe("C1 — droit de partage & émoluments", () => {
+  it("applique 2,50 % + 1,5 % sur l'actif net en concubinage (pas 7,5 % de la soulte)", () => {
+    const soulte = computeSoulteCore(baseAsset, baseLiabilities, "A", baseInput());
+    expect(soulte.amount.amount).toBe(100000);
+    expect(droitDePartageRate("concubinage")).toBe(DROIT_PARTAGE_RATE_CONCUBINAGE);
+    expect(soulte.droitDePartage?.amount).toBe(200000 * DROIT_PARTAGE_RATE_CONCUBINAGE);
+    expect(soulte.emolumentsEstimate?.amount).toBe(200000 * DEFAULT_EMOLUMENTS_RATE_ON_NET);
+    expect(soulte.notaryFeesEstimate?.amount).toBe(
+      200000 * (DROIT_PARTAGE_RATE_CONCUBINAGE + DEFAULT_EMOLUMENTS_RATE_ON_NET)
+    );
+    expect(soulte.totalCashNeeded?.amount).toBe(
+      100000 + 200000 * (DROIT_PARTAGE_RATE_CONCUBINAGE + DEFAULT_EMOLUMENTS_RATE_ON_NET)
+    );
+  });
+
+  it("applique 1,10 % en mariage / PACS (CGI 746)", () => {
+    const married = computeSoulteCore(
+      communityAsset,
+      [{ ...baseLiabilities[0], responsibility: { kind: "community" } }],
+      "A",
+      baseInput({
+        status: "marriage",
+        marriageRegime: "communaute_legale",
+        assets: [communityAsset],
+        liabilities: [{ ...baseLiabilities[0], responsibility: { kind: "community" } }],
+      })
+    );
+    expect(droitDePartageRate("marriage")).toBe(DROIT_PARTAGE_RATE_MARRIAGE_PACS);
+    expect(droitDePartageRate("pacs")).toBe(DROIT_PARTAGE_RATE_MARRIAGE_PACS);
+    expect(married.droitDePartage?.amount).toBe(200000 * DROIT_PARTAGE_RATE_MARRIAGE_PACS);
+  });
+});
+
+describe("C3 — récompenses en communauté", () => {
+  it("impute les apports en récompenses (200k net, 20k/30k → soulte 105k)", () => {
+    // masse après récompenses = 150k → moitié 75k + récompense B 30k = 105k
+    const soulte = computeSoulteCore(
+      communityAsset,
+      [{ ...baseLiabilities[0], responsibility: { kind: "community" } }],
+      "A",
+      baseInput({
+        status: "marriage",
+        marriageRegime: "communaute_legale",
+        contributionA: 20000,
+        contributionB: 30000,
+        assets: [communityAsset],
+        liabilities: [{ ...baseLiabilities[0], responsibility: { kind: "community" } }],
+      })
+    );
+    expect(soulte.amount.amount).toBe(105000);
+    expect(soulte.recompenseA?.amount).toBe(20000);
+    expect(soulte.recompenseB?.amount).toBe(30000);
+  });
+
+  it("en indivision, conserve le rewrite d'apports (20k/30k → 120k)", () => {
+    const soulte = computeSoulteCore(
+      baseAsset,
+      baseLiabilities,
+      "A",
+      baseInput({ contributionA: 20000, contributionB: 30000 })
+    );
+    expect(soulte.amount.amount).toBe(120000);
+  });
+});
+
+describe("C4 — package de refinancement", () => {
+  it("refinanceAmount = CRD + soulte + frais", () => {
+    const soulte = computeSoulteCore(baseAsset, baseLiabilities, "A", baseInput());
+    const fees = soulte.notaryFeesEstimate!.amount;
+    expect(soulte.refinanceAmount?.amount).toBe(200000 + 100000 + fees);
+  });
+});

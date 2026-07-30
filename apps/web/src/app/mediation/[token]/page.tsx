@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { InputField } from "@/components/wizard/wizard-ui";
+import { InputField } from "@/components/ui/input-field";
 import { FadeIn, ShimmerSkeleton } from "@/components/ui";
 import { clarte, clarteGlassCard } from "@/lib/clarte-design";
 import type { MediationComparison } from "@separation/engine";

@@ -1,15 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
-import { useWizardStore } from "@/store/wizard-store";
-import { SimulationWizard } from "@/components/wizard/simulation-wizard";
+import { useSeparationStore } from "@/store/separation-store";
+import { EmpreinteShell } from "@/components/separation/empreinte/empreinte-shell";
 
 export function EmbedWizard({ tenantId }: { tenantId: string }) {
-  const update = useWizardStore((s) => s.update);
-
   useEffect(() => {
-    update({ tenantId });
-  }, [tenantId, update]);
+    useSeparationStore.setState({ discreteMode: true });
+  }, [tenantId]);
 
-  return <SimulationWizard />;
+  return <EmpreinteShell />;
 }

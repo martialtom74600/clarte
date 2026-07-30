@@ -9,8 +9,9 @@ export function ClartePublicChrome({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
   const isPro = pathname.startsWith("/pro");
   const isEmbed = pathname.startsWith("/embed");
+  const isSimulation = pathname.startsWith("/simulation");
 
-  if (isPro || isEmbed) {
+  if (isPro || isEmbed || isSimulation) {
     return <>{children}</>;
   }
 

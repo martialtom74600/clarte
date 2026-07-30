@@ -61,7 +61,7 @@ describe("Legal test cases (notaire validation)", () => {
     expect(result.soulte?.amount.amount).toBe(150000);
   });
 
-  it("Cas 8: soulte avec frais notaire 7.5%", () => {
+  it("Cas 8: droit de partage 2,5 % + émoluments 1,5 % sur actif net (concubinage)", () => {
     const input: SimulationInput = {
       status: "concubinage",
       persons,
@@ -73,12 +73,15 @@ describe("Legal test cases (notaire validation)", () => {
       options: {
         primaryResidenceId: "house",
         scenario: "keep_a",
-        notaryFeesRate: 0.075,
       },
     };
     const result = runSimulation(input);
+    // net 200k, soulte 100k ; frais = 200k × (2,5 % + 1,5 %) = 8 000
     expect(result.soulte?.amount.amount).toBe(100000);
-    expect(result.soulte?.totalCashNeeded?.amount).toBe(107500);
+    expect(result.soulte?.droitDePartage?.amount).toBe(5000);
+    expect(result.soulte?.emolumentsEstimate?.amount).toBe(3000);
+    expect(result.soulte?.totalCashNeeded?.amount).toBe(108000);
+    expect(result.soulte?.refinanceAmount?.amount).toBe(108000);
   });
 
   it("Cas 9: épargne propre et dettes perso", () => {

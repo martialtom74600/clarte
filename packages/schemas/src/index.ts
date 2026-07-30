@@ -16,7 +16,64 @@ export type AssetType =
 
 export type LiabilityType = "mortgage" | "consumer_loan" | "other";
 
-export type ScenarioType = "keep_a" | "keep_b" | "sell" | "compare_all";
+export type ScenarioType = "keep_a" | "keep_b" | "sell" | "rent_out" | "compare_all";
+
+export type UserIntent = "keep_home" | "walk_away" | "amiable_path";
+
+export type FlowPhase = "narrative" | "scenarios" | "secure";
+
+export type DataTier = "empty" | "snapshot" | "partial" | "complete";
+
+export type AtelierEntityType =
+  | "logement"
+  | "credit"
+  | "revenus"
+  | "epargne"
+  | "enfants"
+  | "dettes"
+  | "cadre";
+
+export interface AtelierEntity {
+  id: string;
+  type: AtelierEntityType;
+  zoneId: string;
+  label: string;
+  complete: boolean;
+}
+
+export type PropertyValueMode = "dvf" | "manual";
+
+export interface QuickEstimateInput {
+  status: RelationshipStatus;
+  marriageRegime?: MarriageRegime;
+  intent: UserIntent;
+  propertyValue: number;
+  mortgageRemaining: number;
+  shareA?: number;
+  shareB?: number;
+  propertyValueVariance?: number;
+  notaryFeesRate?: number;
+  postalCode?: string;
+  propertySurface?: number;
+  propertyValueMode?: PropertyValueMode;
+}
+
+export interface QuickEstimateAssumption {
+  code: string;
+  label: string;
+}
+
+export type QuickEstimateConfidence = "low" | "medium" | "high";
+
+export interface QuickEstimateResult {
+  min: Money;
+  max: Money;
+  midpoint: Money;
+  confidence: QuickEstimateConfidence;
+  assumptions: QuickEstimateAssumption[];
+  soulte?: SoulteResult;
+  netEquity: Money;
+}
 
 export interface Money {
   amount: number;
@@ -67,9 +124,12 @@ export interface Liability {
 export interface SimulationOptions {
   primaryResidenceId?: string;
   scenario: ScenarioType;
+  /** Override du taux d'émoluments sur l'actif net (défaut moteur ~1,5 %). Plus un % de soulte. */
   notaryFeesRate?: number;
   mortgageRate?: number;
   mortgageDurationYears?: number;
+  /** Override loyer mensuel brut pour le scénario rent_out (levier labo). */
+  monthlyRentOverride?: number;
 }
 
 export interface SimulationInput {
@@ -82,9 +142,44 @@ export interface SimulationInput {
   liabilities: Liability[];
   options: SimulationOptions;
   hasMinorChildren?: boolean;
+  numberOfChildren?: number;
+  custodyType?: "classic" | "alternate" | "reduced";
   urgencyMonths?: number;
   tenantId?: string;
+  /** Empreinte / labo — localisation et surface pour rent_out dynamique. */
+  postalCode?: string;
+  propertySurface?: number;
+  /** Apports initiaux : récompense en communauté, ratio/créance en indivision. */
+  contributionA?: number;
+  contributionB?: number;
+  /** Mensualité réelle du prêt existant (levier taux historique / désolidarisation). */
+  monthlyMortgagePayment?: number;
 }
+
+/** Identifiant des 4 portes du tableau de bord (Strate 2). */
+export type DoorId = "keep_a" | "keep_b" | "sell" | "rent_out";
+
+export interface DoorVerdict {
+  doorId: DoorId;
+  verdict: AffordabilityVerdict;
+  label: string;
+  headline: string;
+  detail: string;
+  monthlyImpact?: Money;
+}
+
+export type DoorVerdictMap = Record<DoorId, DoorVerdict>;
+
+export type SeparationStratum = "empreinte" | "portes" | "laboratoire";
+
+export type LeverId =
+  | "initial_contributions"
+  | "historical_mortgage_rate"
+  | "children_impact"
+  | "legal_status"
+  | "ownership_shares"
+  | "custom_rent"
+  | "savings";
 
 export interface SoulteResult {
   payer: PersonId;
@@ -93,18 +188,117 @@ export interface SoulteResult {
   assetId: string;
   assetLabel: string;
   netAssetValue: Money;
+  /** Total frais d'acte (droit de partage + émoluments / CSI / débours). */
   notaryFeesEstimate?: Money;
+  /** Soulte + frais d'acte (sortie de cash hors refinancement du CRD). */
   totalCashNeeded?: Money;
+  /** CGI art. 746 — 1,10 % (mariage/PACS) ou 2,50 % (concubinage) sur l'actif net. */
+  droitDePartage?: Money;
+  /** Émoluments notaire + CSI + débours (estimation). */
+  emolumentsEstimate?: Money;
+  /** Package de refinancement bancaire : CRD + soulte + frais. */
+  refinanceAmount?: Money;
+  /** Récompenses / créances d'apport retenues (communauté). */
+  recompenseA?: Money;
+  recompenseB?: Money;
 }
+
+export type KeepFinancingMode = "full_refinance" | "keep_existing_loan";
 
 export interface ScenarioComparison {
   scenario: ScenarioType;
   label: string;
   netWorthByPerson: Record<PersonId, Money>;
   soulte?: SoulteResult;
+  /** Mensualité totale à la charge du gardien (nouveau prêt ± crédit conservé). */
   monthlyPaymentEstimate?: Money;
   cashNeeded?: Money;
+  monthlyNetCashflow?: Record<PersonId, Money>;
   description: string;
+  /** Mode de financement du scénario keep_* (levier « garder mon crédit »). */
+  keepFinancingMode?: KeepFinancingMode;
+  /** Mensualité du prêt actuel conservé (désolidarisation). */
+  keptMortgageMonthly?: Money;
+  /** Capital du nouveau prêt (rachat + frais, ou CRD + rachat + frais). */
+  newLoanAmount?: Money;
+  /** Mensualité du seul nouveau prêt. */
+  newLoanMonthly?: Money;
+}
+
+export type AffordabilityVerdict = "green" | "orange" | "red";
+
+export interface MortgageRateSnapshot {
+  annualRate: number;
+  durationYears: number;
+  asOf: string;
+  source: string;
+}
+
+export interface AffordabilityResult {
+  verdict: AffordabilityVerdict;
+  targetPropertyPrice: Money;
+  availableBudget: Money;
+  maxBorrowing: Money;
+  gap: Money;
+  monthlyPayment: Money;
+  effortRatio: number;
+  maxEffortRatio: number;
+  label: string;
+  detail: string;
+}
+
+export interface LifePathDoor {
+  id: "buy_in_zone" | "rent_out" | "sell_relocate";
+  label: string;
+  description: string;
+  verdict: AffordabilityVerdict;
+  headline: string;
+  detail: string;
+  monthlyImpact?: Money;
+}
+
+export interface ZoneMarketSnapshot {
+  postalCode: string;
+  radiusKm: number;
+  departments: string[];
+  medianPricePerSqm: Money;
+  minPricePerSqm: Money;
+  maxPricePerSqm: Money;
+  surfaceSqm: number;
+  source: string;
+  disclaimer: string;
+}
+
+export interface NewLifeCapInput {
+  postalCode: string;
+  propertyValue: number;
+  propertySurface: number;
+  mortgageRemaining: number;
+  monthlyMortgagePayment: number;
+  contributionA: number;
+  contributionB: number;
+  incomeAMonthly: number;
+  incomeBMonthly: number;
+  netWorthA: number;
+  netWorthB: number;
+  intent: UserIntent;
+  soulteAmount?: number;
+  soultePayer?: PersonId;
+  zoneMedianPricePerSqm?: number;
+  zoneMinPricePerSqm?: number;
+  zoneMaxPricePerSqm?: number;
+  zoneDepartments?: string[];
+}
+
+export interface NewLifeCapResult {
+  zone: ZoneMarketSnapshot;
+  mortgageRate: MortgageRateSnapshot;
+  equityNet: Money;
+  contributionsTotal: Money;
+  contributionsByPerson: Record<PersonId, Money>;
+  netDepartureCapital: Record<PersonId, Money>;
+  doors: LifePathDoor[];
+  recommendedDoorId: LifePathDoor["id"];
 }
 
 export interface LegalWarning {
@@ -152,3 +346,4 @@ export interface TenantConfig {
 }
 
 export * from "./zod.js";
+export * from "./narrative-form.js";

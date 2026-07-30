@@ -59,13 +59,66 @@ describe("runSimulation - concubinage", () => {
     expect(result.soulte?.receiver).toBe("B");
   });
 
+  it("ajuste la soulte avec apports asymétriques", () => {
+    const input = createConcubinageInput({
+      contributionA: 20000,
+      contributionB: 30000,
+      options: { primaryResidenceId: "house", scenario: "keep_a" },
+    });
+    const result = runSimulation(input);
+    expect(result.soulte?.amount.amount).toBe(120000);
+  });
+
+  it("calcule la mensualité sur CRD + soulte + frais (pas soulte seule)", () => {
+    const input = createConcubinageInput({
+      options: {
+        primaryResidenceId: "house",
+        scenario: "keep_a",
+        mortgageRate: 0.0385,
+        mortgageDurationYears: 20,
+      },
+    });
+    const result = runSimulation(input);
+    const keep = result.scenarios.find((s) => s.scenario === "keep_a")!;
+    const refinance = keep.soulte!.refinanceAmount!.amount;
+    expect(refinance).toBeGreaterThan(keep.soulte!.amount.amount);
+    expect(refinance).toBe(
+      200000 + keep.soulte!.amount.amount + keep.soulte!.notaryFeesEstimate!.amount
+    );
+    expect(keep.keepFinancingMode).toBe("full_refinance");
+    expect(keep.cashNeeded?.amount).toBe(refinance);
+    expect(keep.monthlyPaymentEstimate!.amount).toBeGreaterThan(1000);
+  });
+
+  it("avec mensualité historique : conserve le CRD et ne refinance que le rachat", () => {
+    const input = createConcubinageInput({
+      monthlyMortgagePayment: 900,
+      options: {
+        primaryResidenceId: "house",
+        scenario: "keep_a",
+        mortgageRate: 0.0385,
+        mortgageDurationYears: 20,
+      },
+    });
+    const result = runSimulation(input);
+    const keep = result.scenarios.find((s) => s.scenario === "keep_a")!;
+    expect(keep.keepFinancingMode).toBe("keep_existing_loan");
+    expect(keep.keptMortgageMonthly?.amount).toBe(900);
+    expect(keep.newLoanAmount?.amount).toBe(keep.soulte!.totalCashNeeded!.amount);
+    expect(keep.newLoanAmount!.amount).toBeLessThan(keep.soulte!.refinanceAmount!.amount);
+    expect(keep.monthlyPaymentEstimate!.amount).toBe(
+      900 + keep.newLoanMonthly!.amount
+    );
+  });
+
   it("compare les 3 scénarios", () => {
     const result = runSimulation(createConcubinageInput());
-    expect(result.scenarios).toHaveLength(3);
+    expect(result.scenarios).toHaveLength(4);
     expect(result.scenarios.map((s) => s.scenario)).toEqual([
       "keep_a",
       "keep_b",
       "sell",
+      "rent_out",
     ]);
   });
 

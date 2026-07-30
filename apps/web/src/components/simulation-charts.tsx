@@ -14,8 +14,8 @@ interface PatrimonyChartProps {
 
 export function PatrimonyChart({ result, className }: PatrimonyChartProps) {
   const data = [
-    { name: "Personne A", value: result.netWorthByPerson.A.amount },
-    { name: "Personne B", value: result.netWorthByPerson.B.amount },
+    { name: "Vous", value: result.netWorthByPerson.A.amount },
+    { name: "Autre partie", value: result.netWorthByPerson.B.amount },
   ];
 
   return (

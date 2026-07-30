@@ -83,14 +83,20 @@ export const simulationInputSchema = z.object({
   liabilities: z.array(liabilitySchema),
   options: z.object({
     primaryResidenceId: z.string().optional(),
-    scenario: z.enum(["keep_a", "keep_b", "sell", "compare_all"]),
+    scenario: z.enum(["keep_a", "keep_b", "sell", "rent_out", "compare_all"]),
     notaryFeesRate: z.number().min(0).max(0.15).optional(),
     mortgageRate: z.number().min(0).max(0.2).optional(),
     mortgageDurationYears: z.number().min(1).max(30).optional(),
+    monthlyRentOverride: z.number().min(0).optional(),
   }),
   hasMinorChildren: z.boolean().optional(),
   urgencyMonths: z.number().optional(),
   tenantId: z.string().optional(),
+  postalCode: z.string().optional(),
+  propertySurface: z.number().min(1).optional(),
+  contributionA: z.number().min(0).optional(),
+  contributionB: z.number().min(0).optional(),
+  monthlyMortgagePayment: z.number().min(0).optional(),
 });
 
 export const leadQualificationSchema = z.object({
@@ -100,7 +106,7 @@ export const leadQualificationSchema = z.object({
   hasMinorChildren: z.boolean().optional(),
   propertyValue: z.number().optional(),
   scenarioPreference: z
-    .enum(["keep_a", "keep_b", "sell", "compare_all"])
+    .enum(["keep_a", "keep_b", "sell", "rent_out", "compare_all"])
     .optional(),
   optInPartnerMatch: z.boolean().optional(),
   tenantId: z.string().optional(),

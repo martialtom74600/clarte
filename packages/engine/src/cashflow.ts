@@ -57,6 +57,14 @@ function estimateHousing(
 ): { cost: number; label: string } {
   const rentEstimate = round(estimateRentPerSqm(postalCode) * 55);
 
+  if (scenario === "rent_out") {
+    const rentEstimate = round(estimateRentPerSqm(postalCode) * 55);
+    return {
+      cost: rentEstimate,
+      label: "Loyer ailleurs (bien conservé en location)",
+    };
+  }
+
   if (scenario === "sell") {
     return { cost: rentEstimate, label: "Loyer estimé (après vente)" };
   }

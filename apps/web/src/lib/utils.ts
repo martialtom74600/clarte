@@ -10,7 +10,7 @@ export function formatEuro(amount: number): string {
     style: "currency",
     currency: "EUR",
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(Math.round(amount));
 }
 
 export function formatEuroDetailed(amount: number): string {
