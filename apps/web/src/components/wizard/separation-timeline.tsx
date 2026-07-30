@@ -17,16 +17,17 @@ export const WIZARD_MAX_STEP = TIMELINE_STEPS.length - 1;
 
 interface SeparationTimelineProps {
   currentStep: number;
+  isActComplete: (actId: number) => boolean;
 }
 
-export function SeparationTimeline({ currentStep }: SeparationTimelineProps) {
+export function SeparationTimeline({ currentStep, isActComplete }: SeparationTimelineProps) {
   const step = Math.min(currentStep, WIZARD_MAX_STEP);
 
   return (
     <div className="mb-2">
       <div className="hidden md:flex items-center justify-between gap-1">
         {TIMELINE_STEPS.map((s) => {
-          const done = step > s.id;
+          const done = isActComplete(s.id) && s.id < step;
           const active = step === s.id;
           return (
             <div key={s.id} className="flex flex-1 flex-col items-center text-center">

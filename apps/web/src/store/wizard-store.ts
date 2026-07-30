@@ -43,6 +43,14 @@ export const useWizardStore = create<WizardStore>()(
     }),
     {
       name: "clarte-simulation",
+      version: 2,
+      migrate: (persisted, version) => {
+        const state = persisted as WizardState;
+        if (version < 2 && state.step > 4) {
+          state.step = 4;
+        }
+        return persisted as typeof persisted;
+      },
       partialize: (state) => ({
         step: state.step,
         status: state.status,

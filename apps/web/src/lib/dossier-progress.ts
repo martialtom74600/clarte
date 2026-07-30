@@ -80,6 +80,54 @@ export function computeDossierProgress(state: WizardState): {
   return { percent, lines, readyForRevelation };
 }
 
+type StepResolutionInput = Pick<
+  WizardState,
+  | "step"
+  | "status"
+  | "propertyValue"
+  | "postalCode"
+  | "incomeAMonthly"
+  | "incomeBMonthly"
+  | "hasMinorChildren"
+  | "numberOfChildren"
+  | "custodyType"
+>;
+
+/** Ramène l'utilisateur à l'acte cohérent avec ses données (localStorage legacy). */
+export function resolveWizardStep(state: StepResolutionInput, hasResult: boolean): number {
+  const { readyForRevelation } = computeDossierProgress(state as WizardState);
+
+  if (!state.status) return 0;
+  if (state.propertyValue <= 0 || state.postalCode.length < 5) return 1;
+  if (!readyForRevelation) return Math.min(state.step, 2);
+
+  if (!hasResult) return Math.min(state.step, 2);
+
+  if (state.step >= 4) return 4;
+  if (state.step === 3) return 3;
+  return 3;
+}
+
+export function isWizardActComplete(
+  actId: number,
+  state: WizardState,
+  hasResult: boolean
+): boolean {
+  const { readyForRevelation } = computeDossierProgress(state);
+  switch (actId) {
+    case 0:
+      return Boolean(state.status);
+    case 1:
+      return state.propertyValue > 0 && state.postalCode.length >= 5;
+    case 2:
+      return readyForRevelation;
+    case 3:
+      return hasResult;
+    default:
+      return false;
+  }
+}
+
 /** Migre les anciennes étapes (0–8) vers le parcours 5 actes (0–4). */
 export function migrateWizardStep(step: number): number {
   if (step <= 4) return step;

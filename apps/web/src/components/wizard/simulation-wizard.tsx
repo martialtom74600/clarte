@@ -12,7 +12,7 @@ import {
 import { StepShell, WizardStepContainer } from "./wizard-ui";
 import { SeparationTimeline, WIZARD_MAX_STEP } from "./separation-timeline";
 import { clarte, clarteWizardShell } from "@/lib/clarte-design";
-import { computeDossierProgress } from "@/lib/dossier-progress";
+import { computeDossierProgress, isWizardActComplete, resolveWizardStep } from "@/lib/dossier-progress";
 import { toast } from "sonner";
 import { EmotionalSandboxBanner } from "./pain-point-panels";
 import { trackEvent } from "@/lib/analytics";
@@ -82,14 +82,43 @@ export function SimulationWizard() {
   );
 
   useEffect(() => {
-    if (step > WIZARD_MAX_STEP) {
-      setStep(WIZARD_MAX_STEP);
+    const hasResult = Boolean(lastResult);
+    const resolutionInput = {
+      step,
+      status,
+      propertyValue,
+      postalCode,
+      incomeAMonthly,
+      incomeBMonthly,
+      hasMinorChildren,
+      numberOfChildren,
+      custodyType,
+    };
+
+    if (dossier.readyForRevelation && !hasResult && step >= 3) {
+      computeResult();
       return;
     }
-    if (step === 3 && !lastResult) {
-      setStep(2);
+
+    const resolved = resolveWizardStep(resolutionInput, hasResult);
+    if (resolved !== step) {
+      setStep(resolved);
     }
-  }, [step, lastResult, setStep]);
+  }, [
+    step,
+    lastResult,
+    dossier.readyForRevelation,
+    status,
+    propertyValue,
+    postalCode,
+    incomeAMonthly,
+    incomeBMonthly,
+    hasMinorChildren,
+    numberOfChildren,
+    custodyType,
+    setStep,
+    computeResult,
+  ]);
 
   useEffect(() => {
     if (discreteMode) {
@@ -230,8 +259,11 @@ export function SimulationWizard() {
     }
   };
 
-  const revealed = step >= 3;
+  const revealed = Boolean(lastResult);
   const safeStep = Math.min(step, WIZARD_MAX_STEP);
+
+  const isActComplete = (actId: number) =>
+    isWizardActComplete(actId, store, Boolean(lastResult));
 
   return (
     <div className={`${clarte.mesh} min-h-screen py-6 md:py-10`}>
@@ -240,7 +272,7 @@ export function SimulationWizard() {
           <EmotionalSandboxBanner discreteMode={discreteMode} />
           <div className="mb-6 flex items-center justify-between">
             <div className="flex-1">
-              <SeparationTimeline currentStep={safeStep} />
+              <SeparationTimeline currentStep={safeStep} isActComplete={isActComplete} />
             </div>
             <button
               type="button"
@@ -404,6 +436,18 @@ export function SimulationWizard() {
                       setStep(0);
                     }}
                   />
+                </StepShell>
+              )}
+              {safeStep === 4 && !lastResult && (
+                <StepShell
+                  title="Sécuriser & agir"
+                  subtitle="Calcul de votre projection en cours…"
+                  onPrev={() => setStep(2)}
+                  showPrev
+                >
+                  <p className="text-sm text-slate-600">
+                    Finalisez vos revenus à l&apos;étape précédente si cette page reste vide.
+                  </p>
                 </StepShell>
               )}
             </WizardStepContainer>
