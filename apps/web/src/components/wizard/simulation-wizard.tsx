@@ -60,6 +60,7 @@ export function SimulationWizard() {
     nextStep,
     prevStep,
     computeResult,
+    reset,
   } = store;
 
   const dossier = useMemo(() => computeDossierProgress(store), [store]);
@@ -83,24 +84,31 @@ export function SimulationWizard() {
 
   useEffect(() => {
     const hasResult = Boolean(lastResult);
-    const resolutionInput = {
-      step,
-      status,
-      propertyValue,
-      postalCode,
-      incomeAMonthly,
-      incomeBMonthly,
-      hasMinorChildren,
-      numberOfChildren,
-      custodyType,
-    };
+
+    if (step > WIZARD_MAX_STEP) {
+      setStep(WIZARD_MAX_STEP);
+      return;
+    }
 
     if (dossier.readyForRevelation && !hasResult && step >= 3) {
       computeResult();
       return;
     }
 
-    const resolved = resolveWizardStep(resolutionInput, hasResult);
+    const resolved = resolveWizardStep(
+      {
+        step,
+        status,
+        propertyValue,
+        postalCode,
+        incomeAMonthly,
+        incomeBMonthly,
+        hasMinorChildren,
+        numberOfChildren,
+        custodyType,
+      },
+      hasResult
+    );
     if (resolved !== step) {
       setStep(resolved);
     }
@@ -270,18 +278,32 @@ export function SimulationWizard() {
       <div className="mx-auto max-w-5xl px-4">
         <div className={clarteWizardShell}>
           <EmotionalSandboxBanner discreteMode={discreteMode} />
-          <div className="mb-6 flex items-center justify-between">
-            <div className="flex-1">
+          <div className="mb-6 flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
               <SeparationTimeline currentStep={safeStep} isActComplete={isActComplete} />
             </div>
-            <button
-              type="button"
-              onClick={() => update({ discreteMode: !discreteMode })}
-              className="ml-4 rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100/80"
-              title="Mode discret"
-            >
-              {discreteMode ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-            </button>
+            <div className="flex shrink-0 items-center gap-1">
+              {safeStep > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmailSent(false);
+                    reset();
+                  }}
+                  className="hidden rounded-xl px-3 py-2 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100/80 hover:text-brand-600 sm:inline"
+                >
+                  Recommencer
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => update({ discreteMode: !discreteMode })}
+                className="rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100/80"
+                title="Mode discret"
+              >
+                {discreteMode ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
           </div>
 
           <DossierMobileProgress percent={dossier.percent} revealed={revealed} />
@@ -433,7 +455,7 @@ export function SimulationWizard() {
                     onPremiumCheckout={handlePremiumCheckout}
                     onRestart={() => {
                       setEmailSent(false);
-                      setStep(0);
+                      reset();
                     }}
                   />
                 </StepShell>

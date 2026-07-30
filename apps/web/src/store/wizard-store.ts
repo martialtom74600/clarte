@@ -39,48 +39,25 @@ export const useWizardStore = create<WizardStore>()(
         if (!state.status) return null;
         return wizardToSimulationInput(state);
       },
-      reset: () => set(initialWizardState),
+      reset: () => set({ ...initialWizardState, discreteMode: get().discreteMode, tenantId: get().tenantId }),
     }),
     {
       name: "clarte-simulation",
-      version: 2,
+      version: 3,
       migrate: (persisted, version) => {
-        const state = persisted as WizardState;
-        if (version < 2 && state.step > 4) {
-          state.step = 4;
+        const prev = persisted as Partial<WizardState>;
+        if (version < 3) {
+          return {
+            ...initialWizardState,
+            discreteMode: prev.discreteMode ?? false,
+            tenantId: prev.tenantId ?? initialWizardState.tenantId,
+          };
         }
         return persisted as typeof persisted;
       },
       partialize: (state) => ({
-        step: state.step,
-        status: state.status,
-        marriageRegime: state.marriageRegime,
-        marriageDate: state.marriageDate,
-        pacsDate: state.pacsDate,
-        hasMinorChildren: state.hasMinorChildren,
-        numberOfChildren: state.numberOfChildren,
-        custodyType: state.custodyType,
-        incomeAMonthly: state.incomeAMonthly,
-        incomeBMonthly: state.incomeBMonthly,
-        monthlyMortgagePayment: state.monthlyMortgagePayment,
-        urgencyMonths: state.urgencyMonths,
-        postalCode: state.postalCode,
-        propertyAddress: state.propertyAddress,
-        propertyValue: state.propertyValue,
-        mortgageRemaining: state.mortgageRemaining,
-        shareA: state.shareA,
-        shareB: state.shareB,
-        savingsJoint: state.savingsJoint,
-        savingsA: state.savingsA,
-        savingsB: state.savingsB,
-        personalDebtsA: state.personalDebtsA,
-        personalDebtsB: state.personalDebtsB,
-        email: state.email,
-        phone: state.phone,
-        selectedScenario: state.selectedScenario,
-        tenantId: state.tenantId,
         discreteMode: state.discreteMode,
-        wowSeen: state.wowSeen,
+        tenantId: state.tenantId,
       }),
     }
   )
