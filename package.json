@@ -13,11 +13,44 @@
     "typecheck": "turbo typecheck"
   },
   "devDependencies": {
+    "eslint": "9.39.5",
     "turbo": "^2.3.3",
     "typescript": "^5.7.2"
   },
   "packageManager": "npm@10.9.2",
   "engines": {
     "node": ">=20"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "8.5.25",
+      "sharp": "0.35.3"
+    },
+    "eslint": {
+      ".": "9.39.5",
+      "minimatch": "10.2.6"
+    },
+    "eslint-plugin-import": {
+      "minimatch": "10.2.6"
+    },
+    "eslint-plugin-jsx-a11y": {
+      "minimatch": "10.2.6"
+    },
+    "eslint-plugin-react": {
+      "minimatch": "10.2.6"
+    },
+    "@eslint/eslintrc": {
+      "minimatch": "10.2.6"
+    },
+    "@eslint/config-array": {
+      "minimatch": "10.2.6"
+    }
+  },
+  "allowScripts": {
+    "core-js@3.49.0": true,
+    "esbuild@0.25.12": true,
+    "fsevents@2.3.3": true,
+    "sharp@0.35.3": true,
+    "unrs-resolver@1.12.2": true
   }
 }

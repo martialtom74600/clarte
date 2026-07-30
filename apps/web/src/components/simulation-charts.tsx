@@ -35,7 +35,7 @@ export function PatrimonyChart({ result, className }: PatrimonyChartProps) {
               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
             ))}
           </Pie>
-          <Tooltip formatter={(value: number) => formatEuro(value)} />
+          <Tooltip formatter={(value) => formatEuro(Number(value ?? 0))} />
           <Legend />
         </PieChart>
       </ResponsiveContainer>

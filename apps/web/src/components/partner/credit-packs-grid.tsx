@@ -22,7 +22,7 @@ export function CreditPacksGrid({ currentBalance }: { currentBalance: number }) 
 
     if (data.url) {
       toast.info("Redirection Stripe…");
-      window.location.href = data.url;
+      window.location.assign(data.url);
     } else {
       toast.error("Impossible de démarrer le paiement");
     }
