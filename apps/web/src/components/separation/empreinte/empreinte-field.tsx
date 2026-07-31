@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
@@ -21,6 +21,8 @@ interface EmpreinteFieldProps {
   autoFocus?: boolean;
   /** Si false, le bouton Continuer est désactivé. */
   canContinue?: boolean;
+  /** Indicateur d'étape (ex. barre 1/5) rendu au-dessus du label. */
+  progress?: ReactNode;
 }
 
 function formatCurrencyDisplay(raw: string): string {
@@ -174,6 +176,7 @@ export function EmpreinteField({
   suffix,
   autoFocus = true,
   canContinue = true,
+  progress,
 }: EmpreinteFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const reduced = useReducedMotion();
@@ -203,6 +206,7 @@ export function EmpreinteField({
       transition={{ duration: duration.slow, ease: ease.out }}
       className="flex w-full max-w-xl flex-col items-center text-center"
     >
+      {progress}
       <p className="mb-10 text-sm font-medium tracking-wide text-slate-400">{label}</p>
 
       <div className="relative w-full">

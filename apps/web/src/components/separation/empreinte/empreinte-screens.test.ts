@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   EMPREINTE_SCREEN_COUNT,
+  EMPREINTE_SCREEN_LABELS,
+  EMPREINTE_SCREENS,
   footprintToDraft,
   hasActiveLoan,
   isFinancementValid,
@@ -27,8 +29,12 @@ function emptyDraft(overrides: Partial<EmpreinteDraft> = {}): EmpreinteDraft {
 }
 
 describe("empreinte screens — pagination thématique", () => {
-  it("reste à 5 écrans maximum", () => {
+  it("reste à 5 écrans maximum avec libellés de progression", () => {
     expect(EMPREINTE_SCREEN_COUNT).toBe(5);
+    expect(EMPREINTE_SCREENS).toHaveLength(5);
+    expect(EMPREINTE_SCREEN_LABELS.location).toBe("Localisation");
+    expect(EMPREINTE_SCREEN_LABELS.financement).toBe("Financement");
+    expect(EMPREINTE_SCREEN_LABELS.income_b).toBe("Ses revenus");
   });
 
   it("valide la localisation (CP à 5 chiffres)", () => {

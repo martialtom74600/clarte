@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { clarte } from "@/lib/clarte-design";
 import { duration, ease } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 import { useSeparationStore } from "@/store/separation-store";
 import { useSeparationHydrated } from "@/lib/separation/use-separation-hydrated";
 import type { FootprintField } from "@/lib/separation/separation-types";
@@ -18,13 +19,53 @@ import {
 import {
   EMPREINTE_SCREENS,
   EMPREINTE_SCREEN_COUNT,
+  EMPREINTE_SCREEN_LABELS,
   EMPREINTE_STEP_KEY,
   footprintToDraft,
   hasActiveLoan,
   inferEmpreinteScreen,
   isScreenValid,
   type EmpreinteDraft,
+  type EmpreinteScreenId,
 } from "./empreinte-screens";
+
+function EmpreinteProgress({ screenId }: { screenId: EmpreinteScreenId }) {
+  const index = EMPREINTE_SCREENS.indexOf(screenId);
+  const current = index >= 0 ? index : 0;
+  const label = EMPREINTE_SCREEN_LABELS[screenId];
+
+  return (
+    <div className="mb-8 flex w-full flex-col items-center gap-3">
+      <div
+        className="flex items-center gap-2"
+        role="progressbar"
+        aria-valuemin={1}
+        aria-valuemax={EMPREINTE_SCREEN_COUNT}
+        aria-valuenow={current + 1}
+        aria-label={`Étape ${current + 1} sur ${EMPREINTE_SCREEN_COUNT} : ${label}`}
+      >
+        {EMPREINTE_SCREENS.map((id, i) => (
+          <span
+            key={id}
+            className={cn(
+              "h-1.5 rounded-full transition-all duration-300",
+              i === current
+                ? "w-7 bg-brand-500"
+                : i < current
+                  ? "w-1.5 bg-brand-500/45"
+                  : "w-1.5 bg-slate-200"
+            )}
+          />
+        ))}
+      </div>
+      <p className="text-xs font-medium tracking-wide text-slate-400">
+        {current + 1} / {EMPREINTE_SCREEN_COUNT}
+        <span className="mx-1.5 text-slate-300">·</span>
+        {label}
+      </p>
+    </div>
+  );
+}
 
 async function fetchDvfHint(postalCode: string, surface: number): Promise<string | null> {
   try {
@@ -41,20 +82,20 @@ async function fetchDvfHint(postalCode: string, surface: number): Promise<string
 
 function ScreenChrome({
   screenKey,
-  eyebrow,
   title,
   children,
   canContinue,
   onContinue,
   whisper,
+  progress,
 }: {
   screenKey: string;
-  eyebrow: string;
   title: string;
   children: ReactNode;
   canContinue: boolean;
   onContinue: () => void;
   whisper?: string;
+  progress?: ReactNode;
 }) {
   const reduced = useReducedMotion();
 
@@ -75,9 +116,7 @@ function ScreenChrome({
       className="flex w-full max-w-md flex-col items-center text-center"
       onKeyDown={handleKeyDown}
     >
-      <p className="mb-3 text-xs font-medium uppercase tracking-[0.14em] text-slate-400">
-        {eyebrow}
-      </p>
+      {progress}
       <h1 className="mb-10 text-xl font-medium tracking-tight text-slate-800 md:text-2xl">
         {title}
       </h1>
@@ -185,6 +224,7 @@ function EmpreinteFlow() {
     setScreen(next);
   };
 
+  const progress = <EmpreinteProgress screenId={screenId} />;
   let body: ReactNode = null;
 
   if (screenId === "location") {
@@ -198,6 +238,7 @@ function EmpreinteFlow() {
         onSubmit={goNext}
         placeholder="75011"
         canContinue={canContinue}
+        progress={progress}
       />
     );
   } else if (screenId === "income_a") {
@@ -211,6 +252,7 @@ function EmpreinteFlow() {
         onSubmit={goNext}
         placeholder="3 500"
         canContinue={canContinue}
+        progress={progress}
       />
     );
   } else if (screenId === "income_b") {
@@ -224,17 +266,18 @@ function EmpreinteFlow() {
         onSubmit={goNext}
         placeholder="2 800"
         canContinue={canContinue}
+        progress={progress}
       />
     );
   } else if (screenId === "patrimoine") {
     body = (
       <ScreenChrome
         screenKey="patrimoine"
-        eyebrow={`Écran 2 / ${EMPREINTE_SCREEN_COUNT}`}
         title="Le patrimoine"
         canContinue={canContinue}
         onContinue={goNext}
         whisper={dvfLoading ? "Estimation locale en cours…" : (dvfHint ?? undefined)}
+        progress={progress}
       >
         <EmpreinteFormRow
           id="propertySurface"
@@ -269,10 +312,10 @@ function EmpreinteFlow() {
     body = (
       <ScreenChrome
         screenKey="financement"
-        eyebrow={`Écran 3 / ${EMPREINTE_SCREEN_COUNT}`}
         title="Le financement"
         canContinue={canContinue}
         onContinue={goNext}
+        progress={progress}
       >
         <EmpreinteFormRow
           id="mortgageRemaining"

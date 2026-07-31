@@ -19,6 +19,15 @@ export const EMPREINTE_SCREENS: EmpreinteScreenId[] = [
   "income_b",
 ];
 
+/** Libellés courts pour la barre de progression (5 étapes). */
+export const EMPREINTE_SCREEN_LABELS: Record<EmpreinteScreenId, string> = {
+  location: "Localisation",
+  patrimoine: "Patrimoine",
+  financement: "Financement",
+  income_a: "Vos revenus",
+  income_b: "Ses revenus",
+};
+
 export type EmpreinteDraft = Record<FootprintField, string>;
 
 export function footprintToDraft(footprint: FootprintState): EmpreinteDraft {
