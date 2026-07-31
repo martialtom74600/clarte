@@ -7,6 +7,7 @@ import type {
   SimulationInput,
 } from "@separation/schemas";
 import { rentPerSqm } from "./market-rents.js";
+import { CURRENT_MARKET_MORTGAGE_RATE } from "./constants.js";
 import { eur, estimateMonthlyPayment, getShareForPerson, round } from "./utils.js";
 
 /** Provision vacance locative (milieu de fourchette 5–8 %). */
@@ -66,7 +67,7 @@ function resolveMortgagePayment(input: SimulationInput, liabilities: Liability[]
   if (!mortgage) return 0;
   return estimateMonthlyPayment(
     mortgage.remainingBalance.amount,
-    input.options.mortgageRate ?? 0.0385,
+    input.options.mortgageRate ?? CURRENT_MARKET_MORTGAGE_RATE,
     input.options.mortgageDurationYears ?? 20
   ).amount;
 }

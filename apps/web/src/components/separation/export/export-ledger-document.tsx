@@ -11,6 +11,7 @@ import {
 import {
   debtThresholdMessage,
   formatVerdictLabel,
+  HCSF_DEBT_CEILING_PCT,
   parseFooterBlocks,
 } from "@/lib/separation/lab-ledger-insights";
 import styles from "./export-bilan.module.css";
@@ -97,7 +98,8 @@ export function ExportLedgerDocument({ ledger }: { ledger: LabLedgerModel }) {
               <p>{parsed.debtLine}</p>
               {debtThreshold && <p className={styles.insightEmphasis}>{debtThreshold}</p>}
               <p className={styles.insightMuted}>
-                Calcul : mensualités totales ÷ revenus nets mensuels (plafond HCSF 35 %).
+                Calcul : mensualités totales ÷ revenus nets mensuels (plafond HCSF{" "}
+                {HCSF_DEBT_CEILING_PCT} %).
               </p>
             </div>
           )}

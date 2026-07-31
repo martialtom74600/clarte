@@ -177,6 +177,9 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
   const commitHistorical = useDebouncedCallback((monthly: number) => {
     setLeverOverride("historical_mortgage_rate", {
       monthlyMortgagePayment: monthly,
+      ...(footprint.initialMortgageRate > 0
+        ? { mortgageRate: footprint.initialMortgageRate }
+        : {}),
     });
   }, 200);
 
@@ -223,6 +226,9 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
         setHistoricalPay(formatAmount(monthly));
         setLeverOverride("historical_mortgage_rate", {
           monthlyMortgagePayment: monthly,
+          ...(footprint.initialMortgageRate > 0
+            ? { mortgageRate: footprint.initialMortgageRate }
+            : {}),
         });
       }
       if (leverId === "children_impact") {

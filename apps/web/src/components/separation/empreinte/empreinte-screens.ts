@@ -1,5 +1,11 @@
 import type { FootprintField, FootprintState } from "@/lib/separation/separation-types";
 import { parseCurrency, parseNumber } from "./empreinte-field";
+import {
+  canComputeAmortization,
+  computeFinancementFromAmortization,
+  formatMortgageStartDate,
+  formatRatePercent,
+} from "./empreinte-amortization";
 
 export const EMPREINTE_SCREEN_COUNT = 5;
 export const EMPREINTE_STEP_KEY = "clarte-empreinte-screen";
@@ -28,10 +34,47 @@ export const EMPREINTE_SCREEN_LABELS: Record<EmpreinteScreenId, string> = {
   income_b: "Ses revenus",
 };
 
-export type EmpreinteDraft = Record<FootprintField, string>;
+/** Champs persistés + brouillon UI financement (mode manuel). */
+export type EmpreinteDraft = Record<FootprintField, string> & {
+  mortgageStartDate: string;
+  financementManual: string;
+};
+
+export function emptyEmpreinteDraft(overrides: Partial<EmpreinteDraft> = {}): EmpreinteDraft {
+  return {
+    postalCode: "",
+    propertyValue: "",
+    propertySurface: "",
+    purchasePrice: "",
+    mortgageRemaining: "",
+    monthlyMortgagePayment: "",
+    mortgageRemainingYears: "",
+    initialMortgagePrincipal: "",
+    initialMortgageDurationYears: "",
+    mortgageStartMonth: "",
+    mortgageStartYear: "",
+    mortgageStartDate: "",
+    initialMortgageRate: "",
+    mortgageInsuranceRate: "",
+    mortgageInsuranceMonthly: "",
+    incomeA: "",
+    incomeB: "",
+    financementManual: "",
+    ...overrides,
+  };
+}
 
 export function footprintToDraft(footprint: FootprintState): EmpreinteDraft {
   const fmt = (n: number) => (n > 0 ? n.toLocaleString("fr-FR") : "");
+  const startDate = formatMortgageStartDate(
+    footprint.mortgageStartMonth,
+    footprint.mortgageStartYear
+  );
+  const hasSmartOrigin =
+    footprint.initialMortgagePrincipal > 0 &&
+    footprint.initialMortgageRate > 0 &&
+    footprint.mortgageStartMonth >= 1;
+
   return {
     postalCode: footprint.postalCode,
     propertyValue: footprint.propertyValue > 0 ? fmt(footprint.propertyValue) : "",
@@ -52,8 +95,33 @@ export function footprintToDraft(footprint: FootprintState): EmpreinteDraft {
       footprint.monthlyMortgagePayment > 0 ? fmt(footprint.monthlyMortgagePayment) : "",
     mortgageRemainingYears:
       footprint.mortgageRemainingYears > 0 ? String(footprint.mortgageRemainingYears) : "",
+    initialMortgagePrincipal:
+      footprint.initialMortgagePrincipal > 0
+        ? fmt(footprint.initialMortgagePrincipal)
+        : footprint.purchasePrice > 0
+          ? fmt(footprint.purchasePrice)
+          : "",
+    initialMortgageDurationYears:
+      footprint.initialMortgageDurationYears > 0
+        ? String(footprint.initialMortgageDurationYears)
+        : "",
+    mortgageStartMonth:
+      footprint.mortgageStartMonth > 0 ? String(footprint.mortgageStartMonth) : "",
+    mortgageStartYear:
+      footprint.mortgageStartYear > 0 ? String(footprint.mortgageStartYear) : "",
+    mortgageStartDate: startDate,
+    initialMortgageRate:
+      footprint.initialMortgageRate > 0
+        ? formatRatePercent(footprint.initialMortgageRate)
+        : "",
+    mortgageInsuranceRate: "",
+    mortgageInsuranceMonthly:
+      footprint.mortgageInsuranceMonthly > 0
+        ? fmt(footprint.mortgageInsuranceMonthly)
+        : "",
     incomeA: footprint.incomeA > 0 ? fmt(footprint.incomeA) : "",
     incomeB: footprint.incomeB > 0 ? fmt(footprint.incomeB) : "",
+    financementManual: hasSmartOrigin ? "" : footprint.mortgageRemaining >= 0 ? "1" : "",
   };
 }
 
@@ -69,8 +137,7 @@ export function isPatrimoineValid(draft: EmpreinteDraft): boolean {
   return surface > 0 && value > 0 && purchaseFilled && purchase >= 0;
 }
 
-/** CRD saisi ; si > 0, mensualité + durée restantes obligatoires. */
-export function isFinancementValid(draft: EmpreinteDraft): boolean {
+function isManualFinancementValid(draft: EmpreinteDraft): boolean {
   if (draft.mortgageRemaining.trim() === "") return false;
   const crd = parseCurrency(draft.mortgageRemaining);
   if (crd < 0) return false;
@@ -78,6 +145,30 @@ export function isFinancementValid(draft: EmpreinteDraft): boolean {
   const monthly = parseCurrency(draft.monthlyMortgagePayment);
   const years = parseNumber(draft.mortgageRemainingYears);
   return monthly > 0 && years >= 1 && years <= 30;
+}
+
+function isSmartFinancementValid(draft: EmpreinteDraft): boolean {
+  if (!canComputeAmortization(draft)) return false;
+  const result = computeFinancementFromAmortization(draft);
+  if (!result) return false;
+  if (result.remainingBalance <= 0) return true;
+  return (
+    result.monthlyPaymentTotal > 0 &&
+    result.remainingYears >= 1 &&
+    result.remainingYears <= 30
+  );
+}
+
+/** CRD saisi ou dérivé ; si > 0, mensualité + durée restantes obligatoires. */
+export function isFinancementValid(draft: EmpreinteDraft): boolean {
+  if (draft.mortgageRemaining.trim() !== "" && parseCurrency(draft.mortgageRemaining) === 0) {
+    return true;
+  }
+  if (draft.financementManual === "1") {
+    return isManualFinancementValid(draft);
+  }
+  if (isSmartFinancementValid(draft)) return true;
+  return isManualFinancementValid(draft);
 }
 
 export function isIncomeValid(draft: EmpreinteDraft, field: "incomeA" | "incomeB"): boolean {
@@ -122,5 +213,12 @@ export function inferEmpreinteScreen(footprint: FootprintState): number {
 }
 
 export function hasActiveLoan(draft: EmpreinteDraft): boolean {
+  if (draft.mortgageRemaining.trim() !== "" && parseCurrency(draft.mortgageRemaining) === 0) {
+    return false;
+  }
+  if (draft.financementManual !== "1" && canComputeAmortization(draft)) {
+    const result = computeFinancementFromAmortization(draft);
+    if (result) return result.remainingBalance > 0;
+  }
   return draft.mortgageRemaining.trim() !== "" && parseCurrency(draft.mortgageRemaining) > 0;
 }

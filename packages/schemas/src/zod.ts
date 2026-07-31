@@ -129,3 +129,26 @@ export const leadQualificationSchema = z.object({
 
 export type SimulationInputDTO = z.infer<typeof simulationInputSchema>;
 export type LeadQualificationDTO = z.infer<typeof leadQualificationSchema>;
+
+/** Empreinte onboarding — persistée dans separation-store. */
+export const footprintSchema = z.object({
+  postalCode: z.string(),
+  propertyValue: z.number().min(0),
+  propertySurface: z.number().min(0),
+  purchasePrice: z.number().min(0),
+  mortgageRemaining: z.number().min(0),
+  monthlyMortgagePayment: z.number().min(0),
+  mortgageRemainingYears: z.number().min(0).max(30),
+  initialMortgagePrincipal: z.number().min(0),
+  initialMortgageDurationYears: z.number().min(0).max(30),
+  mortgageStartMonth: z.number().min(0).max(12),
+  mortgageStartYear: z.number().min(0).max(2100),
+  initialMortgageRate: z.number().min(0).max(0.2),
+  mortgageInsuranceRate: z.number().min(0).max(0.05),
+  mortgageInsuranceMonthly: z.number().min(0),
+  incomeA: z.number().min(0),
+  incomeB: z.number().min(0),
+  completedAt: z.string().nullable(),
+});
+
+export type FootprintDTO = z.infer<typeof footprintSchema>;

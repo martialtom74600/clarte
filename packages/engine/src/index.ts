@@ -90,6 +90,23 @@ export type { CashflowInput, CashflowResult, PersonCashflow } from "./cashflow.j
 export { compareMediationInputs } from "./mediation.js";
 export type { MediationComparison, MediationFieldDiff } from "./mediation.js";
 export {
+  calculateAmortization,
+  monthlyPaymentFromPrincipal,
+  remainingBalanceAfterMonths,
+} from "./amortization.js";
+export type { AmortizationInput, AmortizationResult } from "./amortization.js";
+export {
+  CURRENT_MARKET_MORTGAGE_RATE,
+  DEBT_VERDICT_GREEN_MAX_RATIO,
+  DEBT_VERDICT_ORANGE_MAX_RATIO,
+  DEFAULT_MORTGAGE_DURATION_YEARS,
+  DEFAULT_MORTGAGE_INSURANCE_ANNUAL_RATE,
+  HCSF_MAX_EFFORT_PERCENT,
+  HCSF_MAX_EFFORT_RATIO,
+  MARKET_MORTGAGE_RATE_AS_OF,
+  MARKET_MORTGAGE_RATES_BY_DURATION,
+} from "./constants.js";
+export {
   eur,
   round,
   addMoney,

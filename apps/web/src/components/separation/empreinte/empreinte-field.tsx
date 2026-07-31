@@ -143,7 +143,7 @@ export function EmpreinteContinueButton({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "group mt-12 text-sm font-medium transition-colors",
+        "group mt-20 text-sm font-medium transition-colors sm:mt-24",
         disabled
           ? "cursor-not-allowed text-slate-300"
           : "text-slate-500 hover:text-brand-600"

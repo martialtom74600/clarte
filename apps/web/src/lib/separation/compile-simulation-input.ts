@@ -5,14 +5,18 @@ import type {
   SeparationState,
 } from "./separation-types";
 import type { LeverId, SimulationInput } from "@separation/schemas";
-import { getMortgageRateSnapshot } from "@separation/engine";
+import {
+  DEFAULT_MORTGAGE_DURATION_YEARS,
+  DEFAULT_MORTGAGE_INSURANCE_ANNUAL_RATE,
+  getMortgageRateSnapshot,
+} from "@separation/engine";
 
 const DEFAULT_SURFACE = 65;
-const DEFAULT_MORTGAGE_YEARS = 20;
 
 function mergeAssumptionsWithLevers(
   assumptions: AssumptionsState,
-  lab: LabState
+  lab: LabState,
+  footprint: FootprintState
 ): AssumptionsState {
   const merged = { ...assumptions };
   const enabled = new Set(lab.enabledLevers);
@@ -24,8 +28,11 @@ function mergeAssumptionsWithLevers(
   }
   if (enabled.has("historical_mortgage_rate") && overrides.historical_mortgage_rate) {
     merged.monthlyMortgagePayment = overrides.historical_mortgage_rate.monthlyMortgagePayment;
-    if (overrides.historical_mortgage_rate.mortgageRate != null) {
-      merged.mortgageRate = overrides.historical_mortgage_rate.mortgageRate;
+    const rate =
+      overrides.historical_mortgage_rate.mortgageRate ??
+      (footprint.initialMortgageRate > 0 ? footprint.initialMortgageRate : undefined);
+    if (rate != null) {
+      merged.mortgageRate = rate;
     }
   }
   if (enabled.has("children_impact") && overrides.children_impact) {
@@ -142,7 +149,7 @@ function resolveMortgageDurationYears(
   if (merged.mortgageDurationYears >= 1 && merged.mortgageDurationYears <= 30) {
     return merged.mortgageDurationYears;
   }
-  return DEFAULT_MORTGAGE_YEARS;
+  return DEFAULT_MORTGAGE_DURATION_YEARS;
 }
 
 /** Fusion footprint + assumptions + leviers actifs → SimulationInput moteur. */
@@ -150,7 +157,7 @@ export function compileSimulationInput(
   state: Pick<SeparationState, "footprint" | "assumptions" | "lab">
 ): SimulationInput {
   const { footprint, lab } = state;
-  const merged = mergeAssumptionsWithLevers(state.assumptions, lab);
+  const merged = mergeAssumptionsWithLevers(state.assumptions, lab, footprint);
   const { assets, liabilities } = buildAssetsAndLiabilities(footprint, merged);
 
   const monthlyRentOverride =
@@ -244,7 +251,7 @@ export function isFootprintComplete(footprint: FootprintState): boolean {
 }
 
 export function defaultAssumptions(): AssumptionsState {
-  const rate = getMortgageRateSnapshot(DEFAULT_MORTGAGE_YEARS);
+  const rate = getMortgageRateSnapshot(DEFAULT_MORTGAGE_DURATION_YEARS);
   return {
     status: "concubinage",
     shareA: 50,
@@ -285,6 +292,13 @@ export function defaultFootprint(): FootprintState {
     mortgageRemaining: 0,
     monthlyMortgagePayment: 0,
     mortgageRemainingYears: 0,
+    initialMortgagePrincipal: 0,
+    initialMortgageDurationYears: 0,
+    mortgageStartMonth: 0,
+    mortgageStartYear: 0,
+    initialMortgageRate: 0,
+    mortgageInsuranceRate: DEFAULT_MORTGAGE_INSURANCE_ANNUAL_RATE,
+    mortgageInsuranceMonthly: 0,
     incomeA: 0,
     incomeB: 0,
     completedAt: null,

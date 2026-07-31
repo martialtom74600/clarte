@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { runSimulation, eur, getNetAssetValue } from "../src/index.js";
+import { runSimulation, eur, getNetAssetValue, CURRENT_MARKET_MORTGAGE_RATE } from "../src/index.js";
 import type { SimulationInput } from "@separation/schemas";
 
 const basePersons: SimulationInput["persons"] = [
@@ -74,7 +74,7 @@ describe("runSimulation - concubinage", () => {
       options: {
         primaryResidenceId: "house",
         scenario: "keep_a",
-        mortgageRate: 0.0385,
+        mortgageRate: CURRENT_MARKET_MORTGAGE_RATE,
         mortgageDurationYears: 20,
       },
     });
@@ -96,7 +96,7 @@ describe("runSimulation - concubinage", () => {
       options: {
         primaryResidenceId: "house",
         scenario: "keep_a",
-        mortgageRate: 0.0385,
+        mortgageRate: CURRENT_MARKET_MORTGAGE_RATE,
         mortgageDurationYears: 20,
       },
     });

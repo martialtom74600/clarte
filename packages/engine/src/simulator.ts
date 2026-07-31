@@ -7,6 +7,7 @@ import type {
   ScenarioComparison,
   SoulteResult,
 } from "@separation/schemas";
+import { CURRENT_MARKET_MORTGAGE_RATE } from "./constants.js";
 import {
   DEFAULT_DISCLAIMERS,
   RULE_PACK_VERSION,
@@ -81,7 +82,7 @@ function buildScenario(
   baseNet: Record<PersonId, import("@separation/schemas").Money>,
   primaryAsset?: Asset
 ): ScenarioComparison {
-  const mortgageRate = input.options.mortgageRate ?? 0.0385;
+  const mortgageRate = input.options.mortgageRate ?? CURRENT_MARKET_MORTGAGE_RATE;
   const mortgageYears = input.options.mortgageDurationYears ?? 20;
 
   if (scenario === "rent_out" && primaryAsset) {

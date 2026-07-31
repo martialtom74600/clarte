@@ -1,18 +1,20 @@
 import type { MortgageRateSnapshot } from "@separation/schemas";
+import {
+  CURRENT_MARKET_MORTGAGE_RATE,
+  DEFAULT_MORTGAGE_DURATION_YEARS,
+  MARKET_MORTGAGE_RATES_BY_DURATION,
+} from "./constants.js";
 
-/** Barème indicatif — à mettre à jour mensuellement (non offre bancaire). */
-const RATE_TABLE: Record<number, { rate: number; asOf: string }> = {
-  15: { rate: 0.0365, asOf: "2026-07" },
-  20: { rate: 0.0385, asOf: "2026-07" },
-  25: { rate: 0.041, asOf: "2026-07" },
-};
-
-export function getMortgageRateSnapshot(durationYears = 20): MortgageRateSnapshot {
-  const entry = RATE_TABLE[durationYears] ?? RATE_TABLE[20];
+export function getMortgageRateSnapshot(
+  durationYears = DEFAULT_MORTGAGE_DURATION_YEARS
+): MortgageRateSnapshot {
+  const entry =
+    MARKET_MORTGAGE_RATES_BY_DURATION[durationYears] ??
+    MARKET_MORTGAGE_RATES_BY_DURATION[DEFAULT_MORTGAGE_DURATION_YEARS];
   return {
-    annualRate: entry.rate,
+    annualRate: entry?.rate ?? CURRENT_MARKET_MORTGAGE_RATE,
     durationYears,
-    asOf: entry.asOf,
+    asOf: entry?.asOf ?? "2026-07",
     source: "Barème indicatif Clarté — simulation non contractuelle",
   };
 }

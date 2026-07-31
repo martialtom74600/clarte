@@ -22,12 +22,17 @@ import {
   EMPREINTE_SCREEN_LABELS,
   EMPREINTE_STEP_KEY,
   footprintToDraft,
-  hasActiveLoan,
   inferEmpreinteScreen,
   isScreenValid,
   type EmpreinteDraft,
   type EmpreinteScreenId,
 } from "./empreinte-screens";
+import { EmpreinteFinancementScreen } from "./empreinte-financement";
+import {
+  parseMortgageStartDate,
+  parseRatePercent,
+} from "./empreinte-amortization";
+import { DEFAULT_MORTGAGE_INSURANCE_ANNUAL_RATE } from "@separation/engine";
 
 function EmpreinteProgress({ screenId }: { screenId: EmpreinteScreenId }) {
   const index = EMPREINTE_SCREENS.indexOf(screenId);
@@ -127,7 +132,7 @@ function ScreenChrome({
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="mt-6 text-sm text-slate-500"
+          className="mt-8 text-sm text-slate-500"
         >
           {whisper}
         </motion.p>
@@ -143,7 +148,6 @@ function EmpreinteFlow() {
   const footprint = useSeparationStore((s) => s.footprint);
   const setFootprintField = useSeparationStore((s) => s.setFootprintField);
   const completeFootprint = useSeparationStore((s) => s.completeFootprint);
-  const reduced = useReducedMotion();
 
   const [screen, setScreen] = useState(() => inferEmpreinteScreen(footprint));
   const [draft, setDraft] = useState<EmpreinteDraft>(() => footprintToDraft(footprint));
@@ -152,7 +156,6 @@ function EmpreinteFlow() {
 
   const screenId = EMPREINTE_SCREENS[screen] ?? "location";
   const canContinue = useMemo(() => isScreenValid(screenId, draft), [screenId, draft]);
-  const loanOpen = hasActiveLoan(draft);
 
   const updateField = useCallback((field: FootprintField, value: string) => {
     setDraft((prev) => ({ ...prev, [field]: value }));
@@ -185,6 +188,22 @@ function EmpreinteFlow() {
     if (screenId === "financement") {
       const crd = parseCurrency(draft.mortgageRemaining);
       setFootprintField("mortgageRemaining", crd);
+
+      const start = parseMortgageStartDate(draft.mortgageStartDate);
+      setFootprintField("initialMortgagePrincipal", parseCurrency(draft.initialMortgagePrincipal));
+      setFootprintField(
+        "initialMortgageDurationYears",
+        parseNumber(draft.initialMortgageDurationYears)
+      );
+      setFootprintField("mortgageStartMonth", start?.month ?? 0);
+      setFootprintField("mortgageStartYear", start?.year ?? 0);
+      setFootprintField("initialMortgageRate", parseRatePercent(draft.initialMortgageRate));
+      setFootprintField("mortgageInsuranceRate", DEFAULT_MORTGAGE_INSURANCE_ANNUAL_RATE);
+      setFootprintField(
+        "mortgageInsuranceMonthly",
+        parseCurrency(draft.mortgageInsuranceMonthly)
+      );
+
       if (crd > 0) {
         setFootprintField(
           "monthlyMortgagePayment",
@@ -251,6 +270,7 @@ function EmpreinteFlow() {
         onChange={(v) => updateField("incomeA", v)}
         onSubmit={goNext}
         placeholder="3 500"
+        hint="Net avant impôt (prélèvement à la source)."
         canContinue={canContinue}
         progress={progress}
       />
@@ -265,6 +285,7 @@ function EmpreinteFlow() {
         onChange={(v) => updateField("incomeB", v)}
         onSubmit={goNext}
         placeholder="2 800"
+        hint="Net avant impôt (prélèvement à la source)."
         canContinue={canContinue}
         progress={progress}
       />
@@ -304,66 +325,19 @@ function EmpreinteFlow() {
           value={draft.purchasePrice}
           onChange={(v) => updateField("purchasePrice", v)}
           placeholder="320 000"
-          hint="Indiquez 0 si vous ne savez pas."
+          hint="Saisissez 0 si inconnu (utile pour estimer votre plus-value immobilière)."
         />
       </ScreenChrome>
     );
-  } else {
+  } else if (screenId === "financement") {
     body = (
-      <ScreenChrome
-        screenKey="financement"
-        title="Le financement"
+      <EmpreinteFinancementScreen
+        draft={draft}
+        onDraftChange={(patch) => setDraft((prev) => ({ ...prev, ...patch }))}
         canContinue={canContinue}
         onContinue={goNext}
         progress={progress}
-      >
-        <EmpreinteFormRow
-          id="mortgageRemaining"
-          label="Capital restant dû"
-          type="currency"
-          value={draft.mortgageRemaining}
-          onChange={(v) => updateField("mortgageRemaining", v)}
-          placeholder="200 000"
-          hint="Indiquez 0 s'il n'y a plus de crédit."
-          autoFocus
-        />
-
-        <AnimatePresence initial={false}>
-          {loanOpen && (
-            <motion.div
-              key="loan-details"
-              initial={reduced ? { opacity: 0 } : { opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8 }}
-              transition={{ duration: duration.normal, ease: ease.out }}
-              className="flex flex-col gap-8"
-            >
-              <p className="text-left text-xs font-medium text-slate-400">
-                Détails du crédit en cours
-              </p>
-              <EmpreinteFormRow
-                id="monthlyMortgagePayment"
-                label="Mensualité actuelle"
-                type="currency"
-                value={draft.monthlyMortgagePayment}
-                onChange={(v) => updateField("monthlyMortgagePayment", v)}
-                placeholder="1 200"
-                hint="Assurance comprise si possible."
-              />
-              <EmpreinteFormRow
-                id="mortgageRemainingYears"
-                label="Durée restante"
-                type="number"
-                value={draft.mortgageRemainingYears}
-                onChange={(v) => updateField("mortgageRemainingYears", v)}
-                placeholder="15"
-                suffix="ans"
-                hint="Horizon du refinancement indicatif."
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </ScreenChrome>
+      />
     );
   }
 

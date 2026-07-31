@@ -9,6 +9,12 @@ import type {
   PersonId,
   ZoneMarketSnapshot,
 } from "@separation/schemas";
+import {
+  CURRENT_MARKET_MORTGAGE_RATE,
+  DEFAULT_MORTGAGE_DURATION_YEARS,
+  HCSF_MAX_EFFORT_PERCENT,
+  HCSF_MAX_EFFORT_RATIO,
+} from "./constants.js";
 import { estimateMonthlyPayment, eur, round } from "./utils.js";
 import { getMortgageRateSnapshot } from "./mortgage-rates.js";
 import { deptFromPostal, pricePerSqmForDept } from "./market-prices.js";
@@ -19,7 +25,7 @@ import {
 
 export { rentPerSqm } from "./market-rents.js";
 
-const DEFAULT_MAX_EFFORT = 0.35;
+const DEFAULT_MAX_EFFORT = HCSF_MAX_EFFORT_RATIO;
 /** Aligné sur sale-proceeds (éviter import circulaire). */
 const AGENCY_FEES_RATE = 0.05;
 const DIAGNOSTICS_FLAT = 1800;
@@ -128,10 +134,10 @@ export function computeAffordability(params: {
   const effortPct = Math.round(effortRatio * 100);
   const hcsfLine =
     verdict === "green"
-      ? "Le projet reste dans les seuils de financement (HCSF 35 %)."
+      ? `Le projet reste dans les seuils de financement (HCSF ${HCSF_MAX_EFFORT_PERCENT} %).`
       : verdict === "orange"
-        ? "Le projet est serré par rapport aux seuils de financement (HCSF 35 %)."
-        : "Le projet dépasse les seuils de financement (HCSF 35 %).";
+        ? `Le projet est serré par rapport aux seuils de financement (HCSF ${HCSF_MAX_EFFORT_PERCENT} %).`
+        : `Le projet dépasse les seuils de financement (HCSF ${HCSF_MAX_EFFORT_PERCENT} %).`;
 
   return {
     verdict,
@@ -184,7 +190,7 @@ export function computeNewLifeCap(input: NewLifeCapInput): NewLifeCapResult {
 
   const keepTarget = Math.max(
     soulte,
-    round(zone.medianPricePerSqm.amount * input.propertySurface * 0.35)
+    round(zone.medianPricePerSqm.amount * input.propertySurface * HCSF_MAX_EFFORT_RATIO)
   );
   const keepAAff = computeAffordability({
     incomeMonthly: input.incomeAMonthly,

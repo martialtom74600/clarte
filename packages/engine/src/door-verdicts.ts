@@ -14,6 +14,11 @@ import {
 import { getMortgageRateSnapshot } from "./mortgage-rates.js";
 import { RENT_GREEN_THRESHOLD } from "./rent-out-cashflow.js";
 import { estimateChildSupport } from "./support.js";
+import {
+  DEBT_VERDICT_GREEN_MAX_RATIO,
+  DEBT_VERDICT_ORANGE_MAX_RATIO,
+  HCSF_MAX_EFFORT_RATIO,
+} from "./constants.js";
 import { eur, round } from "./utils.js";
 
 const DOOR_LABELS: Record<DoorId, string> = {
@@ -47,7 +52,7 @@ function childSupportChargeFor(input: SimulationInput, person: PersonId): number
   return support.monthlyAmount.amount;
 }
 
-const HCSF_MAX_EFFORT = 0.35;
+const HCSF_MAX_EFFORT = HCSF_MAX_EFFORT_RATIO;
 
 /**
  * Endettement réel du projet keep :
@@ -86,11 +91,15 @@ export function computeKeepDebtEffort(params: {
   const withinLimit = effortRatio <= HCSF_MAX_EFFORT;
 
   const financingVerdict: AffordabilityVerdict =
-    effortRatio <= 0.33 ? "green" : effortRatio <= 0.38 ? "orange" : "red";
+    effortRatio <= DEBT_VERDICT_GREEN_MAX_RATIO
+      ? "green"
+      : effortRatio <= DEBT_VERDICT_ORANGE_MAX_RATIO
+        ? "orange"
+        : "red";
 
   const statusLine = withinLimit
     ? "-> Projet finançable"
-    : "-> Projet qui dépasse la limite bancaire de 35 %";
+    : `-> Projet qui dépasse la limite bancaire de ${HCSF_MAX_EFFORT * 100} %`;
 
   return {
     totalMonthly,

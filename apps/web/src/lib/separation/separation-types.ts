@@ -18,10 +18,24 @@ export interface FootprintState {
   /** Prix d'achat à l'époque (0 = inconnu). */
   purchasePrice: number;
   mortgageRemaining: number;
-  /** Mensualité réelle du crédit en cours (0 si pas de crédit). */
+  /** Mensualité totale du crédit en cours (capital + intérêts + assurance, charge HCSF). */
   monthlyMortgagePayment: number;
   /** Années restantes sur le crédit (durée du refinancement indicatif). */
   mortgageRemainingYears: number;
+  /** Capital emprunté initial (€) — mode amortissement empreinte. */
+  initialMortgagePrincipal: number;
+  /** Durée initiale du prêt (années). */
+  initialMortgageDurationYears: number;
+  /** Mois de souscription (1–12, 0 = inconnu). */
+  mortgageStartMonth: number;
+  /** Année de souscription (0 = inconnu). */
+  mortgageStartYear: number;
+  /** Taux d'intérêt annuel hors assurance à la souscription (décimal, ex. 0.012). */
+  initialMortgageRate: number;
+  /** Taux d'assurance annuel sur capital initial (décimal, défaut 0,0034). */
+  mortgageInsuranceRate: number;
+  /** Coût mensuel d'assurance fixe (€) — prime sur le taux si > 0. */
+  mortgageInsuranceMonthly: number;
   incomeA: number;
   incomeB: number;
   completedAt: string | null;

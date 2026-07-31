@@ -1,7 +1,8 @@
 import type { AffordabilityVerdict, DoorId } from "@separation/schemas";
+import { HCSF_MAX_EFFORT_PERCENT } from "@separation/engine";
 import type { LabLedgerModel } from "./lab-ledger-model";
 
-export const HCSF_DEBT_CEILING_PCT = 35;
+export const HCSF_DEBT_CEILING_PCT = HCSF_MAX_EFFORT_PERCENT;
 
 export function shouldOpenLedgerInsights(verdict: AffordabilityVerdict | undefined): boolean {
   return verdict === "orange" || verdict === "red";

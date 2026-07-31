@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { AffordabilityVerdict } from "@separation/schemas";
 import { cn } from "@/lib/utils";
 import type { LabLedgerModel } from "@/lib/separation/lab-ledger-model";
@@ -66,12 +67,17 @@ export function LedgerFooterInsights({
       };
   const panel = verdict ? VERDICT_PANEL[verdict.verdict] : null;
   const debtThreshold = debtThresholdMessage(debtPct, doorId);
-  const defaultOpen = shouldOpenLedgerInsights(verdict?.verdict);
+  const [insightsOpen, setInsightsOpen] = useState(false);
+
+  useEffect(() => {
+    setInsightsOpen(shouldOpenLedgerInsights(verdict?.verdict));
+  }, [verdict?.verdict]);
 
   return (
     <>
       <details
-        defaultOpen={defaultOpen}
+        open={insightsOpen}
+        onToggle={(e) => setInsightsOpen(e.currentTarget.open)}
         className="group mt-4 rounded-xl border border-slate-200/80 bg-white/50"
       >
         <summary className="cursor-pointer list-none px-3 py-2.5 text-xs font-medium text-slate-600 marker:content-none [&::-webkit-details-marker]:hidden">
