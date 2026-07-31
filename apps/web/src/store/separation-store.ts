@@ -12,26 +12,20 @@ import type {
 import {
   compileSimulationInput,
   defaultAssumptions,
+  defaultFootprint,
   defaultLabState,
   isFootprintComplete,
 } from "@/lib/separation/compile-simulation-input";
 import { recomputeSeparationDerived } from "@/lib/separation/recompute-derived";
 
-const STORAGE_KEY = "clarte-separation-v1";
+const STORAGE_KEY = "clarte-separation-v2";
 
 export const initialSeparationState: Omit<
   SeparationState,
   "derived"
 > & { derived: SeparationState["derived"] } = {
   stratum: "empreinte",
-  footprint: {
-    postalCode: "",
-    propertyValue: 0,
-    mortgageRemaining: 0,
-    incomeA: 0,
-    incomeB: 0,
-    completedAt: null,
-  },
+  footprint: defaultFootprint(),
   assumptions: defaultAssumptions(),
   lab: defaultLabState(),
   derived: {

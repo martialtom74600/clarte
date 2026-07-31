@@ -12,7 +12,11 @@ import type { FootprintState } from "@/lib/separation/separation-types";
 const footprint: FootprintState = {
   postalCode: "75011",
   propertyValue: 400000,
+  propertySurface: 65,
+  purchasePrice: 320000,
   mortgageRemaining: 200000,
+  monthlyMortgagePayment: 950,
+  mortgageRemainingYears: 15,
   incomeA: 5000,
   incomeB: 4000,
   completedAt: "2026-01-01T00:00:00.000Z",

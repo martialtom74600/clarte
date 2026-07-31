@@ -5,7 +5,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
 
-export type EmpreinteFieldType = "postal" | "currency";
+export type EmpreinteFieldType = "postal" | "currency" | "number";
 
 interface EmpreinteFieldProps {
   stepKey: string;
@@ -17,6 +17,7 @@ interface EmpreinteFieldProps {
   hint?: string;
   whisper?: string;
   placeholder?: string;
+  suffix?: string;
   autoFocus?: boolean;
 }
 
@@ -26,7 +27,18 @@ function formatCurrencyDisplay(raw: string): string {
   return Number(digits).toLocaleString("fr-FR");
 }
 
+function formatNumberDisplay(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  return String(Number(digits));
+}
+
 function parseCurrency(raw: string): number {
+  const digits = raw.replace(/\D/g, "");
+  return digits ? Number(digits) : 0;
+}
+
+function parseNumber(raw: string): number {
   const digits = raw.replace(/\D/g, "");
   return digits ? Number(digits) : 0;
 }
@@ -41,6 +53,7 @@ export function EmpreinteField({
   hint,
   whisper,
   placeholder,
+  suffix,
   autoFocus = true,
 }: EmpreinteFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -57,6 +70,10 @@ export function EmpreinteField({
       onChange(next.replace(/\D/g, "").slice(0, 5));
       return;
     }
+    if (type === "number") {
+      onChange(formatNumberDisplay(next));
+      return;
+    }
     onChange(formatCurrencyDisplay(next));
   };
 
@@ -66,6 +83,9 @@ export function EmpreinteField({
       onSubmit();
     }
   };
+
+  const showSuffix = Boolean(suffix) && (type === "number" || (type === "currency" && value));
+  const currencySuffix = type === "currency" && value && !suffix;
 
   return (
     <motion.div
@@ -81,8 +101,8 @@ export function EmpreinteField({
       <div className="relative w-full">
         <input
           ref={inputRef}
-          type={type === "postal" ? "text" : "text"}
-          inputMode={type === "postal" ? "numeric" : "numeric"}
+          type="text"
+          inputMode="numeric"
           autoComplete="off"
           value={value}
           placeholder={placeholder}
@@ -96,12 +116,12 @@ export function EmpreinteField({
             "md:text-5xl lg:text-6xl"
           )}
         />
-        {type === "currency" && value && (
+        {(currencySuffix || showSuffix) && (
           <span
             className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 text-2xl font-light text-slate-400 md:text-3xl"
             aria-hidden
           >
-            €
+            {suffix ?? "€"}
           </span>
         )}
       </div>
@@ -132,4 +152,4 @@ export function EmpreinteField({
   );
 }
 
-export { parseCurrency };
+export { parseCurrency, parseNumber };

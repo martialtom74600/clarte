@@ -7,7 +7,11 @@ import type { FootprintState } from "@/lib/separation/separation-types";
 const footprint: FootprintState = {
   postalCode: "75011",
   propertyValue: 400000,
+  propertySurface: 65,
+  purchasePrice: 320000,
   mortgageRemaining: 200000,
+  monthlyMortgagePayment: 950,
+  mortgageRemainingYears: 15,
   incomeA: 5000,
   incomeB: 4000,
   completedAt: "2026-01-01T00:00:00.000Z",
@@ -63,26 +67,17 @@ describe("buildLabLedger", () => {
     expect(soulte).toBe(120000);
   });
 
-  it("avec garder mon crédit : affiche crédit conservé + nouveau prêt rachat", () => {
-    const lab = {
-      ...defaultLabState(),
-      activeDoor: "keep_a" as const,
-      enabledLevers: ["historical_mortgage_rate" as const],
-      overrides: {
-        historical_mortgage_rate: { monthlyMortgagePayment: 950 },
-      },
-    };
-    const derivedHist = recomputeSeparationDerived({ ...baseState, lab });
-    const keep = derivedHist.lastResult?.scenarios.find((s) => s.scenario === "keep_a");
+  it("avec mensualité empreinte : affiche crédit conservé + nouveau prêt rachat", () => {
+    const keep = derived.lastResult?.scenarios.find((s) => s.scenario === "keep_a");
     expect(keep?.keepFinancingMode).toBe("keep_existing_loan");
 
     const ledger = buildLabLedger({
       doorId: "keep_a",
       footprint,
       assumptions: defaultAssumptions(),
-      lab,
-      result: derivedHist.lastResult,
-      doorVerdicts: derivedHist.doorVerdicts,
+      lab: baseState.lab,
+      result: derived.lastResult,
+      doorVerdicts: derived.doorVerdicts,
     });
     expect(ledger?.lines.some((l) => l.id === "kept-mortgage")).toBe(true);
     expect(ledger?.lines.some((l) => l.id === "new-loan")).toBe(true);

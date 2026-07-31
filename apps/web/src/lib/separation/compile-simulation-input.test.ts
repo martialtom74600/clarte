@@ -11,7 +11,11 @@ import type { FootprintState, SeparationState } from "@/lib/separation/separatio
 const completeFootprint: FootprintState = {
   postalCode: "75011",
   propertyValue: 400000,
+  propertySurface: 65,
+  purchasePrice: 320000,
   mortgageRemaining: 200000,
+  monthlyMortgagePayment: 950,
+  mortgageRemainingYears: 15,
   incomeA: 5000,
   incomeB: 4000,
   completedAt: null,
@@ -35,10 +39,25 @@ function baseState(overrides: Partial<SeparationState> = {}): SeparationState {
 }
 
 describe("isFootprintComplete", () => {
-  it("exige les 5 champs macro", () => {
+  it("exige surface, crédit (mensualité + durée) et revenus", () => {
     expect(isFootprintComplete(completeFootprint)).toBe(true);
     expect(isFootprintComplete({ ...completeFootprint, incomeB: 0 })).toBe(false);
     expect(isFootprintComplete({ ...completeFootprint, postalCode: "750" })).toBe(false);
+    expect(isFootprintComplete({ ...completeFootprint, propertySurface: 0 })).toBe(false);
+    expect(isFootprintComplete({ ...completeFootprint, monthlyMortgagePayment: 0 })).toBe(
+      false
+    );
+    expect(isFootprintComplete({ ...completeFootprint, mortgageRemainingYears: 0 })).toBe(
+      false
+    );
+    expect(
+      isFootprintComplete({
+        ...completeFootprint,
+        mortgageRemaining: 0,
+        monthlyMortgagePayment: 0,
+        mortgageRemainingYears: 0,
+      })
+    ).toBe(true);
   });
 });
 
@@ -48,12 +67,31 @@ describe("compileSimulationInput", () => {
     expect(input.status).toBe("concubinage");
     expect(input.postalCode).toBe("75011");
     expect(input.propertySurface).toBe(65);
+    expect(input.monthlyMortgagePayment).toBe(950);
+    expect(input.options.mortgageDurationYears).toBe(15);
+    expect(input.assets[0]?.purchasePrice?.amount).toBe(320000);
     expect(input.contributionA).toBeUndefined();
     expect(input.assets[0].ownership).toEqual({
       kind: "indivision",
       shares: { A: 0.5, B: 0.5 },
     });
     expect(input.options.scenario).toBe("compare_all");
+  });
+
+  it("laisse le levier mensualité écraser l'empreinte", () => {
+    const input = compileSimulationInput(
+      baseState({
+        lab: {
+          activeDoor: "keep_a",
+          enabledLevers: ["historical_mortgage_rate"],
+          overrides: {
+            historical_mortgage_rate: { monthlyMortgagePayment: 1100 },
+          },
+        },
+      })
+    );
+    expect(input.monthlyMortgagePayment).toBe(1100);
+    expect(input.options.mortgageDurationYears).toBe(15);
   });
 
   it("injecte les apports uniquement quand le levier est activé", () => {
