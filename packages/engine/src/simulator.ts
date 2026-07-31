@@ -24,6 +24,7 @@ import {
 import { computeSoulteCore } from "./soulte-core.js";
 import { computeSaleProceeds } from "./sale-proceeds.js";
 import { computeRentOutCashflow } from "./rent-out-cashflow.js";
+import { computeKeepBilateralExtras } from "./keep-buyout.js";
 
 export const BANK_KEEP_LOAN_DISCLAIMER =
   "La désolidarisation de l'emprunt initial est soumise à l'accord discrétionnaire de la banque (ratio d'endettement et solvabilité du repreneur). Ce mode n'est pas garanti.";
@@ -136,14 +137,53 @@ function buildScenario(
   }
 
   const keeper: PersonId = scenario === "keep_a" ? "A" : "B";
-  const { netWorth, soulte } = applyKeepScenario(input, keeper, baseNet, primaryAsset);
+  const { netWorth: baseAfterSoulte, soulte } = applyKeepScenario(
+    input,
+    keeper,
+    baseNet,
+    primaryAsset
+  );
+  const bilateral = computeKeepBilateralExtras(input, keeper, soulte);
+  const indemnity = bilateral.occupationIndemnity.amount;
+
+  // Impute l'indemnité d'occupation sur les patrimoines nets (rachat final).
+  const netWorth = {
+    A: { ...baseAfterSoulte.A },
+    B: { ...baseAfterSoulte.B },
+  };
+  if (indemnity > 0 && !soulte.negativeEquity) {
+    netWorth[soulte.payer] = subtractMoney(netWorth[soulte.payer], bilateral.occupationIndemnity);
+    netWorth[soulte.receiver] = addMoney(netWorth[soulte.receiver], bilateral.occupationIndemnity);
+  } else if (indemnity > 0 && soulte.negativeEquity) {
+    // Equity négative : pas de soulte, mais l'indemnité reste une créance entre parties.
+    netWorth[keeper] = subtractMoney(netWorth[keeper], bilateral.occupationIndemnity);
+    netWorth[bilateral.departurePersonId] = addMoney(
+      netWorth[bilateral.departurePersonId],
+      bilateral.occupationIndemnity
+    );
+  }
+
   const soulteCash =
-    soulte.totalCashNeeded?.amount ?? soulte.amount.amount;
+    (soulte.totalCashNeeded?.amount ?? soulte.amount.amount) + indemnity;
   const fullRefinance =
-    soulte.refinanceAmount?.amount ?? soulteCash;
+    (soulte.refinanceAmount?.amount ?? soulte.totalCashNeeded?.amount ?? soulte.amount.amount) +
+    indemnity;
+
+  const bilateralFields = {
+    departurePersonId: bilateral.departurePersonId,
+    departureCapital: bilateral.departureCapital,
+    buyoutTransferTotal: bilateral.buyoutTransferTotal,
+    occupationMonths: bilateral.occupationMonths,
+    occupationMonthlyHalfRent: bilateral.occupationMonthlyHalfRent,
+    occupationIndemnity: bilateral.occupationIndemnity,
+    occupationNote: bilateral.occupationNote,
+    relocateTarget: bilateral.relocateTarget,
+    relocateVerdictByPerson: bilateral.relocateVerdictByPerson,
+    departureRelocateVerdict: bilateral.departureRelocateVerdict,
+  };
 
   // Levier « garder mon crédit » : monthlyMortgagePayment > 0 → on conserve le CRD
-  // aux conditions actuelles et on ne refinance que le rachat + frais.
+  // aux conditions actuelles et on ne refinance que le rachat + frais (+ indemnité).
   const keepExistingLoan =
     input.monthlyMortgagePayment != null && input.monthlyMortgagePayment > 0;
 
@@ -170,13 +210,14 @@ function buildScenario(
       newLoanMonthly,
       bankDisclaimer: BANK_KEEP_LOAN_DISCLAIMER,
       negativeEquity: soulte.negativeEquity === true,
+      ...bilateralFields,
       description: soulte.negativeEquity
         ? `Actif net négatif — dette à partager. Hypothèse indicative : conservation du crédit actuel (${Math.round(keptMonthly).toLocaleString("fr-FR")} €/mois), sous accord banque.`
-        : `${keeper === "A" ? "A" : "B"} conserve le logement et le crédit actuel (${Math.round(keptMonthly).toLocaleString("fr-FR")} €/mois), et finance uniquement le rachat (~${Math.round(newLoanAmount).toLocaleString("fr-FR")} €). Sous réserve d'accord banque (désolidarisation).`,
+        : `${keeper === "A" ? "A" : "B"} conserve le logement et le crédit actuel (${Math.round(keptMonthly).toLocaleString("fr-FR")} €/mois), et finance le rachat${indemnity > 0 ? " + indemnité d'occupation" : ""} (~${Math.round(newLoanAmount).toLocaleString("fr-FR")} €). Sous réserve d'accord banque (désolidarisation).`,
     };
   }
 
-  // Défaut C4 — refinancement global CRD + soulte + frais aux taux marché.
+  // Défaut C4 — refinancement global CRD + soulte + frais (+ indemnité) aux taux marché.
   const monthlyPayment = estimateMonthlyPayment(
     fullRefinance,
     mortgageRate,
@@ -189,14 +230,15 @@ function buildScenario(
     netWorthByPerson: netWorth,
     soulte,
     monthlyPaymentEstimate: monthlyPayment,
-    cashNeeded: soulte.refinanceAmount ?? soulte.totalCashNeeded ?? soulte.amount,
+    cashNeeded: eur(fullRefinance),
     keepFinancingMode: "full_refinance",
     newLoanAmount: eur(fullRefinance),
     newLoanMonthly: monthlyPayment,
     negativeEquity: soulte.negativeEquity === true,
+    ...bilateralFields,
     description: soulte.negativeEquity
       ? `Actif net négatif — dette à partager (~${Math.round(Math.abs(soulte.netAssetValue.amount)).toLocaleString("fr-FR")} €). Pas de soulte ; refinancement du CRD estimé à ${Math.round(fullRefinance).toLocaleString("fr-FR")} €.`
-      : `${keeper === "A" ? "A" : "B"} conserve le logement et verse une soulte de ${soulte.amount.amount.toLocaleString("fr-FR")} € à l'autre partie (refinancement estimé ${Math.round(fullRefinance).toLocaleString("fr-FR")} €).`,
+      : `${keeper === "A" ? "A" : "B"} conserve le logement et verse ${bilateral.buyoutTransferTotal.amount.toLocaleString("fr-FR")} € à l'autre partie (soulte${indemnity > 0 ? " + indemnité d'occupation" : ""} ; refinancement estimé ${Math.round(fullRefinance).toLocaleString("fr-FR")} €).`,
   };
 }
 

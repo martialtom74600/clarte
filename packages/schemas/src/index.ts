@@ -146,6 +146,11 @@ export interface SimulationOptions {
   managementFeeRate?: number;
   /** Taux marginal IR pour estimation micro-foncier (sinon dérivé des revenus). */
   marginalIncomeTaxRate?: number;
+  /**
+   * Mois d'occupation exclusive du logement avant signature (indemnité d'occupation).
+   * Formule indicative : (loyer estimé / 2) × mois.
+   */
+  occupationMonths?: number;
 }
 
 /** Décomposition cashflow locatif (porte rent_out) — année 2026. */
@@ -219,7 +224,8 @@ export type LeverId =
   | "legal_status"
   | "ownership_shares"
   | "custom_rent"
-  | "savings";
+  | "savings"
+  | "occupation_indemnity";
 
 export interface SoulteResult {
   payer: PersonId;
@@ -296,6 +302,22 @@ export interface ScenarioComparison {
   rentOutBreakdown?: RentOutBreakdown;
   /** Formule lisible : Loyer − crédit − TF/charges − impôts = net. */
   rentOutFormulaDetail?: string;
+  /** Personne qui part (receveur de la soulte) — scénarios keep_*. */
+  departurePersonId?: PersonId;
+  /** Capital net récupéré par le partant (soulte + indemnité d'occupation). */
+  departureCapital?: Money;
+  /** Soulte + indemnité d'occupation (transfert final). */
+  buyoutTransferTotal?: Money;
+  /** Mois d'occupation exclusive avant signature. */
+  occupationMonths?: number;
+  /** Demi-loyer mensuel (base indemnité). */
+  occupationMonthlyHalfRent?: Money;
+  /** Indemnité d'occupation totale imputée sur le rachat. */
+  occupationIndemnity?: Money;
+  /** Note explicative indemnité d'occupation. */
+  occupationNote?: string;
+  /** Verdict de relogement du partant (zone). */
+  departureRelocateVerdict?: AffordabilityVerdict;
 }
 
 export interface MortgageRateSnapshot {

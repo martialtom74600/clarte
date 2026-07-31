@@ -48,6 +48,8 @@ export interface LeverOverrides {
   ownership_shares?: { shareA: number; shareB: number };
   custom_rent?: { monthlyRentOverride: number };
   savings?: { savingsA: number; savingsB: number };
+  /** Mois d'occupation exclusive avant signature (indemnité = loyer/2 × mois). */
+  occupation_indemnity?: { occupationMonths: number };
 }
 
 export interface LabState {

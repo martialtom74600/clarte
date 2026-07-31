@@ -48,6 +48,35 @@ function buildKeepPresentation(
   const keepExisting = scenario?.keepFinancingMode === "keep_existing_loan";
   const negativeEquity =
     scenario?.negativeEquity === true || scenario?.soulte?.negativeEquity === true;
+  const departing = scenario?.departurePersonId ?? (doorId === "keep_a" ? "B" : "A");
+  const departureCapital =
+    scenario?.departureCapital?.amount ?? scenario?.soulte?.amount.amount ?? 0;
+  const departureRelocate =
+    scenario?.departureRelocateVerdict ?? scenario?.relocateVerdictByPerson?.[departing];
+
+  const bilateral: PorteBilateralShare[] = [
+    {
+      personKey: doorId === "keep_a" ? "A" : "B",
+      personLabel: doorId === "keep_a" ? "Vous (rachetez)" : "L'autre (rachete)",
+      amount: formatEuro(
+        keepExisting
+          ? (scenario?.newLoanAmount?.amount ?? scenario?.cashNeeded?.amount ?? 0)
+          : (scenario?.cashNeeded?.amount ??
+            scenario?.soulte?.refinanceAmount?.amount ??
+            scenario?.soulte?.amount.amount ??
+            0)
+      ),
+      caption: keepExisting ? "à emprunter (rachat)" : "financement rachat",
+    },
+    {
+      personKey: departing,
+      personLabel: doorId === "keep_a" ? "L'autre (part)" : "Vous (partez)",
+      amount: formatEuro(departureCapital),
+      caption: "capital net récupéré",
+      relocateLabel: relocateLabel(departureRelocate),
+      relocateVerdict: departureRelocate,
+    },
+  ];
 
   if (negativeEquity) {
     const residual = scenario?.soulte?.residualDebt?.amount ?? 0;
@@ -55,6 +84,7 @@ function buildKeepPresentation(
       heroValue: formatEuro(residual),
       heroCaption: "dette résiduelle à partager",
       consequence: "Actif net négatif — dette à partager",
+      bilateral,
     };
   }
 
@@ -63,14 +93,15 @@ function buildKeepPresentation(
       scenario?.cashNeeded?.amount ??
       scenario?.soulte?.totalCashNeeded?.amount ??
       0)
-    : (scenario?.soulte?.refinanceAmount?.amount ??
-      scenario?.cashNeeded?.amount ??
+    : (scenario?.cashNeeded?.amount ??
+      scenario?.soulte?.refinanceAmount?.amount ??
       scenario?.soulte?.totalCashNeeded?.amount ??
       scenario?.soulte?.amount.amount ??
       0);
   const monthly = scenario?.monthlyPaymentEstimate?.amount ?? 0;
   const keeperPhrase =
     doorId === "keep_a" ? "Vous conservez le bien" : "L'autre partie conserve le bien";
+  const indemnity = scenario?.occupationIndemnity?.amount ?? 0;
 
   const heroCaption = keepExisting
     ? "à emprunter en plus du crédit actuel (sous accord banque)"
@@ -83,8 +114,9 @@ function buildKeepPresentation(
     heroCaption,
     consequence:
       monthly > 0
-        ? `${keeperPhrase} · mensualité estimée ${formatEuro(monthly)}/mois`
-        : `${keeperPhrase} · montant à verser`,
+        ? `${keeperPhrase} · mensualité ${formatEuro(monthly)}/mois · partant ${formatEuro(departureCapital)}${indemnity > 0 ? " (dont indemnité)" : ""}`
+        : `${keeperPhrase} · partant récupère ${formatEuro(departureCapital)}`,
+    bilateral,
   };
 }
 

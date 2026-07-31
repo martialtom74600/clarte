@@ -127,6 +127,11 @@ export function compileSimulationInput(
 
   const contributionsActive = lab.enabledLevers.includes("initial_contributions");
   const historicalActive = lab.enabledLevers.includes("historical_mortgage_rate");
+  const occupationActive = lab.enabledLevers.includes("occupation_indemnity");
+  const occupationMonths =
+    occupationActive && (lab.overrides.occupation_indemnity?.occupationMonths ?? 0) > 0
+      ? lab.overrides.occupation_indemnity!.occupationMonths
+      : undefined;
   const childrenActive =
     lab.enabledLevers.includes("children_impact") &&
     Boolean(lab.overrides.children_impact?.hasMinorChildren) &&
@@ -159,6 +164,7 @@ export function compileSimulationInput(
       mortgageRate: merged.mortgageRate,
       mortgageDurationYears: merged.mortgageDurationYears,
       monthlyRentOverride,
+      occupationMonths,
     },
     hasMinorChildren: childrenActive,
     numberOfChildren: childrenActive

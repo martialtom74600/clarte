@@ -1,4 +1,4 @@
-import type { DoorId } from "@separation/schemas";
+import type { DoorId, ScenarioComparison } from "@separation/schemas";
 import { formatEuro } from "@/lib/utils";
 import type { AssumptionsState, FootprintState, LabState } from "./separation-types";
 import { buildLabLedger, defaultMortgagePayment, type LabLedgerModel } from "./lab-ledger-model";
@@ -15,11 +15,17 @@ export interface ExportLeverLine {
   value: string;
 }
 
+export interface ExportInsight {
+  title: string;
+  body: string;
+}
+
 export interface ExportBilanModel {
   scenarioTitle: string;
   dateLabel: string;
   footprint: ExportField[];
   activeLevers: ExportLeverLine[];
+  insights: ExportInsight[];
   ledger: LabLedgerModel;
   disclaimer: string;
 }
@@ -84,7 +90,96 @@ export function buildActiveLeverLines(
     }
   }
 
+  if (lab.enabledLevers.includes("occupation_indemnity")) {
+    const months = lab.overrides.occupation_indemnity?.occupationMonths ?? 0;
+    lines.push({
+      id: "occupation_indemnity",
+      label: "Occupation exclusive avant signature",
+      value: months > 0 ? `${months} mois` : "Activé",
+    });
+  }
+
   return lines;
+}
+
+function scenarioFor(result: SimulationResult, doorId: DoorId): ScenarioComparison | undefined {
+  return result.scenarios.find((s) => s.scenario === doorId);
+}
+
+export function buildExportInsights(
+  doorId: DoorId,
+  result: SimulationResult | null,
+  verdicts: DoorVerdictMap | null
+): ExportInsight[] {
+  if (!result) return [];
+  const scenario = scenarioFor(result, doorId);
+  const verdict = verdicts?.[doorId];
+  const insights: ExportInsight[] = [];
+
+  if (verdict) {
+    insights.push({
+      title: `Lecture du feu — ${verdict.verdict === "green" ? "Tenable" : verdict.verdict === "orange" ? "Serré" : "Difficile"}`,
+      body: `${verdict.headline}. ${verdict.detail}`,
+    });
+  }
+
+  if (doorId === "keep_a" || doorId === "keep_b") {
+    const departure = scenario?.departureCapital?.amount ?? scenario?.soulte?.amount.amount;
+    const relocate = scenario?.departureRelocateVerdict;
+    const indemnity = scenario?.occupationIndemnity?.amount ?? 0;
+    if (departure != null) {
+      insights.push({
+        title: "Capital du partant & relogement",
+        body: `Capital net récupéré : ${formatEuro(departure)}${
+          indemnity > 0 ? ` (dont indemnité d'occupation ${formatEuro(indemnity)})` : ""
+        }. Relogement zone : ${relocate ?? "à évaluer"}${
+          scenario?.relocateTarget
+            ? ` — cible ~${formatEuro(scenario.relocateTarget.amount)}`
+            : ""
+        }.`,
+      });
+    }
+    if (scenario?.occupationNote) {
+      insights.push({
+        title: "Indemnité d'occupation",
+        body: scenario.occupationNote,
+      });
+    }
+  }
+
+  if (doorId === "rent_out" && scenario?.rentOutBreakdown) {
+    const bd = scenario.rentOutBreakdown;
+    insights.push({
+      title: "Détail fiscal locatif (micro-foncier)",
+      body:
+        `Loyer brut ${formatEuro(bd.grossRent.amount)} − vacance ${formatEuro(bd.vacancyProvision.amount)} ` +
+        `→ effectif ${formatEuro(bd.effectiveRent.amount)}. ` +
+        `Charges : crédit ${formatEuro(bd.mortgagePayment.amount)}, TF ${formatEuro(bd.propertyTaxMonthly.amount)}, ` +
+        `PNO ${formatEuro(bd.pnoMonthly.amount)}, gestion ${formatEuro(bd.managementFees.amount)}. ` +
+        `Impôts (abatt. 30 % + IR + PS) ${formatEuro(bd.incomeTaxEstimate.amount)}. ` +
+        `Cashflow net : ${formatEuro(bd.netCashflow.amount)}/mois.`,
+    });
+    if (scenario.rentOutFormulaDetail) {
+      insights.push({
+        title: "Formule de cashflow",
+        body: scenario.rentOutFormulaDetail,
+      });
+    }
+  }
+
+  if (doorId === "sell") {
+    if (scenario?.capitalGainsNote) {
+      insights.push({ title: "Plus-value (CGI 150 U)", body: scenario.capitalGainsNote });
+    }
+    if (scenario?.saleProceedsByPerson) {
+      insights.push({
+        title: "Répartition bilatérale après vente",
+        body: `Vous ${formatEuro(scenario.saleProceedsByPerson.A.amount)} · Autre ${formatEuro(scenario.saleProceedsByPerson.B.amount)} (après agence + diagnostics + CRD).`,
+      });
+    }
+  }
+
+  return insights;
 }
 
 export function buildExportBilan(params: {
@@ -116,10 +211,15 @@ export function buildExportBilan(params: {
       { label: "Crédit restant", value: formatEuro(footprint.mortgageRemaining) },
       { label: "Vos revenus nets", value: `${formatEuro(footprint.incomeA)}/mois` },
       { label: "Revenus de l'autre partie", value: `${formatEuro(footprint.incomeB)}/mois` },
+      {
+        label: "Surface retenue",
+        value: `${assumptions.propertySurface || 65} m²`,
+      },
     ],
     activeLevers: buildActiveLeverLines(lab, footprint, assumptions),
+    insights: buildExportInsights(doorId, result, doorVerdicts),
     ledger,
     disclaimer:
-      "Document généré par Clarté. Simulation indicative : droit de partage CGI 746 (1,10 % ou 2,50 %) + émoluments ~1,5 % ; vente = agence ~5 % + diagnostics forfaitaires ; plus-value RP exonérée (CGI 150 U). Le mode « garder mon crédit » suppose un accord banque (désolidarisation). Consultez un notaire ou un conseiller avant toute décision.",
+      "Document généré par Clarté (pack 2026.5). Simulation indicative : droit de partage CGI 746 (1,10 % ou 2,50 %) + émoluments ~1,5 % ; vente = agence ~5 % + diagnostics ; plus-value RP exonérée (CGI 150 U) ; location = vacance, TF, PNO, gestion, micro-foncier ; rachat = soulte ± indemnité d'occupation (loyer÷2×mois) + test de relogement du partant. Le mode « garder mon crédit » suppose un accord banque (désolidarisation). Consultez un notaire ou un conseiller avant toute décision.",
   };
 }

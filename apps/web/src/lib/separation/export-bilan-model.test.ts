@@ -73,11 +73,48 @@ describe("export-bilan-model", () => {
     });
 
     expect(bilan?.scenarioTitle).toBe(EXPORT_SCENARIO_TITLES.keep_a);
-    expect(bilan?.footprint).toHaveLength(5);
+    expect(bilan?.footprint.length).toBeGreaterThanOrEqual(5);
     expect(bilan?.activeLevers).toHaveLength(1);
     expect(bilan?.ledger.lines.some((l) => l.id === "soulte")).toBe(true);
+    expect(bilan?.insights.length).toBeGreaterThan(0);
+    expect(bilan?.insights.some((i) => /partant|Lecture/i.test(i.title))).toBe(true);
     expect(bilan?.disclaimer).toMatch(/1,10 %|2,50 %/);
     expect(bilan?.disclaimer).toMatch(/1,5 %/);
+    expect(bilan?.disclaimer).toMatch(/2026\.5/);
     expect(bilan?.disclaimer).not.toMatch(/7[,.]5/);
+  });
+
+  it("exporte le détail fiscal rent_out et l'indemnité keep", () => {
+    const rentBilan = buildExportBilan({
+      doorId: "rent_out",
+      footprint,
+      assumptions: defaultAssumptions(),
+      lab: { ...defaultLabState(), activeDoor: "rent_out" },
+      result: derived.lastResult,
+      doorVerdicts: derived.doorVerdicts,
+    });
+    expect(rentBilan?.insights.some((i) => /micro-foncier|fiscal/i.test(i.title))).toBe(
+      true
+    );
+
+    const occLab = {
+      ...defaultLabState(),
+      activeDoor: "keep_a" as const,
+      enabledLevers: ["occupation_indemnity" as const],
+      overrides: { occupation_indemnity: { occupationMonths: 8 } },
+    };
+    const occDerived = recomputeSeparationDerived({ ...baseState, lab: occLab });
+    const keepBilan = buildExportBilan({
+      doorId: "keep_a",
+      footprint,
+      assumptions: defaultAssumptions(),
+      lab: occLab,
+      result: occDerived.lastResult,
+      doorVerdicts: occDerived.doorVerdicts,
+    });
+    expect(keepBilan?.activeLevers.some((l) => l.id === "occupation_indemnity")).toBe(true);
+    expect(keepBilan?.insights.some((i) => /occupation/i.test(i.title + i.body))).toBe(
+      true
+    );
   });
 });

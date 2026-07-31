@@ -102,12 +102,55 @@ function SimulationPdfDocument({
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Scénarios comparés</Text>
           {result.scenarios.map((s) => (
-            <View key={s.scenario} style={{ marginBottom: 8 }}>
+            <View key={s.scenario} style={{ marginBottom: 10 }}>
               <Text style={{ fontWeight: "bold" }}>{s.label}</Text>
               <Text>
                 A : {formatEuro(s.netWorthByPerson.A.amount)} • B :{" "}
                 {formatEuro(s.netWorthByPerson.B.amount)}
               </Text>
+              {(s.scenario === "keep_a" || s.scenario === "keep_b") && (
+                <View style={{ marginTop: 4 }}>
+                  {s.departureCapital && (
+                    <Text>
+                      Capital partant : {formatEuro(s.departureCapital.amount)}
+                      {s.departureRelocateVerdict
+                        ? ` — relogement ${s.departureRelocateVerdict}`
+                        : ""}
+                    </Text>
+                  )}
+                  {(s.occupationIndemnity?.amount ?? 0) > 0 && (
+                    <Text>
+                      Indemnité d&apos;occupation ({s.occupationMonths ?? 0} mois) :{" "}
+                      {formatEuro(s.occupationIndemnity!.amount)}
+                    </Text>
+                  )}
+                  {s.soulte && (
+                    <Text>
+                      Soulte : {formatEuro(s.soulte.amount.amount)} ({s.soulte.payer}→
+                      {s.soulte.receiver})
+                    </Text>
+                  )}
+                </View>
+              )}
+              {s.scenario === "rent_out" && s.rentOutBreakdown && (
+                <View style={{ marginTop: 4 }}>
+                  <Text>
+                    Cashflow net : {formatEuro(s.rentOutBreakdown.netCashflow.amount)}/mois
+                  </Text>
+                  <Text>
+                    Loyer {formatEuro(s.rentOutBreakdown.grossRent.amount)} − crédit{" "}
+                    {formatEuro(s.rentOutBreakdown.mortgagePayment.amount)} − TF{" "}
+                    {formatEuro(s.rentOutBreakdown.propertyTaxMonthly.amount)} − impôts{" "}
+                    {formatEuro(s.rentOutBreakdown.incomeTaxEstimate.amount)}
+                  </Text>
+                </View>
+              )}
+              {s.scenario === "sell" && s.saleNetProceeds && (
+                <Text>
+                  Net vendeur : {formatEuro(s.saleNetProceeds.amount)}
+                  {s.capitalGainsNote ? ` — ${s.capitalGainsNote}` : ""}
+                </Text>
+              )}
             </View>
           ))}
         </View>

@@ -35,6 +35,9 @@ describe("porte-presenter", () => {
     const porte = buildPortePresentation("keep_a", lastResult, doorVerdicts);
     expect(porte?.heroCaption).toBe("pour garder le bien");
     expect(porte?.heroValue).toContain("€");
+    expect(porte?.bilateral).toHaveLength(2);
+    expect(porte?.bilateral?.[1].caption).toMatch(/capital net récupéré/i);
+    expect(porte?.bilateral?.[1].relocateVerdict).toMatch(/green|orange|red/);
   });
 
   it("affiche le cashflow pour rent_out", () => {

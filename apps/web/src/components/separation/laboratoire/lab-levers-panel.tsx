@@ -10,7 +10,11 @@ import type { LeverOverrides } from "@/lib/separation/separation-types";
 import { cn, formatEuro } from "@/lib/utils";
 
 type ChildrenImpactConfig = NonNullable<LeverOverrides["children_impact"]>;
-type LabLeverId = "initial_contributions" | "historical_mortgage_rate" | "children_impact";
+type LabLeverId =
+  | "initial_contributions"
+  | "historical_mortgage_rate"
+  | "children_impact"
+  | "occupation_indemnity";
 
 function parseAmount(raw: string): number {
   const digits = raw.replace(/\D/g, "");
@@ -95,6 +99,30 @@ const LEVER_COPY: Record<
       impact: "Affiché dans le bilan (charge à côté du loyer).",
     },
   },
+  occupation_indemnity: {
+    keep_a: {
+      title: "Temps passé seul dans le logement avant signature",
+      description:
+        "Si vous occupez le bien seul avant l'acte, une indemnité d'occupation peut être due à l'autre (loyer estimé ÷ 2 × nombre de mois).",
+      impact: "Augmente le capital récupéré par le partant et le montant à financer.",
+    },
+    keep_b: {
+      title: "Temps passé seul dans le logement avant signature",
+      description:
+        "Si l'autre occupe le bien seul avant l'acte, une indemnité d'occupation peut s'imputer sur le rachat (loyer estimé ÷ 2 × mois).",
+      impact: "Augmente ce que vous récupérez et ce que l'autre doit financer.",
+    },
+    sell: {
+      title: "Temps passé seul dans le logement avant signature",
+      description: "Sur une vente, l'indemnité d'occupation se discute à part — non modélisée ici.",
+      impact: "Sans effet sur ce scénario.",
+    },
+    rent_out: {
+      title: "Temps passé seul dans le logement avant signature",
+      description: "Ce levier concerne le rachat, pas la location.",
+      impact: "Sans effet sur ce scénario.",
+    },
+  },
 };
 
 interface LabLeversPanelProps {
@@ -113,6 +141,7 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
   const contributionsEnabled = lab.enabledLevers.includes("initial_contributions");
   const historicalEnabled = lab.enabledLevers.includes("historical_mortgage_rate");
   const childrenEnabled = lab.enabledLevers.includes("children_impact");
+  const occupationEnabled = lab.enabledLevers.includes("occupation_indemnity");
 
   const [contribA, setContribA] = useState(
     formatAmount(lab.overrides.initial_contributions?.contributionA ?? 0)
@@ -124,6 +153,9 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
     formatAmount(
       lab.overrides.historical_mortgage_rate?.monthlyMortgagePayment ?? marketMonthly
     )
+  );
+  const [occupationMonths, setOccupationMonths] = useState(
+    String(lab.overrides.occupation_indemnity?.occupationMonths ?? 8)
   );
 
   const childrenCfg = lab.overrides.children_impact ?? {
@@ -149,6 +181,12 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
     setLeverOverride("children_impact", cfg);
   }, 200);
 
+  const commitOccupation = useDebouncedCallback((months: number) => {
+    setLeverOverride("occupation_indemnity", {
+      occupationMonths: Math.min(120, Math.max(1, months)),
+    });
+  }, 200);
+
   const pushContributions = (a: string, b: string) => {
     if (!contributionsEnabled) return;
     commitContributions(parseAmount(a), parseAmount(b));
@@ -157,6 +195,11 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
   const pushHistorical = (raw: string) => {
     if (!historicalEnabled) return;
     commitHistorical(parseAmount(raw));
+  };
+
+  const pushOccupation = (raw: string) => {
+    if (!occupationEnabled) return;
+    commitOccupation(parseAmount(raw) || 1);
   };
 
   const toggleLever = useCallback(
@@ -186,6 +229,11 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
           custodyType: "classic",
         });
       }
+      if (leverId === "occupation_indemnity") {
+        const months = parseAmount(occupationMonths) || 8;
+        setOccupationMonths(String(months));
+        setLeverOverride("occupation_indemnity", { occupationMonths: months });
+      }
     },
     [
       disableLever,
@@ -194,14 +242,17 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
       contribB,
       historicalPay,
       marketMonthly,
+      occupationMonths,
     ]
   );
 
   const contribCopy = LEVER_COPY.initial_contributions[doorId];
   const histCopy = LEVER_COPY.historical_mortgage_rate[doorId];
   const childrenCopy = LEVER_COPY.children_impact[doorId];
+  const occupationCopy = LEVER_COPY.occupation_indemnity[doorId];
   const historicalRelevant = doorId !== "sell";
   const contributionsRelevant = doorId === "keep_a" || doorId === "keep_b";
+  const occupationRelevant = doorId === "keep_a" || doorId === "keep_b";
 
   return (
     <div className="space-y-4">
@@ -307,6 +358,27 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
           onChange={(cfg) => commitChildren(cfg)}
         />
       </LabLever>
+
+      {occupationRelevant && (
+        <LabLever
+          title={occupationCopy.title}
+          description={`${occupationCopy.description} ${occupationCopy.impact}`}
+          enabled={occupationEnabled}
+          onToggle={(on) => toggleLever("occupation_indemnity", on)}
+        >
+          <LabField
+            label="Nombre de mois seul(e) dans le logement"
+            value={occupationMonths}
+            onChange={(v) => {
+              const digits = v.replace(/\D/g, "");
+              setOccupationMonths(digits);
+              pushOccupation(digits);
+            }}
+            suffix="mois"
+            hint="Exemple : 8 mois → indemnité = (loyer estimé ÷ 2) × 8"
+          />
+        </LabLever>
+      )}
     </div>
   );
 }

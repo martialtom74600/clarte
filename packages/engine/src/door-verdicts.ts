@@ -55,16 +55,17 @@ function buildKeepDoorVerdict(
   const doorId: DoorId = keeper === "A" ? "keep_a" : "keep_b";
   const scenario = result.scenarios.find((s) => s.scenario === doorId);
   const keepExisting = scenario?.keepFinancingMode === "keep_existing_loan";
+  const departing = scenario?.departurePersonId ?? (keeper === "A" ? "B" : "A");
 
-  // Garde du crédit : on ne finance que rachat + frais.
-  // Sinon : package CRD + rachat + frais.
+  // Garde du crédit : on ne finance que rachat + frais (+ indemnité).
+  // Sinon : package CRD + rachat + frais (+ indemnité).
   const financingNeeded = keepExisting
     ? (scenario?.newLoanAmount?.amount ??
       scenario?.cashNeeded?.amount ??
       scenario?.soulte?.totalCashNeeded?.amount ??
       0)
-    : (scenario?.soulte?.refinanceAmount?.amount ??
-      scenario?.cashNeeded?.amount ??
+    : (scenario?.cashNeeded?.amount ??
+      scenario?.soulte?.refinanceAmount?.amount ??
       scenario?.soulte?.totalCashNeeded?.amount ??
       scenario?.soulte?.amount.amount ??
       0);
@@ -98,16 +99,43 @@ function buildKeepDoorVerdict(
     };
   }
 
-  const bankNote = scenario?.bankDisclaimer
-    ? `\n${scenario.bankDisclaimer}`
-    : "";
+  const departureRelocate =
+    scenario?.departureRelocateVerdict ??
+    scenario?.relocateVerdictByPerson?.[departing] ??
+    "orange";
+  const combined = worstVerdict(affordability.verdict, departureRelocate);
+
+  const departureCapital = scenario?.departureCapital?.amount ?? scenario?.soulte?.amount.amount ?? 0;
+  const relocateTarget = scenario?.relocateTarget?.amount ?? 0;
+  const indemnity = scenario?.occupationIndemnity?.amount ?? 0;
+
+  const relocateNote =
+    departureRelocate === "green"
+      ? `Partant : capital ${Math.round(departureCapital).toLocaleString("fr-FR")} € — relogement zone tenable (cible ~${Math.round(relocateTarget).toLocaleString("fr-FR")} €).`
+      : departureRelocate === "orange"
+        ? `Partant : capital ${Math.round(departureCapital).toLocaleString("fr-FR")} € — relogement zone serré (cible ~${Math.round(relocateTarget).toLocaleString("fr-FR")} €).`
+        : `Partant : capital ${Math.round(departureCapital).toLocaleString("fr-FR")} € — relogement zone difficile (cible ~${Math.round(relocateTarget).toLocaleString("fr-FR")} €).`;
+
+  const occupationNote =
+    indemnity > 0 && scenario?.occupationNote ? ` ${scenario.occupationNote}` : "";
+
+  const bankNote = scenario?.bankDisclaimer ? ` ${scenario.bankDisclaimer}` : "";
+
+  const headline =
+    combined === "green"
+      ? "Rachat et relogement du partant tenables"
+      : combined === "orange"
+        ? "Rachat ou relogement du partant serré"
+        : departureRelocate === "red" && affordability.verdict !== "red"
+          ? "Financement ok, mais partant sans relogement zone"
+          : affordability.label;
 
   return {
     doorId,
-    verdict: affordability.verdict,
+    verdict: combined,
     label: DOOR_LABELS[doorId],
-    headline: affordability.label,
-    detail: `${affordability.detail}${bankNote}`,
+    headline,
+    detail: `${affordability.detail} ${relocateNote}${occupationNote}${bankNote}`.trim(),
     monthlyImpact: scenario?.monthlyPaymentEstimate ?? affordability.monthlyPayment,
   };
 }

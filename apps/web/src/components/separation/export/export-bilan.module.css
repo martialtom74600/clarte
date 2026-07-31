@@ -87,6 +87,24 @@
   font-style: italic;
 }
 
+.insightBlock {
+  padding: 0.875rem 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.insightTitle {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #0f172a;
+  margin-bottom: 0.375rem;
+}
+
+.insightBody {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: #475569;
+}
+
 .ledgerRow {
   display: flex;
   justify-content: space-between;
@@ -160,6 +178,8 @@
   .fieldValue,
   .leverLabel,
   .leverValue,
+  .insightTitle,
+  .insightBody,
   .title,
   .date,
   .ledgerRow,

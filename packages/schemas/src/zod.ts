@@ -96,6 +96,7 @@ export const simulationInputSchema = z.object({
     managementDelegated: z.boolean().optional(),
     managementFeeRate: z.number().min(0).max(0.25).optional(),
     marginalIncomeTaxRate: z.number().min(0).max(0.55).optional(),
+    occupationMonths: z.number().min(0).max(120).optional(),
   }),
   hasMinorChildren: z.boolean().optional(),
   urgencyMonths: z.number().optional(),

@@ -27,6 +27,12 @@ export {
   RENT_GREEN_THRESHOLD,
 } from "./rent-out-cashflow.js";
 export type { RentOutCashflowParams, RentOutCashflowResult } from "./rent-out-cashflow.js";
+export {
+  computeKeepBilateralExtras,
+  computeOccupationIndemnity,
+  estimateGrossRentMonthly,
+} from "./keep-buyout.js";
+export type { KeepBilateralExtras } from "./keep-buyout.js";
 export { BANK_KEEP_LOAN_DISCLAIMER } from "./simulator.js";
 export type { ContributionMode } from "./soulte-core.js";
 export { runQuickEstimate } from "./quick-estimate.js";

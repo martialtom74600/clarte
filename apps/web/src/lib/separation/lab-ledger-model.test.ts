@@ -109,6 +109,46 @@ describe("buildLabLedger", () => {
     expect(ledger?.footer).toMatch(/150 U|Relogement/i);
   });
 
+  it("keep_a : affiche capital du partant et cible de relogement", () => {
+    const ledger = buildLabLedger({
+      doorId: "keep_a",
+      footprint,
+      assumptions: defaultAssumptions(),
+      lab: { ...defaultLabState(), activeDoor: "keep_a" },
+      result: derived.lastResult,
+      doorVerdicts: derived.doorVerdicts,
+    });
+    expect(ledger?.lines.some((l) => l.id === "departure-capital")).toBe(true);
+    expect(ledger?.lines.some((l) => l.id === "relocate-target")).toBe(true);
+    expect(ledger?.footer).toMatch(/Relogement du partant/i);
+  });
+
+  it("keep_a + occupation : impute l'indemnité sur le rachat", () => {
+    const lab = {
+      ...defaultLabState(),
+      activeDoor: "keep_a" as const,
+      enabledLevers: ["occupation_indemnity" as const],
+      overrides: { occupation_indemnity: { occupationMonths: 8 } },
+    };
+    const withOcc = recomputeSeparationDerived({ ...baseState, lab });
+    const keep = withOcc.lastResult?.scenarios.find((s) => s.scenario === "keep_a");
+    expect(keep?.occupationIndemnity?.amount).toBeGreaterThan(0);
+
+    const ledger = buildLabLedger({
+      doorId: "keep_a",
+      footprint,
+      assumptions: defaultAssumptions(),
+      lab,
+      result: withOcc.lastResult,
+      doorVerdicts: withOcc.doorVerdicts,
+    });
+    expect(ledger?.lines.some((l) => l.id === "occupation-indemnity")).toBe(true);
+    expect(ledger?.lines.find((l) => l.id === "occupation-indemnity")?.amount).toBe(
+      keep?.occupationIndemnity?.amount
+    );
+    expect(ledger?.lines.some((l) => l.id === "buyout-transfer")).toBe(true);
+  });
+
   it("rent_out : décompose loyer − crédit − TF/charges − impôts = cashflow net", () => {
     const ledger = buildLabLedger({
       doorId: "rent_out",

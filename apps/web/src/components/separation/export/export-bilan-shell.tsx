@@ -87,6 +87,18 @@ export function ExportBilanShell() {
           )}
         </section>
 
+        {model.insights.length > 0 && (
+          <section className={styles.section}>
+            <h2 className={styles.sectionTitle}>Lecture patrimoniale</h2>
+            {model.insights.map((insight) => (
+              <div key={insight.title} className={styles.insightBlock}>
+                <p className={styles.insightTitle}>{insight.title}</p>
+                <p className={styles.insightBody}>{insight.body}</p>
+              </div>
+            ))}
+          </section>
+        )}
+
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Ce que ça donne</h2>
           {model.ledger.lines.map((line) => (

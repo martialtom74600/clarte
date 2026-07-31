@@ -141,16 +141,71 @@ function buildKeepLedger(
   const newLoanMonthly = scenario?.newLoanMonthly?.amount ?? 0;
   const keptMonthly = scenario?.keptMortgageMonthly?.amount ?? 0;
 
+  const indemnity = scenario?.occupationIndemnity?.amount ?? 0;
+  const buyoutTransfer = scenario?.buyoutTransferTotal?.amount ?? soulte + indemnity;
+  const departureCapital = scenario?.departureCapital?.amount ?? buyoutTransfer;
+  const relocateTarget = scenario?.relocateTarget?.amount ?? 0;
+  const cashWithIndemnity = totalCash + indemnity;
+
   lines.push(
-    { id: "soulte", label: soulteLabel, amount: soulte, tone: "highlight" },
+    { id: "soulte", label: soulteLabel, amount: soulte, tone: "highlight" }
+  );
+
+  if (indemnity > 0 && (scenario?.occupationMonths ?? 0) > 0) {
+    const months = scenario!.occupationMonths!;
+    const halfRent = scenario?.occupationMonthlyHalfRent?.amount ?? indemnity / months;
+    lines.push(
+      {
+        id: "occupation-half-rent",
+        label: `Demi-loyer × ${months} mois d'occupation exclusive`,
+        amount: Math.round(halfRent),
+        tone: "neutral",
+        suffix: "/mois",
+      },
+      {
+        id: "occupation-indemnity",
+        label: "Indemnité d'occupation (imputée sur le rachat)",
+        amount: indemnity,
+        tone: "highlight",
+      },
+      {
+        id: "buyout-transfer",
+        label: doorId === "keep_a" ? "Transfert total (soulte + indemnité)" : "Vous récupérez au total",
+        amount: buyoutTransfer,
+        tone: "total",
+      }
+    );
+  }
+
+  lines.push(
     {
       id: "notary",
       label: "Droit de partage (CGI 746) + émoluments ~1,5 %",
       amount: notary,
       tone: "subtract",
     },
-    { id: "total-cash", label: totalCashLabel, amount: totalCash, tone: "highlight" }
+    {
+      id: "total-cash",
+      label: totalCashLabel,
+      amount: cashWithIndemnity,
+      tone: "highlight",
+    },
+    {
+      id: "departure-capital",
+      label: doorId === "keep_a" ? "Capital net récupéré par l'autre" : "Votre capital net récupéré",
+      amount: departureCapital,
+      tone: "highlight",
+    }
   );
+
+  if (relocateTarget > 0) {
+    lines.push({
+      id: "relocate-target",
+      label: "Cible relogement zone (prix × surface)",
+      amount: relocateTarget,
+      tone: "neutral",
+    });
+  }
 
   if (keepExisting) {
     lines.push(
@@ -203,8 +258,16 @@ function buildKeepLedger(
   const pension = childSupportLine(footprint, lab);
   if (pension) lines.push(pension);
 
+  const departureRelocate =
+    scenario?.departureRelocateVerdict ??
+    scenario?.relocateVerdictByPerson?.[scenario?.departurePersonId ?? (doorId === "keep_a" ? "B" : "A")];
+
   const footerParts = [
     negativeEquity ? "Actif net négatif — dette à partager." : null,
+    scenario?.occupationNote,
+    departureRelocate
+      ? `Relogement du partant : ${departureRelocate}.`
+      : null,
     keepExisting ? scenario?.bankDisclaimer : null,
     verdict?.detail,
   ].filter(Boolean);
