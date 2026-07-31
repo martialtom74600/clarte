@@ -1,8 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { Pencil } from "lucide-react";
 import type { DoorId } from "@separation/schemas";
 import { clarte } from "@/lib/clarte-design";
+import { cn } from "@/lib/utils";
 import { useSeparationStore } from "@/store/separation-store";
 import { buildAllPortes } from "@/lib/separation/porte-presenter";
 import { PorteCard } from "./porte-card";
@@ -47,8 +49,29 @@ export function PortesGrid() {
 }
 
 export function PortesShell() {
+  const router = useRouter();
+  const reset = useSeparationStore((s) => s.reset);
+
+  const handleEditInfo = () => {
+    reset();
+    router.push("/simulation");
+  };
+
   return (
     <div className={`${clarte.mesh} min-h-[100dvh] px-4 py-16 md:px-8 md:py-20`}>
+      <div className="mx-auto mb-2 flex w-full max-w-4xl justify-end md:mb-4">
+        <button
+          type="button"
+          onClick={handleEditInfo}
+          className={cn(
+            clarte.btnGhost,
+            "inline-flex items-center gap-1.5 px-3 py-2 text-xs text-slate-500 underline-offset-4 hover:underline md:text-sm"
+          )}
+        >
+          <Pencil className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+          Modifier mes informations
+        </button>
+      </div>
       <PortesGrid />
     </div>
   );

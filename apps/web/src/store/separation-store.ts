@@ -17,25 +17,37 @@ import {
   isFootprintComplete,
 } from "@/lib/separation/compile-simulation-input";
 import { recomputeSeparationDerived } from "@/lib/separation/recompute-derived";
+import { EMPREINTE_STEP_KEY } from "@/components/separation/empreinte/empreinte-screens";
 
-const STORAGE_KEY = "clarte-separation-v2";
+export const STORAGE_KEY = "clarte-separation-v2";
 
-export const initialSeparationState: Omit<
-  SeparationState,
-  "derived"
-> & { derived: SeparationState["derived"] } = {
-  stratum: "empreinte",
-  footprint: defaultFootprint(),
-  assumptions: defaultAssumptions(),
-  lab: defaultLabState(),
-  derived: {
-    lastInput: null,
-    lastResult: null,
-    doorVerdicts: null,
-    computedAt: null,
-  },
-  discreteMode: false,
-};
+/** Clés sessionStorage liées au funnel Empreinte (hors store persist). */
+const EMPREINTE_LEGACY_STEP_KEY = "clarte-empreinte-step";
+
+export function createInitialSeparationState(): SeparationState {
+  return {
+    stratum: "empreinte",
+    footprint: defaultFootprint(),
+    assumptions: defaultAssumptions(),
+    lab: defaultLabState(),
+    derived: {
+      lastInput: null,
+      lastResult: null,
+      doorVerdicts: null,
+      computedAt: null,
+    },
+    discreteMode: false,
+  };
+}
+
+export const initialSeparationState = createInitialSeparationState();
+
+export function clearSeparationPersistence(): void {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(STORAGE_KEY);
+  sessionStorage.removeItem(EMPREINTE_STEP_KEY);
+  sessionStorage.removeItem(EMPREINTE_LEGACY_STEP_KEY);
+}
 
 export interface SeparationStore extends SeparationState {
   setFootprintField: (field: FootprintField, value: string | number) => void;
@@ -175,7 +187,10 @@ export const createSeparationStore = () =>
           return compileSimulationInput(state);
         },
 
-        reset: () => set({ ...initialSeparationState }),
+        reset: () => {
+          clearSeparationPersistence();
+          set(createInitialSeparationState());
+        },
       }),
       {
         name: STORAGE_KEY,

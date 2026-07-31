@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { create } from "zustand";
 import type { SeparationStore } from "@/store/separation-store";
-import { initialSeparationState } from "@/store/separation-store";
+import {
+  createInitialSeparationState,
+  initialSeparationState,
+} from "@/store/separation-store";
 import {
   compileSimulationInput,
   isFootprintComplete,
@@ -104,7 +107,7 @@ function createTestSeparationStore() {
       return compileSimulationInput(state);
     },
 
-    reset: () => set({ ...initialSeparationState }),
+    reset: () => set(createInitialSeparationState()),
   }));
 }
 
@@ -191,5 +194,26 @@ describe("SeparationStore (in-memory)", () => {
     expect(store.getState().stratum).toBe("laboratoire");
     expect(store.getState().lab.activeDoor).toBe("rent_out");
     expect(store.getState().derived.doorVerdicts).toEqual(verdictsBefore);
+  });
+
+  it("reset remet le funnel à zéro pour une nouvelle saisie", () => {
+    fillCompleteFootprint();
+    store.getState().completeFootprint();
+    store.getState().openDoor("keep_a");
+    store.getState().setLeverOverride("initial_contributions", {
+      contributionA: 10000,
+      contributionB: 15000,
+    });
+
+    store.getState().reset();
+
+    const state = store.getState();
+    expect(state.stratum).toBe("empreinte");
+    expect(state.footprint.postalCode).toBe("");
+    expect(state.footprint.propertyValue).toBe(0);
+    expect(state.footprint.completedAt).toBeNull();
+    expect(state.derived.lastResult).toBeNull();
+    expect(state.lab.activeDoor).toBeNull();
+    expect(state.lab.enabledLevers).toEqual([]);
   });
 });
