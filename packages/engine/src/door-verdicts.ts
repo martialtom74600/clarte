@@ -14,7 +14,7 @@ import {
 import { getMortgageRateSnapshot } from "./mortgage-rates.js";
 import { RENT_GREEN_THRESHOLD } from "./rent-out-cashflow.js";
 import { estimateChildSupport } from "./support.js";
-import { eur, estimateMonthlyPayment, round } from "./utils.js";
+import { eur, round } from "./utils.js";
 
 const DOOR_LABELS: Record<DoorId, string> = {
   keep_a: "Vous rachetez",
@@ -47,6 +47,61 @@ function childSupportChargeFor(input: SimulationInput, person: PersonId): number
   return support.monthlyAmount.amount;
 }
 
+const HCSF_MAX_EFFORT = 0.35;
+
+/**
+ * Endettement réel du projet keep :
+ * (mensualité crédit conservé + mensualité nouveau prêt [+ CEEE]) / revenus.
+ */
+export function computeKeepDebtEffort(params: {
+  incomeMonthly: number;
+  keptMortgageMonthly: number;
+  newLoanMonthly: number;
+  childSupportMonthly?: number;
+}): {
+  totalMonthly: number;
+  effortRatio: number | null;
+  financingVerdict: AffordabilityVerdict;
+  detail: string;
+} {
+  const totalMonthly = round(
+    Math.max(0, params.keptMortgageMonthly) +
+      Math.max(0, params.newLoanMonthly) +
+      Math.max(0, params.childSupportMonthly ?? 0)
+  );
+
+  if (params.incomeMonthly <= 0) {
+    return {
+      totalMonthly,
+      effortRatio: null,
+      financingVerdict: "orange",
+      detail: "Revenus manquants pour calculer l'accord bancaire.",
+    };
+  }
+
+  const effortRatio = totalMonthly / params.incomeMonthly;
+  const effortPct = Math.round(effortRatio * 100);
+  const incomeLabel = Math.round(params.incomeMonthly).toLocaleString("fr-FR");
+  const monthlyLabel = Math.round(totalMonthly).toLocaleString("fr-FR");
+  const withinLimit = effortRatio <= HCSF_MAX_EFFORT;
+
+  const financingVerdict: AffordabilityVerdict =
+    effortRatio <= 0.33 ? "green" : effortRatio <= 0.38 ? "orange" : "red";
+
+  const statusLine = withinLimit
+    ? "-> Projet finançable"
+    : "-> Projet qui dépasse la limite bancaire de 35 %";
+
+  return {
+    totalMonthly,
+    effortRatio: round(effortRatio, 3),
+    financingVerdict,
+    detail:
+      `Votre endettement sera de ${effortPct} % (mensualité totale de ${monthlyLabel} € / revenus de ${incomeLabel} €).\n` +
+      statusLine,
+  };
+}
+
 function buildKeepDoorVerdict(
   input: SimulationInput,
   result: SimulationResult,
@@ -57,32 +112,27 @@ function buildKeepDoorVerdict(
   const keepExisting = scenario?.keepFinancingMode === "keep_existing_loan";
   const departing = scenario?.departurePersonId ?? (keeper === "A" ? "B" : "A");
 
-  // Garde du crédit : on ne finance que rachat + frais (+ indemnité).
-  // Sinon : package CRD + rachat + frais (+ indemnité).
-  const financingNeeded = keepExisting
-    ? (scenario?.newLoanAmount?.amount ??
-      scenario?.cashNeeded?.amount ??
-      scenario?.soulte?.totalCashNeeded?.amount ??
-      0)
-    : (scenario?.cashNeeded?.amount ??
-      scenario?.soulte?.refinanceAmount?.amount ??
-      scenario?.soulte?.totalCashNeeded?.amount ??
-      scenario?.soulte?.amount.amount ??
-      0);
+  const keptMonthly = keepExisting
+    ? (scenario?.keptMortgageMonthly?.amount ?? input.monthlyMortgagePayment ?? 0)
+    : 0;
+  const newLoanMonthly =
+    scenario?.newLoanMonthly?.amount ??
+    (keepExisting
+      ? 0
+      : (scenario?.monthlyPaymentEstimate?.amount ?? 0));
+  // Mode refinancement global : toute la mensualité est dans newLoanMonthly / monthlyPaymentEstimate.
+  const refinanceMonthly = keepExisting
+    ? newLoanMonthly
+    : (scenario?.monthlyPaymentEstimate?.amount ?? newLoanMonthly);
 
-  const existingCharges =
-    (keepExisting ? (scenario?.keptMortgageMonthly?.amount ?? input.monthlyMortgagePayment ?? 0) : 0) +
-    childSupportChargeFor(input, keeper);
+  const childSupport = childSupportChargeFor(input, keeper);
+  const income = incomeFor(input, keeper);
 
-  const rateSnapshot = getMortgageRateSnapshot(input.options.mortgageDurationYears ?? 20);
-
-  const affordability = computeAffordability({
-    incomeMonthly: incomeFor(input, keeper),
-    liquidCapital: Math.max(0, result.netWorthByPerson[keeper].amount),
-    targetPropertyPrice: financingNeeded,
-    existingMonthlyCharges: existingCharges,
-    durationYears: rateSnapshot.durationYears,
-    maxEffortRatio: 0.35,
+  const debt = computeKeepDebtEffort({
+    incomeMonthly: income,
+    keptMortgageMonthly: keptMonthly,
+    newLoanMonthly: refinanceMonthly,
+    childSupportMonthly: childSupport,
   });
 
   if (scenario?.soulte?.negativeEquity || scenario?.negativeEquity) {
@@ -95,7 +145,7 @@ function buildKeepDoorVerdict(
       detail: `Le crédit dépasse la valeur du bien (~${Math.round(residual).toLocaleString("fr-FR")} € de dette résiduelle). Pas de soulte ; anticipez un accord banque et notaire. ${
         scenario?.bankDisclaimer ?? ""
       }`.trim(),
-      monthlyImpact: scenario?.monthlyPaymentEstimate ?? affordability.monthlyPayment,
+      monthlyImpact: scenario?.monthlyPaymentEstimate ?? eur(debt.totalMonthly),
     };
   }
 
@@ -103,7 +153,7 @@ function buildKeepDoorVerdict(
     scenario?.departureRelocateVerdict ??
     scenario?.relocateVerdictByPerson?.[departing] ??
     "orange";
-  const combined = worstVerdict(affordability.verdict, departureRelocate);
+  const combined = worstVerdict(debt.financingVerdict, departureRelocate);
 
   const departureCapital = scenario?.departureCapital?.amount ?? scenario?.soulte?.amount.amount ?? 0;
   const relocateTarget = scenario?.relocateTarget?.amount ?? 0;
@@ -126,17 +176,21 @@ function buildKeepDoorVerdict(
       ? "Rachat et relogement du partant tenables"
       : combined === "orange"
         ? "Rachat ou relogement du partant serré"
-        : departureRelocate === "red" && affordability.verdict !== "red"
+        : departureRelocate === "red" && debt.financingVerdict !== "red"
           ? "Financement ok, mais partant sans relogement zone"
-          : affordability.label;
+          : debt.effortRatio == null
+            ? "Revenus manquants pour l'accord bancaire"
+            : debt.financingVerdict === "red"
+              ? "Endettement au-delà du seuil bancaire"
+              : "Projet de rachat serré";
 
   return {
     doorId,
     verdict: combined,
     label: DOOR_LABELS[doorId],
     headline,
-    detail: `${affordability.detail} ${relocateNote}${occupationNote}${bankNote}`.trim(),
-    monthlyImpact: scenario?.monthlyPaymentEstimate ?? affordability.monthlyPayment,
+    detail: `${debt.detail}\n${relocateNote}${occupationNote}${bankNote}`.trim(),
+    monthlyImpact: scenario?.monthlyPaymentEstimate ?? eur(debt.totalMonthly),
   };
 }
 

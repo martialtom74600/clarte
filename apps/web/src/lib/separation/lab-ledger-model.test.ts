@@ -88,6 +88,10 @@ describe("buildLabLedger", () => {
     expect(ledger?.lines.some((l) => l.id === "new-loan")).toBe(true);
     expect(ledger?.lines.find((l) => l.id === "kept-mortgage")?.amount).toBe(950);
     expect(ledger?.footer).toMatch(/désolidarisation|banque/i);
+    expect(ledger?.footer).toMatch(/endettement sera de \d+ %/);
+    expect(ledger?.footer).toMatch(/Projet finançable|limite bancaire de 35 %/);
+    expect(ledger?.footer).not.toMatch(/capacité max/i);
+    expect(ledger?.footer).not.toMatch(/effort de 0/);
   });
 
   it("vente : affiche agence, diagnostics et parts bilatérales", () => {

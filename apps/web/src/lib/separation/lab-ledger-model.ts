@@ -277,7 +277,8 @@ function buildKeepLedger(
     doorTitle: DOOR_TITLES[doorId],
     verdict,
     lines,
-    footer: footerParts.join(" ") || undefined,
+    // Newlines : le détail HCSF (endettement / finançable) est mis en avant dans le ledger UI.
+    footer: footerParts.join("\n") || undefined,
   };
 }
 

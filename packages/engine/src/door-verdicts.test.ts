@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { compileDoorVerdicts, runSimulation, eur } from "../src/index.js";
+import {
+  compileDoorVerdicts,
+  computeKeepDebtEffort,
+  runSimulation,
+  eur,
+} from "../src/index.js";
 import type { SimulationInput } from "@separation/schemas";
 
 function createInput(overrides: Partial<SimulationInput> = {}): SimulationInput {
@@ -77,6 +82,67 @@ describe("compileDoorVerdicts", () => {
     expect(apportsScenario!.soulte!.amount.amount).toBe(120000);
     expect(baseVerdict.headline).toBeDefined();
     expect(apportsVerdict.detail).toContain("€");
+  });
+});
+
+describe("computeKeepDebtEffort — HCSF", () => {
+  it("additionne crédit conservé + nouveau prêt dans le taux d'effort", () => {
+    const debt = computeKeepDebtEffort({
+      incomeMonthly: 5000,
+      keptMortgageMonthly: 900,
+      newLoanMonthly: 600,
+    });
+    // (900 + 600) / 5000 = 30 %
+    expect(debt.effortRatio).toBe(0.3);
+    expect(debt.totalMonthly).toBe(1500);
+    expect(debt.detail).toMatch(/endettement sera de 30 %/);
+    expect(debt.detail).toMatch(/mensualité totale de 1[\s\u00a0]?500 €/);
+    expect(debt.detail).toMatch(/revenus de 5[\s\u00a0]?000 €/);
+    expect(debt.detail).toMatch(/Projet finançable/);
+    expect(debt.detail).not.toMatch(/capacité max/i);
+    expect(debt.detail).not.toMatch(/effort de 0/);
+  });
+
+  it("signale le dépassement du seuil 35 %", () => {
+    const debt = computeKeepDebtEffort({
+      incomeMonthly: 3000,
+      keptMortgageMonthly: 900,
+      newLoanMonthly: 800,
+    });
+    // 1700 / 3000 ≈ 56.7 %
+    expect(debt.effortRatio!).toBeGreaterThan(0.35);
+    expect(debt.financingVerdict).toBe("red");
+    expect(debt.detail).toMatch(/dépasse la limite bancaire de 35 %/);
+  });
+
+  it("masque le taux si revenus manquants", () => {
+    const debt = computeKeepDebtEffort({
+      incomeMonthly: 0,
+      keptMortgageMonthly: 900,
+      newLoanMonthly: 600,
+    });
+    expect(debt.effortRatio).toBeNull();
+    expect(debt.detail).toBe("Revenus manquants pour calculer l'accord bancaire.");
+  });
+
+  it("n'affiche jamais 0 % quand une mensualité existe (keep_existing_loan)", () => {
+    const input = createInput({
+      monthlyMortgagePayment: 950,
+      options: { primaryResidenceId: "house", scenario: "compare_all" },
+    });
+    const result = runSimulation(input);
+    const verdicts = compileDoorVerdicts(input, result);
+    expect(verdicts.keep_a.detail).toMatch(/endettement sera de \d+ %/);
+    expect(verdicts.keep_a.detail).not.toMatch(/effort de 0\s*%/);
+    expect(verdicts.keep_a.detail).not.toMatch(/capacité max/i);
+
+    const keep = result.scenarios.find((s) => s.scenario === "keep_a")!;
+    expect(keep.keepFinancingMode).toBe("keep_existing_loan");
+    const kept = keep.keptMortgageMonthly!.amount;
+    const neu = keep.newLoanMonthly!.amount;
+    const income = 5000;
+    const expectedPct = Math.round(((kept + neu) / income) * 100);
+    expect(verdicts.keep_a.detail).toContain(`endettement sera de ${expectedPct} %`);
   });
 });
 

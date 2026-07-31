@@ -21,6 +21,23 @@ describe("computeAffordability", () => {
     expect(result.verdict).toBe("red");
     expect(result.gap.amount).toBeLessThan(0);
   });
+
+  it("inclut les charges existantes dans le taux d'effort", () => {
+    const without = computeAffordability({
+      incomeMonthly: 5000,
+      liquidCapital: 100000,
+      targetPropertyPrice: 200000,
+      existingMonthlyCharges: 0,
+    });
+    const withKept = computeAffordability({
+      incomeMonthly: 5000,
+      liquidCapital: 100000,
+      targetPropertyPrice: 200000,
+      existingMonthlyCharges: 900,
+    });
+    expect(withKept.effortRatio).toBeGreaterThan(without.effortRatio);
+    expect(withKept.monthlyPayment.amount).toBeGreaterThan(without.monthlyPayment.amount);
+  });
 });
 
 describe("computeNewLifeCap", () => {
