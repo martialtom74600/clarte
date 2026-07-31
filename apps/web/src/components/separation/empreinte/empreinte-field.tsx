@@ -19,6 +19,8 @@ interface EmpreinteFieldProps {
   placeholder?: string;
   suffix?: string;
   autoFocus?: boolean;
+  /** Si false, le bouton Continuer est désactivé. */
+  canContinue?: boolean;
 }
 
 function formatCurrencyDisplay(raw: string): string {
@@ -43,6 +45,122 @@ function parseNumber(raw: string): number {
   return digits ? Number(digits) : 0;
 }
 
+function sanitizeInput(type: EmpreinteFieldType, next: string): string {
+  if (type === "postal") return next.replace(/\D/g, "").slice(0, 5);
+  if (type === "number") return formatNumberDisplay(next);
+  return formatCurrencyDisplay(next);
+}
+
+/** Champ compact pour les écrans multi-champs (patrimoine / financement). */
+export function EmpreinteFormRow({
+  id,
+  label,
+  type,
+  value,
+  onChange,
+  placeholder,
+  suffix,
+  hint,
+  autoFocus = false,
+  inputRef,
+}: {
+  id: string;
+  label: string;
+  type: EmpreinteFieldType;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  suffix?: string;
+  hint?: string;
+  autoFocus?: boolean;
+  inputRef?: React.RefObject<HTMLInputElement | null>;
+}) {
+  const localRef = useRef<HTMLInputElement>(null);
+  const ref = inputRef ?? localRef;
+
+  useEffect(() => {
+    if (!autoFocus) return;
+    const t = window.setTimeout(() => ref.current?.focus(), 80);
+    return () => window.clearTimeout(t);
+  }, [autoFocus, ref]);
+
+  return (
+    <div className="w-full text-left">
+      <label htmlFor={id} className="mb-2 block text-sm font-medium text-slate-500">
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          ref={ref}
+          id={id}
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          value={value}
+          placeholder={placeholder}
+          onChange={(e) => onChange(sanitizeInput(type, e.target.value))}
+          className={cn(
+            "w-full border-0 border-b border-slate-300/80 bg-transparent pb-2.5 pr-12",
+            "text-2xl font-light tracking-tight text-slate-900 placeholder:text-slate-300",
+            "outline-none transition-colors focus:border-brand-500/60",
+            "md:text-3xl"
+          )}
+        />
+        {suffix && (
+          <span
+            className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 text-lg font-light text-slate-400"
+            aria-hidden
+          >
+            {suffix}
+          </span>
+        )}
+        {type === "currency" && value && !suffix && (
+          <span
+            className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 text-lg font-light text-slate-400"
+            aria-hidden
+          >
+            €
+          </span>
+        )}
+      </div>
+      {hint && <p className="mt-2 text-xs text-slate-400">{hint}</p>}
+    </div>
+  );
+}
+
+export function EmpreinteContinueButton({
+  onClick,
+  disabled,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "group mt-12 text-sm font-medium transition-colors",
+        disabled
+          ? "cursor-not-allowed text-slate-300"
+          : "text-slate-500 hover:text-brand-600"
+      )}
+    >
+      Continuer
+      <span
+        className={cn(
+          "ml-1 inline-block transition-transform",
+          !disabled && "group-hover:translate-x-0.5"
+        )}
+      >
+        →
+      </span>
+    </button>
+  );
+}
+
+/** Écran mono-champ (localisation / revenus) — hérite du rythme d'origine. */
 export function EmpreinteField({
   stepKey,
   label,
@@ -55,6 +173,7 @@ export function EmpreinteField({
   placeholder,
   suffix,
   autoFocus = true,
+  canContinue = true,
 }: EmpreinteFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const reduced = useReducedMotion();
@@ -65,26 +184,14 @@ export function EmpreinteField({
     return () => window.clearTimeout(t);
   }, [stepKey, autoFocus, reduced]);
 
-  const handleChange = (next: string) => {
-    if (type === "postal") {
-      onChange(next.replace(/\D/g, "").slice(0, 5));
-      return;
-    }
-    if (type === "number") {
-      onChange(formatNumberDisplay(next));
-      return;
-    }
-    onChange(formatCurrencyDisplay(next));
-  };
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
+    if (e.key === "Enter" && canContinue) {
       e.preventDefault();
       onSubmit();
     }
   };
 
-  const showSuffix = Boolean(suffix) && (type === "number" || (type === "currency" && value));
+  const showSuffix = Boolean(suffix) && (type === "number" || Boolean(value));
   const currencySuffix = type === "currency" && value && !suffix;
 
   return (
@@ -106,7 +213,7 @@ export function EmpreinteField({
           autoComplete="off"
           value={value}
           placeholder={placeholder}
-          onChange={(e) => handleChange(e.target.value)}
+          onChange={(e) => onChange(sanitizeInput(type, e.target.value))}
           onKeyDown={handleKeyDown}
           aria-label={label}
           className={cn(
@@ -138,18 +245,9 @@ export function EmpreinteField({
 
       {hint && <p className="mt-4 text-xs text-slate-400">{hint}</p>}
 
-      <button
-        type="button"
-        onClick={onSubmit}
-        className="group mt-14 text-sm font-medium text-slate-500 transition-colors hover:text-brand-600"
-      >
-        Continuer
-        <span className="ml-1 inline-block transition-transform group-hover:translate-x-0.5">
-          →
-        </span>
-      </button>
+      <EmpreinteContinueButton onClick={onSubmit} disabled={!canContinue} />
     </motion.div>
   );
 }
 
-export { parseCurrency, parseNumber };
+export { parseCurrency, parseNumber, sanitizeInput, formatCurrencyDisplay, formatNumberDisplay };
