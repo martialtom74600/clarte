@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildLabLedger, formatAffordabilityVerdictLabel } from "@/lib/separation/lab-ledger-model";
+import { groupLedgerLines } from "@/lib/separation/lab-ledger-sections";
 import { recomputeSeparationDerived } from "@/lib/separation/recompute-derived";
 import { defaultAssumptions, defaultLabState } from "@/lib/separation/compile-simulation-input";
 import type { FootprintState } from "@/lib/separation/separation-types";
@@ -174,11 +175,27 @@ describe("buildLabLedger", () => {
     expect(ledger?.lines.some((l) => l.id === "pno")).toBe(true);
     expect(ledger?.lines.some((l) => l.id === "management")).toBe(true);
     expect(ledger?.lines.some((l) => l.id === "tax")).toBe(true);
-    expect(ledger?.lines.find((l) => l.id === "net")?.label).toMatch(/Cashflow net/i);
+    expect(ledger?.lines.find((l) => l.id === "net")?.label).toMatch(/Argent net/i);
     expect(ledger?.footer).toMatch(/micro-foncier|Feu/i);
     const rentScenario = derived.lastResult?.scenarios.find((s) => s.scenario === "rent_out");
     expect(ledger?.lines.find((l) => l.id === "net")?.amount).toBe(
       Math.round(rentScenario?.rentOutBreakdown?.netCashflow.amount ?? NaN)
     );
+  });
+
+  it("regroupe les lignes par section thématique", () => {
+    const ledger = buildLabLedger({
+      doorId: "keep_a",
+      footprint,
+      assumptions: defaultAssumptions(),
+      lab: baseState.lab,
+      result: derived.lastResult,
+      doorVerdicts: derived.doorVerdicts,
+    });
+    const groups = groupLedgerLines(ledger!.lines);
+    expect(groups.some((g) => g.sectionId === "bien")).toBe(true);
+    expect(groups.some((g) => g.sectionId === "echange")).toBe(true);
+    expect(groups.some((g) => g.sectionId === "mensuel")).toBe(true);
+    expect(ledger?.lines.every((l) => l.sectionId)).toBe(true);
   });
 });

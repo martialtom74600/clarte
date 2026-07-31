@@ -2,6 +2,7 @@ import type { AffordabilityVerdict, DoorId, DoorVerdictMap, SimulationResult } f
 import { estimateChildSupport, estimateMonthlyPayment } from "@separation/engine";
 import type { AssumptionsState, FootprintState, LabState } from "./separation-types";
 import { compileSimulationInput } from "./compile-simulation-input";
+import type { LedgerSectionId } from "./lab-ledger-sections";
 
 export interface LedgerLine {
   id: string;
@@ -9,6 +10,9 @@ export interface LedgerLine {
   amount: number;
   tone?: "neutral" | "subtract" | "highlight" | "total";
   suffix?: string;
+  sectionId?: LedgerSectionId;
+  /** Courte explication sous le libellé (jargon évité). */
+  hint?: string;
 }
 
 export interface LabLedgerModel {
@@ -116,10 +120,12 @@ function childSupportLine(
 
   return {
     id: "child-support",
-    label: `Budget pour les enfants (${support.payerId === "A" ? "versé" : "reçu"} par ${support.payerId === "A" ? "vous" : "l'autre"})`,
+    label: `Budget enfants (${support.payerId === "A" ? "versé" : "reçu"} par ${support.payerId === "A" ? "vous" : "l'autre"})`,
     amount: support.monthlyAmount.amount,
     tone: "subtract",
     suffix: "/mois",
+    sectionId: "enfants",
+    hint: "Estimation mensuelle — à ajuster selon votre situation",
   };
 }
 
@@ -140,18 +146,32 @@ function buildKeepLedger(
   const negativeEquity = net < 0 || scenario?.negativeEquity === true;
 
   const lines: LedgerLine[] = [
-    { id: "property", label: "Valeur du bien", amount: footprint.propertyValue },
+    {
+      id: "property",
+      label: "Valeur du bien",
+      amount: footprint.propertyValue,
+      sectionId: "bien",
+      hint: "Estimation actuelle du logement",
+    },
     {
       id: "mortgage",
-      label: "Crédit restant",
+      label: "Prêt immobilier restant",
       amount: footprint.mortgageRemaining,
       tone: "subtract",
+      sectionId: "bien",
+      hint: "Ce qu'il reste à rembourser à la banque",
     },
     {
       id: "net",
-      label: negativeEquity ? "Actif net négatif — dette à partager" : "Valeur nette du bien",
+      label: negativeEquity
+        ? "Dette nette à partager"
+        : "Patrimoine net du logement",
       amount: net,
       tone: "highlight",
+      sectionId: "bien",
+      hint: negativeEquity
+        ? "Le crédit dépasse la valeur — la dette se partage"
+        : "Valeur du bien moins le crédit restant",
     },
   ];
 
@@ -166,23 +186,27 @@ function buildKeepLedger(
       lines.push({
         id: "contributions",
         label: isCommunity || mode === "recompense"
-          ? "Récompenses d'apports art. 1469 (avant partage)"
+          ? "Apports remboursés avant le partage"
           : mode === "creance"
-            ? "Créances d'apport art. 815-13 (prélèvement avant partage)"
+            ? "Apports déduits avant le partage"
             : `Apports initiaux (vous ${Math.round((contributionA / (contributionA + contributionB)) * 100)} % · autre ${Math.round((contributionB / (contributionA + contributionB)) * 100)} %)`,
         amount: contributionA + contributionB,
         tone: "neutral",
+        sectionId: "bien",
+        hint: "Argent investi au départ — pris en compte avant de partager",
       });
     }
   }
 
   const soulteLabel = negativeEquity
-    ? "Soulte (aucune — equity négative)"
+    ? "Rachat de parts (impossible — dette nette)"
     : doorId === "keep_a"
-      ? "Vous devez verser"
-      : "Vous recevrez";
+      ? "Vous payez à l'autre"
+      : "Vous recevez de l'autre";
   const totalCashLabel =
-    doorId === "keep_a" ? "Total à prévoir (rachat + frais d'acte)" : "Total que l'autre doit prévoir";
+    doorId === "keep_a"
+      ? "Total à sortir (rachat + notaire)"
+      : "Total que l'autre doit prévoir";
   const keepExisting = scenario?.keepFinancingMode === "keep_existing_loan";
   const newLoan = scenario?.newLoanAmount?.amount ?? totalCash;
   const newLoanMonthly = scenario?.newLoanMonthly?.amount ?? 0;
@@ -194,9 +218,14 @@ function buildKeepLedger(
   const relocateTarget = scenario?.relocateTarget?.amount ?? 0;
   const cashWithIndemnity = totalCash + indemnity;
 
-  lines.push(
-    { id: "soulte", label: soulteLabel, amount: soulte, tone: "highlight" }
-  );
+  lines.push({
+    id: "soulte",
+    label: soulteLabel,
+    amount: soulte,
+    tone: "highlight",
+    sectionId: "echange",
+    hint: "Montant pour racheter la part de l'autre",
+  });
 
   if (indemnity > 0 && (scenario?.occupationMonths ?? 0) > 0) {
     const months = scenario!.occupationMonths!;
@@ -204,22 +233,26 @@ function buildKeepLedger(
     lines.push(
       {
         id: "occupation-half-rent",
-        label: `Demi-loyer × ${months} mois d'occupation exclusive`,
+        label: `Loyer d'occupation (demi-loyer)`,
         amount: Math.round(halfRent),
         tone: "neutral",
         suffix: "/mois",
+        sectionId: "echange",
+        hint: `Pendant ${months} mois d'occupation exclusive`,
       },
       {
         id: "occupation-indemnity",
-        label: "Indemnité d'occupation (imputée sur le rachat)",
+        label: "Total occupation (inclus dans le rachat)",
         amount: indemnity,
         tone: "highlight",
+        sectionId: "echange",
       },
       {
         id: "buyout-transfer",
-        label: doorId === "keep_a" ? "Transfert total (soulte + indemnité)" : "Vous récupérez au total",
+        label: doorId === "keep_a" ? "Montant total à l'autre" : "Vous récupérez au total",
         amount: buyoutTransfer,
         tone: "total",
+        sectionId: "echange",
       }
     );
   }
@@ -227,30 +260,37 @@ function buildKeepLedger(
   lines.push(
     {
       id: "notary",
-      label: "Droit de partage (CGI 746) + émoluments ~1,5 %",
+      label: "Frais de notaire pour le rachat",
       amount: notary,
       tone: "subtract",
+      sectionId: "echange",
+      hint: "Environ 1,5 % du montant racheté",
     },
     {
       id: "total-cash",
       label: totalCashLabel,
       amount: cashWithIndemnity,
       tone: "highlight",
+      sectionId: "echange",
     },
     {
       id: "departure-capital",
-      label: doorId === "keep_a" ? "Capital net récupéré par l'autre" : "Votre capital net récupéré",
+      label: doorId === "keep_a" ? "Ce que l'autre repart avec" : "Votre argent récupéré",
       amount: departureCapital,
       tone: "highlight",
+      sectionId: "echange",
+      hint: "Capital disponible pour se reloger",
     }
   );
 
   if (relocateTarget > 0) {
     lines.push({
       id: "relocate-target",
-      label: "Cible relogement zone (prix × surface)",
+      label: "Prix d'un logement équivalent dans votre quartier",
       amount: relocateTarget,
       tone: "neutral",
+      sectionId: "relogement",
+      hint: "Repère local pour évaluer le relogement",
     });
   }
 
@@ -258,16 +298,19 @@ function buildKeepLedger(
     lines.push(
       {
         id: "kept-mortgage",
-        label: "Crédit actuel conservé (votre mensualité)",
+        label: "Votre crédit actuel (conservé)",
         amount: keptMonthly,
         tone: "neutral",
         suffix: "/mois",
+        sectionId: "mensuel",
+        hint: "Mensualité du prêt déjà en cours",
       },
       {
         id: "new-loan",
-        label: "Nouveau prêt (rachat + frais seulement)",
+        label: "Nouveau prêt pour le rachat",
         amount: newLoan,
         tone: "total",
+        sectionId: "mensuel",
       },
       {
         id: "new-loan-monthly",
@@ -275,6 +318,7 @@ function buildKeepLedger(
         amount: newLoanMonthly,
         tone: "neutral",
         suffix: "/mois",
+        sectionId: "mensuel",
       },
       {
         id: "monthly",
@@ -282,22 +326,25 @@ function buildKeepLedger(
         amount: monthly,
         tone: "total",
         suffix: "/mois",
+        sectionId: "mensuel",
       }
     );
   } else {
     lines.push(
       {
         id: "refinance",
-        label: "Nouveau crédit estimé (CRD + rachat + frais)",
+        label: "Nouveau crédit (rachat + dette + frais)",
         amount: newLoan,
         tone: "total",
+        sectionId: "mensuel",
       },
       {
         id: "monthly",
-        label: "Mensualité de ce nouveau crédit",
+        label: "Mensualité estimée",
         amount: monthly,
         tone: "neutral",
         suffix: "/mois",
+        sectionId: "mensuel",
       }
     );
   }
@@ -342,53 +389,66 @@ function buildSellLedger(
   const relocateTarget = sell?.relocateTarget?.amount;
 
   const lines: LedgerLine[] = [
-    { id: "property", label: "Valeur du bien", amount: footprint.propertyValue },
+    {
+      id: "property",
+      label: "Valeur du bien",
+      amount: footprint.propertyValue,
+      sectionId: "bien",
+      hint: "Prix de vente visé",
+    },
     {
       id: "agency",
-      label: "Frais d'agence (~5 %)",
+      label: "Commission d'agence (~5 %)",
       amount: agency,
       tone: "subtract",
+      sectionId: "bien",
     },
     {
       id: "diagnostics",
-      label: "Diagnostics obligatoires (forfait)",
+      label: "Diagnostics obligatoires",
       amount: diagnostics,
       tone: "subtract",
+      sectionId: "bien",
+      hint: "DPE, amiante, etc.",
     },
     {
       id: "mortgage",
-      label: "Crédit restant",
+      label: "Prêt immobilier restant",
       amount: footprint.mortgageRemaining,
       tone: "subtract",
+      sectionId: "bien",
     },
     {
       id: "net",
-      label: negativeEquity
-        ? "Actif net négatif — dette à partager"
-        : "Produit net de vente (après frais)",
+      label: negativeEquity ? "Dette nette à partager" : "Argent récolté après tous les frais",
       amount: saleNet,
       tone: "highlight",
+      sectionId: "bien",
     },
     {
       id: "you",
-      label: negativeEquity ? "Votre quote-part de dette" : "Votre part nette",
+      label: negativeEquity ? "Votre part de la dette" : "Votre part nette",
       amount: you,
       tone: "total",
+      sectionId: "echange",
     },
     {
       id: "other",
-      label: negativeEquity ? "Quote-part de dette de l'autre" : "Part nette de l'autre",
+      label: negativeEquity ? "Part de dette de l'autre" : "Part nette de l'autre",
       amount: other,
       tone: "total",
+      sectionId: "echange",
     },
   ];
 
   if (relocateTarget != null && relocateTarget > 0) {
     lines.push({
       id: "relocate-target",
-      label: "Cible relogement zone (prix × surface)",
+      label: "Prix d'un logement équivalent dans votre quartier",
       amount: relocateTarget,
       tone: "neutral",
+      sectionId: "relogement",
+      hint: "Repère local pour évaluer le relogement",
     });
   }
 
@@ -429,68 +489,84 @@ function buildRentLedger(
   const lines: LedgerLine[] = [
     {
       id: "rent",
-      label: "Loyer brut estimé (zone × surface)",
+      label: "Loyer perçu (estimation)",
       amount: Math.round(bd?.grossRent.amount ?? 0),
+      sectionId: "revenus",
+      hint: "Basé sur les prix du quartier et la surface",
     },
     {
       id: "vacancy",
       label: `Vacance locative (${Math.round((bd?.vacancyRate ?? 0.06) * 100)} %)`,
       amount: Math.round(bd?.vacancyProvision.amount ?? 0),
       tone: "subtract",
+      sectionId: "revenus",
+      hint: "Périodes sans locataire",
     },
     {
       id: "effective-rent",
-      label: "Loyer effectif",
+      label: "Loyer réellement encaissé",
       amount: Math.round(bd?.effectiveRent.amount ?? 0),
-      tone: "neutral",
+      tone: "highlight",
+      sectionId: "revenus",
     },
     {
       id: "mortgage-pay",
       label: lab.enabledLevers.includes("historical_mortgage_rate")
-        ? "Mensualité crédit (votre taux)"
-        : "Mensualité crédit (marché)",
+        ? "Mensualité de votre crédit"
+        : "Mensualité crédit (taux du marché)",
       amount: Math.round(mortgagePay),
       tone: "subtract",
+      sectionId: "charges",
     },
     {
       id: "property-tax",
-      label: "Taxe foncière (mensualisée)",
+      label: "Taxe foncière",
       amount: Math.round(bd?.propertyTaxMonthly.amount ?? 0),
       tone: "subtract",
+      sectionId: "charges",
+      hint: "Montant mensualisé",
     },
     {
       id: "pno",
-      label: "Assurance PNO",
+      label: "Assurance propriétaire (PNO)",
       amount: Math.round(bd?.pnoMonthly.amount ?? 0),
       tone: "subtract",
+      sectionId: "charges",
     },
     {
       id: "management",
-      label: `Gestion déléguée (${Math.round((bd?.managementFeeRate ?? 0) * 100)} %)`,
+      label: `Gestion par une agence (${Math.round((bd?.managementFeeRate ?? 0) * 100)} %)`,
       amount: Math.round(bd?.managementFees.amount ?? 0),
       tone: "subtract",
+      sectionId: "charges",
     },
     {
       id: "tax",
-      label: "Impôts micro-foncier (IR + PS, abatt. 30 %)",
+      label: "Impôts sur le loyer",
       amount: Math.round(bd?.incomeTaxEstimate.amount ?? 0),
       tone: "subtract",
+      sectionId: "charges",
+      hint: "Estimation au régime le plus simple (micro-foncier)",
     },
     {
       id: "net",
-      label: "Cashflow net réel",
+      label: "Argent net chaque mois",
       amount: Math.round(net),
       tone: "total",
       suffix: "/mois",
+      sectionId: "resultat",
+      hint: "Loyer − charges − impôts",
     },
   ];
 
   if (!lab.enabledLevers.includes("historical_mortgage_rate") && footprint.mortgageRemaining > 0) {
     lines.splice(4, 0, {
       id: "market-ref",
-      label: "Réf. mensualité marché",
+      label: "Référence mensualité marché",
       amount: defaultMortgagePayment(footprint, assumptions),
       tone: "neutral",
+      sectionId: "charges",
+      hint: "Pour comparer avec votre taux actuel",
     });
   }
 
