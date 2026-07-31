@@ -134,6 +134,42 @@ export interface SimulationOptions {
   sellingCostsRate?: number;
   /** Forfait diagnostics obligatoires (€) — défaut moteur ~1 800 €. */
   diagnosticsFlatFee?: number;
+  /** Provision vacance locative (0–1), défaut moteur ~6 %. */
+  vacancyRate?: number;
+  /** Taxe foncière annuelle override (€). */
+  propertyTaxAnnual?: number;
+  /** Assurance PNO annuelle override (€). */
+  pnoAnnual?: number;
+  /** true (défaut) = frais de gestion déléguée appliqués. */
+  managementDelegated?: boolean;
+  /** Taux frais de gestion sur loyer effectif (défaut ~7 % si déléguée). */
+  managementFeeRate?: number;
+  /** Taux marginal IR pour estimation micro-foncier (sinon dérivé des revenus). */
+  marginalIncomeTaxRate?: number;
+}
+
+/** Décomposition cashflow locatif (porte rent_out) — année 2026. */
+export interface RentOutBreakdown {
+  grossRent: Money;
+  vacancyRate: number;
+  vacancyProvision: Money;
+  /** Loyer après provision vacance. */
+  effectiveRent: Money;
+  mortgagePayment: Money;
+  propertyTaxMonthly: Money;
+  pnoMonthly: Money;
+  managementFeeRate: number;
+  managementFees: Money;
+  microFoncierAllowanceRate: number;
+  taxableBaseMonthly: Money;
+  marginalIncomeTaxRate: number;
+  socialContributionsRate: number;
+  /** IR + PS estimés (micro-foncier). */
+  incomeTaxEstimate: Money;
+  /** Crédit + TF + PNO + gestion. */
+  structuralCharges: Money;
+  /** Cashflow net réel après charges et impôts. */
+  netCashflow: Money;
 }
 
 export interface SimulationInput {
@@ -256,6 +292,10 @@ export interface ScenarioComparison {
   relocateTarget?: Money;
   /** Verdict de relogement par personne (même zone). */
   relocateVerdictByPerson?: Record<PersonId, AffordabilityVerdict>;
+  /** Décomposition cashflow locatif (porte rent_out). */
+  rentOutBreakdown?: RentOutBreakdown;
+  /** Formule lisible : Loyer − crédit − TF/charges − impôts = net. */
+  rentOutFormulaDetail?: string;
 }
 
 export interface MortgageRateSnapshot {

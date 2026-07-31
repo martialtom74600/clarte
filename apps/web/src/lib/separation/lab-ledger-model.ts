@@ -316,26 +316,72 @@ function buildRentLedger(
 ): LabLedgerModel {
   const input = compileSimulationInput({ footprint, assumptions, lab });
   const scenario = scenarioFor(result, "rent_out");
-  const net = scenario?.monthlyPaymentEstimate?.amount ?? 0;
-  const mortgagePay = effectiveMortgagePayment(footprint, assumptions, lab);
-  const grossRent = net + mortgagePay + 180;
+  const bd = scenario?.rentOutBreakdown;
+  const net = bd?.netCashflow.amount ?? scenario?.monthlyPaymentEstimate?.amount ?? 0;
+  const mortgagePay =
+    bd?.mortgagePayment.amount ?? effectiveMortgagePayment(footprint, assumptions, lab);
 
   const lines: LedgerLine[] = [
-    { id: "rent", label: "Loyer estimé", amount: Math.round(grossRent) },
+    {
+      id: "rent",
+      label: "Loyer brut estimé (zone × surface)",
+      amount: Math.round(bd?.grossRent.amount ?? 0),
+    },
+    {
+      id: "vacancy",
+      label: `Vacance locative (${Math.round((bd?.vacancyRate ?? 0.06) * 100)} %)`,
+      amount: Math.round(bd?.vacancyProvision.amount ?? 0),
+      tone: "subtract",
+    },
+    {
+      id: "effective-rent",
+      label: "Loyer effectif",
+      amount: Math.round(bd?.effectiveRent.amount ?? 0),
+      tone: "neutral",
+    },
     {
       id: "mortgage-pay",
       label: lab.enabledLevers.includes("historical_mortgage_rate")
         ? "Mensualité crédit (votre taux)"
         : "Mensualité crédit (marché)",
-      amount: mortgagePay,
+      amount: Math.round(mortgagePay),
       tone: "subtract",
     },
-    { id: "charges", label: "Charges estimées", amount: 180, tone: "subtract" },
-    { id: "net", label: "Excédent mensuel net", amount: net, tone: "total", suffix: "/mois" },
+    {
+      id: "property-tax",
+      label: "Taxe foncière (mensualisée)",
+      amount: Math.round(bd?.propertyTaxMonthly.amount ?? 0),
+      tone: "subtract",
+    },
+    {
+      id: "pno",
+      label: "Assurance PNO",
+      amount: Math.round(bd?.pnoMonthly.amount ?? 0),
+      tone: "subtract",
+    },
+    {
+      id: "management",
+      label: `Gestion déléguée (${Math.round((bd?.managementFeeRate ?? 0) * 100)} %)`,
+      amount: Math.round(bd?.managementFees.amount ?? 0),
+      tone: "subtract",
+    },
+    {
+      id: "tax",
+      label: "Impôts micro-foncier (IR + PS, abatt. 30 %)",
+      amount: Math.round(bd?.incomeTaxEstimate.amount ?? 0),
+      tone: "subtract",
+    },
+    {
+      id: "net",
+      label: "Cashflow net réel",
+      amount: Math.round(net),
+      tone: "total",
+      suffix: "/mois",
+    },
   ];
 
   if (!lab.enabledLevers.includes("historical_mortgage_rate") && footprint.mortgageRemaining > 0) {
-    lines.splice(2, 0, {
+    lines.splice(4, 0, {
       id: "market-ref",
       label: "Réf. mensualité marché",
       amount: defaultMortgagePayment(footprint, assumptions),
@@ -346,12 +392,20 @@ function buildRentLedger(
   const pension = childSupportLine(footprint, lab);
   if (pension) lines.push(pension);
 
+  const footerParts = [
+    scenario?.rentOutFormulaDetail,
+    verdict?.headline
+      ? `Feu ${verdict.verdict} — ${verdict.headline}`
+      : null,
+    input.postalCode ? `Zone ${input.postalCode}` : null,
+  ].filter(Boolean);
+
   return {
     doorId: "rent_out",
     doorTitle: DOOR_TITLES.rent_out,
     verdict,
     lines,
-    footer: verdict?.detail ?? input.postalCode,
+    footer: footerParts.join(" · ") || undefined,
   };
 }
 

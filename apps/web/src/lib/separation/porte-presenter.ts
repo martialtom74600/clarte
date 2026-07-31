@@ -147,13 +147,37 @@ function buildRentPresentation(
   verdict: DoorVerdictMap[DoorId]
 ): Pick<PortePresentation, "heroValue" | "heroCaption" | "consequence" | "bilateral"> {
   const scenario = scenarioFor(result, "rent_out");
-  const net = scenario?.monthlyPaymentEstimate?.amount ?? 0;
+  const net =
+    scenario?.rentOutBreakdown?.netCashflow.amount ??
+    scenario?.monthlyPaymentEstimate?.amount ??
+    0;
   const prefix = net > 0 ? "+" : net < 0 ? "−" : "";
+  const shareA = scenario?.monthlyNetCashflow?.A.amount;
+  const shareB = scenario?.monthlyNetCashflow?.B.amount;
+
+  const bilateral: PorteBilateralShare[] | undefined =
+    shareA != null && shareB != null
+      ? [
+          {
+            personKey: "A",
+            personLabel: "Vous",
+            amount: `${shareA >= 0 ? "+" : "−"}${formatEuro(Math.abs(shareA))}`,
+            caption: "quote-part / mois",
+          },
+          {
+            personKey: "B",
+            personLabel: "L'autre",
+            amount: `${shareB >= 0 ? "+" : "−"}${formatEuro(Math.abs(shareB))}`,
+            caption: "quote-part / mois",
+          },
+        ]
+      : undefined;
 
   return {
     heroValue: `${prefix}${formatEuro(Math.abs(net))}`,
-    heroCaption: "reste chaque mois",
-    consequence: verdict.headline,
+    heroCaption: "cashflow net / mois",
+    consequence: verdict.detail || verdict.headline,
+    bilateral,
   };
 }
 

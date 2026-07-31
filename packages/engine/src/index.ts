@@ -15,6 +15,18 @@ export {
   DEFAULT_SELLING_COSTS_RATE,
 } from "./sale-proceeds.js";
 export type { SaleProceedsBreakdown, RelocateSnapshot } from "./sale-proceeds.js";
+export {
+  computeRentOutCashflow,
+  computeRentOutCashflowFromParams,
+  DEFAULT_VACANCY_RATE,
+  DEFAULT_PROPERTY_TAX_RATE_ANNUAL,
+  DEFAULT_PNO_ANNUAL_EUR,
+  DEFAULT_MANAGEMENT_FEE_RATE,
+  MICRO_FONCIER_ALLOWANCE_RATE,
+  FONCIER_SOCIAL_CONTRIBUTIONS_RATE,
+  RENT_GREEN_THRESHOLD,
+} from "./rent-out-cashflow.js";
+export type { RentOutCashflowParams, RentOutCashflowResult } from "./rent-out-cashflow.js";
 export { BANK_KEEP_LOAN_DISCLAIMER } from "./simulator.js";
 export type { ContributionMode } from "./soulte-core.js";
 export { runQuickEstimate } from "./quick-estimate.js";
@@ -26,7 +38,7 @@ export {
   computeMaxBorrowing,
   rentPerSqm,
 } from "./affordability.js";
-export { compileDoorVerdicts, RENT_GREEN_THRESHOLD, RENT_CHARGES_MONTHLY } from "./door-verdicts.js";
+export { compileDoorVerdicts, RENT_CHARGES_MONTHLY } from "./door-verdicts.js";
 export { getMortgageRateSnapshot } from "./mortgage-rates.js";
 export {
   estimateChildSupport,

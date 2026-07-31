@@ -39,8 +39,11 @@ describe("porte-presenter", () => {
 
   it("affiche le cashflow pour rent_out", () => {
     const porte = buildPortePresentation("rent_out", lastResult, doorVerdicts);
-    expect(porte?.heroCaption).toBe("reste chaque mois");
+    expect(porte?.heroCaption).toBe("cashflow net / mois");
     expect(porte?.consequence.length).toBeGreaterThan(0);
+    expect(porte?.bilateral).toHaveLength(2);
+    expect(porte?.bilateral?.[0].personLabel).toBe("Vous");
+    expect(porte?.consequence).toMatch(/micro-foncier|Loyer|créd/);
   });
 
   it("affiche un hero bilatéral pour sell", () => {

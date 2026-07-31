@@ -10,14 +10,11 @@ import type {
 import {
   buildZoneMarketSnapshot,
   computeAffordability,
-  rentPerSqm,
 } from "./affordability.js";
 import { getMortgageRateSnapshot } from "./mortgage-rates.js";
+import { RENT_GREEN_THRESHOLD } from "./rent-out-cashflow.js";
 import { estimateChildSupport } from "./support.js";
 import { eur, estimateMonthlyPayment, round } from "./utils.js";
-
-const CHARGES_ESTIMATE_MONTHLY = 180;
-const RENT_GREEN_THRESHOLD = 200;
 
 const DOOR_LABELS: Record<DoorId, string> = {
   keep_a: "Vous rachetez",
@@ -196,24 +193,10 @@ function buildRentOutDoorVerdict(
   result: SimulationResult
 ): DoorVerdict {
   const rentScenario = result.scenarios.find((s) => s.scenario === "rent_out");
-  const netRent = rentScenario?.monthlyPaymentEstimate?.amount ?? 0;
+  const bd = rentScenario?.rentOutBreakdown;
+  const netRent = bd?.netCashflow.amount ?? rentScenario?.monthlyPaymentEstimate?.amount ?? 0;
   const postalCode = input.postalCode ?? "75000";
   const surface = input.propertySurface ?? 65;
-  const grossRent =
-    input.options.monthlyRentOverride && input.options.monthlyRentOverride > 0
-      ? round(input.options.monthlyRentOverride)
-      : round(rentPerSqm(postalCode) * surface);
-  const mortgage = input.liabilities.find((l) => l.type === "mortgage");
-  const mortgagePay =
-    input.monthlyMortgagePayment && input.monthlyMortgagePayment > 0
-      ? input.monthlyMortgagePayment
-      : mortgage
-        ? estimateMonthlyPayment(
-            mortgage.remainingBalance.amount,
-            input.options.mortgageRate ?? 0.0385,
-            input.options.mortgageDurationYears ?? 20
-          ).amount
-        : 0;
 
   const verdict: AffordabilityVerdict =
     netRent >= RENT_GREEN_THRESHOLD
@@ -222,10 +205,9 @@ function buildRentOutDoorVerdict(
         ? "orange"
         : "red";
 
-  const creditLabel =
-    input.monthlyMortgagePayment && input.monthlyMortgagePayment > 0
-      ? "votre mensualité actuelle"
-      : "mensualité marché";
+  const detail =
+    rentScenario?.rentOutFormulaDetail ??
+    `Cashflow net ${Math.round(netRent).toLocaleString("fr-FR")} €/mois (${postalCode}, ${surface} m²)`;
 
   return {
     doorId: "rent_out",
@@ -233,11 +215,11 @@ function buildRentOutDoorVerdict(
     label: DOOR_LABELS.rent_out,
     headline:
       verdict === "green"
-        ? `Excédent locatif ~${Math.round(netRent).toLocaleString("fr-FR")} €/mois`
+        ? `Cashflow net ~${Math.round(netRent).toLocaleString("fr-FR")} €/mois`
         : verdict === "orange"
-          ? "Équilibre tendu entre loyer et crédit"
-          : "Loyer insuffisant vs crédit restant",
-    detail: `Loyer ${Math.round(grossRent).toLocaleString("fr-FR")} € − ${creditLabel} ${Math.round(mortgagePay).toLocaleString("fr-FR")} € − charges ~${CHARGES_ESTIMATE_MONTHLY} € (${postalCode}, ${surface} m²)`,
+          ? "Équilibre tendu après charges et impôts"
+          : "Cashflow locatif insuffisant (charges + impôts)",
+    detail,
     monthlyImpact: eur(netRent),
   };
 }
@@ -255,4 +237,6 @@ export function compileDoorVerdicts(
   };
 }
 
-export { RENT_GREEN_THRESHOLD, CHARGES_ESTIMATE_MONTHLY as RENT_CHARGES_MONTHLY };
+export { RENT_GREEN_THRESHOLD };
+/** @deprecated Ancien forfait 180 € — remplacé par TF + PNO + vacance + gestion. */
+export const RENT_CHARGES_MONTHLY = 0;

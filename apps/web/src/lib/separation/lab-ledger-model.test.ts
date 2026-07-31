@@ -108,4 +108,27 @@ describe("buildLabLedger", () => {
     expect(ledger?.lines.find((l) => l.id === "other")?.amount).toBe(89100);
     expect(ledger?.footer).toMatch(/150 U|Relogement/i);
   });
+
+  it("rent_out : décompose loyer − crédit − TF/charges − impôts = cashflow net", () => {
+    const ledger = buildLabLedger({
+      doorId: "rent_out",
+      footprint,
+      assumptions: defaultAssumptions(),
+      lab: { ...defaultLabState(), activeDoor: "rent_out" },
+      result: derived.lastResult,
+      doorVerdicts: derived.doorVerdicts,
+    });
+    expect(ledger?.lines.some((l) => l.id === "rent")).toBe(true);
+    expect(ledger?.lines.some((l) => l.id === "vacancy")).toBe(true);
+    expect(ledger?.lines.some((l) => l.id === "property-tax")).toBe(true);
+    expect(ledger?.lines.some((l) => l.id === "pno")).toBe(true);
+    expect(ledger?.lines.some((l) => l.id === "management")).toBe(true);
+    expect(ledger?.lines.some((l) => l.id === "tax")).toBe(true);
+    expect(ledger?.lines.find((l) => l.id === "net")?.label).toMatch(/Cashflow net/i);
+    expect(ledger?.footer).toMatch(/micro-foncier|Feu/i);
+    const rentScenario = derived.lastResult?.scenarios.find((s) => s.scenario === "rent_out");
+    expect(ledger?.lines.find((l) => l.id === "net")?.amount).toBe(
+      Math.round(rentScenario?.rentOutBreakdown?.netCashflow.amount ?? NaN)
+    );
+  });
 });

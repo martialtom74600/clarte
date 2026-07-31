@@ -23,9 +23,7 @@ import {
 } from "./utils.js";
 import { computeSoulteCore } from "./soulte-core.js";
 import { computeSaleProceeds } from "./sale-proceeds.js";
-import { rentPerSqm } from "./affordability.js";
-
-const CHARGES_ESTIMATE_MONTHLY = 180;
+import { computeRentOutCashflow } from "./rent-out-cashflow.js";
 
 export const BANK_KEEP_LOAN_DISCLAIMER =
   "La désolidarisation de l'emprunt initial est soumise à l'accord discrétionnaire de la banque (ratio d'endettement et solvabilité du repreneur). Ce mode n'est pas garanti.";
@@ -55,44 +53,23 @@ function buildRentOutScenario(
   baseNet: Record<PersonId, import("@separation/schemas").Money>,
   primaryAsset: Asset
 ): ScenarioComparison {
-  const shareA = getShareForPerson(primaryAsset.ownership, "A");
-  const shareB = getShareForPerson(primaryAsset.ownership, "B");
-  const mortgage = input.liabilities.find((l) => l.type === "mortgage");
-  const mortgageRate = input.options.mortgageRate ?? 0.0385;
-  const mortgageYears = input.options.mortgageDurationYears ?? 20;
-  const mortgagePay =
-    input.monthlyMortgagePayment && input.monthlyMortgagePayment > 0
-      ? input.monthlyMortgagePayment
-      : mortgage
-        ? estimateMonthlyPayment(
-            mortgage.remainingBalance.amount,
-            mortgageRate,
-            mortgageYears
-          ).amount
-        : 0;
-
   const postalCode = input.postalCode ?? "75000";
   const surface = input.propertySurface ?? 65;
-  const grossRent =
-    input.options.monthlyRentOverride && input.options.monthlyRentOverride > 0
-      ? round(input.options.monthlyRentOverride)
-      : round(rentPerSqm(postalCode) * surface);
-  const netRent = grossRent - mortgagePay - CHARGES_ESTIMATE_MONTHLY;
-  const monthlyNetCashflow = {
-    A: eur(netRent * shareA),
-    B: eur(netRent * shareB),
-  };
+  const rent = computeRentOutCashflow(primaryAsset, input.liabilities, input);
+  const netRent = rent.breakdown.netCashflow.amount;
 
   return {
     scenario: "rent_out",
     label: "Garder et louer",
     netWorthByPerson: baseNet,
-    monthlyNetCashflow,
-    monthlyPaymentEstimate: eur(netRent),
+    monthlyNetCashflow: rent.netCashflowByPerson,
+    monthlyPaymentEstimate: rent.breakdown.netCashflow,
+    rentOutBreakdown: rent.breakdown,
+    rentOutFormulaDetail: rent.formulaDetail,
     description:
       netRent >= 0
-        ? `Location estimée (${postalCode}, ${surface} m²) : excédent net ~${Math.round(netRent).toLocaleString("fr-FR")} €/mois après crédit (réparti selon quote-part).`
-        : `Location estimée (${postalCode}, ${surface} m²) : le loyer ne couvre pas le crédit (~${Math.round(netRent).toLocaleString("fr-FR")} €/mois).`,
+        ? `Location (${postalCode}, ${surface} m²) : cashflow net ~${Math.round(netRent).toLocaleString("fr-FR")} €/mois après crédit, TF, vacance, PNO, gestion et micro-foncier.`
+        : `Location (${postalCode}, ${surface} m²) : cashflow net négatif ~${Math.round(netRent).toLocaleString("fr-FR")} €/mois après charges et impôts.`,
   };
 }
 

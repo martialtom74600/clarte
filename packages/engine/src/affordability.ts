@@ -11,24 +11,17 @@ import type {
 } from "@separation/schemas";
 import { estimateMonthlyPayment, eur, round } from "./utils.js";
 import { getMortgageRateSnapshot } from "./mortgage-rates.js";
+import {
+  computeRentOutCashflowFromParams,
+  RENT_GREEN_THRESHOLD,
+} from "./rent-out-cashflow.js";
+
+export { rentPerSqm } from "./market-rents.js";
 
 const DEFAULT_MAX_EFFORT = 0.35;
-const CHARGES_ESTIMATE_MONTHLY = 180;
 /** Aligné sur sale-proceeds (éviter import circulaire). */
 const AGENCY_FEES_RATE = 0.05;
 const DIAGNOSTICS_FLAT = 1800;
-
-const RENT_PER_SQM_BY_DEPT: Record<string, number> = {
-  "75": 22,
-  "92": 18,
-  "93": 16,
-  "94": 17,
-  "69": 14,
-  "13": 16,
-  "33": 13,
-  "06": 18,
-  default: 11,
-};
 
 const PRICE_PER_SQM_BY_DEPT: Record<string, number> = {
   "75": 10500,
@@ -55,11 +48,6 @@ function deptFromPostal(postalCode: string): string {
   if (!postalCode || postalCode.length < 2) return "default";
   if (postalCode.startsWith("20")) return "2A";
   return postalCode.slice(0, 2);
-}
-
-export function rentPerSqm(postalCode: string): number {
-  const dept = deptFromPostal(postalCode);
-  return RENT_PER_SQM_BY_DEPT[dept] ?? RENT_PER_SQM_BY_DEPT.default;
 }
 
 function pricePerSqm(dept: string): number {
@@ -229,14 +217,27 @@ export function computeNewLifeCap(input: NewLifeCapInput): NewLifeCapResult {
     durationYears: rateSnapshot.durationYears,
   });
 
-  const grossRent = round(rentPerSqm(input.postalCode) * input.propertySurface);
   const mortgagePay =
     input.monthlyMortgagePayment > 0
       ? input.monthlyMortgagePayment
       : estimateMonthlyPayment(input.mortgageRemaining, rateSnapshot.annualRate, 20).amount;
-  const netRentMonthly = grossRent - mortgagePay - CHARGES_ESTIMATE_MONTHLY;
+  const rentCf = computeRentOutCashflowFromParams({
+    postalCode: input.postalCode,
+    surfaceSqm: input.propertySurface,
+    propertyValue: input.propertyValue,
+    mortgagePaymentMonthly: mortgagePay,
+    marginalIncomeTaxRate:
+      Math.max(input.incomeAMonthly, input.incomeBMonthly) * 12 > 86_547
+        ? 0.41
+        : 0.3,
+  });
+  const netRentMonthly = rentCf.breakdown.netCashflow.amount;
   const rentVerdict: AffordabilityVerdict =
-    netRentMonthly >= 200 ? "green" : netRentMonthly >= 0 ? "orange" : "red";
+    netRentMonthly >= RENT_GREEN_THRESHOLD
+      ? "green"
+      : netRentMonthly >= 0
+        ? "orange"
+        : "red";
 
   const sellProceedsEach = round(Math.max(0, equityAfterSaleCosts) / 2);
   const relocateTarget = round(
@@ -293,15 +294,16 @@ export function computeNewLifeCap(input: NewLifeCapInput): NewLifeCapResult {
     {
       id: "rent_out",
       label: "Garder et louer",
-      description: "Conserver le bien en location — le loyer couvre (ou non) le crédit.",
+      description:
+        "Conserver le bien en location — cashflow après crédit, TF, vacance, PNO, gestion et micro-foncier.",
       verdict: rentVerdict,
       headline:
         rentVerdict === "green"
-          ? `Excédent locatif ~${netRentMonthly.toLocaleString("fr-FR")} €/mois`
+          ? `Cashflow net ~${Math.round(netRentMonthly).toLocaleString("fr-FR")} €/mois`
           : rentVerdict === "orange"
-            ? "Équilibre tendu entre loyer et crédit"
-            : "Loyer insuffisant vs crédit restant",
-      detail: `Loyer estimé ${grossRent.toLocaleString("fr-FR")} € − crédit ${Math.round(mortgagePay).toLocaleString("fr-FR")} € − charges ~${CHARGES_ESTIMATE_MONTHLY} €`,
+            ? "Équilibre tendu après charges et impôts"
+            : "Cashflow locatif insuffisant",
+      detail: rentCf.formulaDetail,
       monthlyImpact: eur(netRentMonthly),
     },
   ];
