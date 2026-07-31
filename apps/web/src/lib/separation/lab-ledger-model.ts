@@ -1,4 +1,4 @@
-import type { DoorId, DoorVerdictMap, SimulationResult } from "@separation/schemas";
+import type { AffordabilityVerdict, DoorId, DoorVerdictMap, SimulationResult } from "@separation/schemas";
 import { estimateChildSupport, estimateMonthlyPayment } from "@separation/engine";
 import type { AssumptionsState, FootprintState, LabState } from "./separation-types";
 import { compileSimulationInput } from "./compile-simulation-input";
@@ -17,6 +17,50 @@ export interface LabLedgerModel {
   verdict: DoorVerdictMap[DoorId] | null;
   lines: LedgerLine[];
   footer?: string;
+  /** Note d'avertissement (ex. accord banque) — une seule fois, hors footer principal. */
+  warningNote?: string;
+}
+
+const RELOCATE_VERDICT_LABELS: Record<AffordabilityVerdict, string> = {
+  green: "Tenable",
+  orange: "Serré",
+  red: "Difficile",
+};
+
+/** Traduit red/orange/green pour l'UI (jamais la valeur brute). */
+export function formatAffordabilityVerdictLabel(verdict: AffordabilityVerdict): string {
+  return RELOCATE_VERDICT_LABELS[verdict];
+}
+
+function stripDisclaimerFromText(text: string, disclaimer: string): string {
+  if (!text.includes(disclaimer)) return text.trim();
+  return text.replace(disclaimer, "").replace(/\s{2,}/g, " ").trim();
+}
+
+function buildKeepFooter(params: {
+  negativeEquity: boolean;
+  verdictDetail?: string;
+  bankDisclaimer?: string | null;
+}): Pick<LabLedgerModel, "footer" | "warningNote"> {
+  const warningNote =
+    params.bankDisclaimer && params.bankDisclaimer.length > 0
+      ? params.bankDisclaimer
+      : undefined;
+
+  let body = params.verdictDetail ?? "";
+  if (warningNote) {
+    body = stripDisclaimerFromText(body, warningNote);
+  }
+
+  const footerParts = [
+    params.negativeEquity ? "Actif net négatif — dette à partager." : null,
+    body || null,
+  ].filter(Boolean);
+
+  return {
+    footer: footerParts.join("\n") || undefined,
+    warningNote,
+  };
 }
 
 const DOOR_TITLES: Record<DoorId, string> = {
@@ -261,27 +305,21 @@ function buildKeepLedger(
   const pension = childSupportLine(footprint, lab);
   if (pension) lines.push(pension);
 
-  const departureRelocate =
-    scenario?.departureRelocateVerdict ??
-    scenario?.relocateVerdictByPerson?.[scenario?.departurePersonId ?? (doorId === "keep_a" ? "B" : "A")];
-
-  const footerParts = [
-    negativeEquity ? "Actif net négatif — dette à partager." : null,
-    scenario?.occupationNote,
-    departureRelocate
-      ? `Relogement du partant : ${departureRelocate}.`
-      : null,
-    keepExisting ? scenario?.bankDisclaimer : null,
-    verdict?.detail,
-  ].filter(Boolean);
+  const bankDisclaimer =
+    keepExisting && scenario?.bankDisclaimer ? scenario.bankDisclaimer : undefined;
+  const { footer, warningNote } = buildKeepFooter({
+    negativeEquity,
+    verdictDetail: verdict?.detail,
+    bankDisclaimer,
+  });
 
   return {
     doorId,
     doorTitle: DOOR_TITLES[doorId],
     verdict,
     lines,
-    // Newlines : le détail HCSF (endettement / finançable) est mis en avant dans le ledger UI.
-    footer: footerParts.join("\n") || undefined,
+    footer,
+    warningNote,
   };
 }
 
@@ -360,7 +398,7 @@ function buildSellLedger(
   const footerParts = [
     sell?.capitalGainsNote,
     sell?.relocateVerdictByPerson
-      ? `Relogement zone — Vous : ${sell.relocateVerdictByPerson.A} · Autre : ${sell.relocateVerdictByPerson.B}.`
+      ? `Relogement zone — Vous : ${formatAffordabilityVerdictLabel(sell.relocateVerdictByPerson.A)} · Autre : ${formatAffordabilityVerdictLabel(sell.relocateVerdictByPerson.B)}.`
       : null,
     verdict?.detail,
   ].filter(Boolean);

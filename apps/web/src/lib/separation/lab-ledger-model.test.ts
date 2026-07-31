@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildLabLedger } from "@/lib/separation/lab-ledger-model";
+import { buildLabLedger, formatAffordabilityVerdictLabel } from "@/lib/separation/lab-ledger-model";
 import { recomputeSeparationDerived } from "@/lib/separation/recompute-derived";
 import { defaultAssumptions, defaultLabState } from "@/lib/separation/compile-simulation-input";
 import type { FootprintState } from "@/lib/separation/separation-types";
@@ -16,6 +16,14 @@ const footprint: FootprintState = {
   incomeB: 4000,
   completedAt: "2026-01-01T00:00:00.000Z",
 };
+
+describe("formatAffordabilityVerdictLabel", () => {
+  it("traduit les verdicts sans fuite red/orange/green", () => {
+    expect(formatAffordabilityVerdictLabel("red")).toBe("Difficile");
+    expect(formatAffordabilityVerdictLabel("orange")).toBe("Serré");
+    expect(formatAffordabilityVerdictLabel("green")).toBe("Tenable");
+  });
+});
 
 describe("buildLabLedger", () => {
   const baseState = {
@@ -82,11 +90,13 @@ describe("buildLabLedger", () => {
     expect(ledger?.lines.some((l) => l.id === "kept-mortgage")).toBe(true);
     expect(ledger?.lines.some((l) => l.id === "new-loan")).toBe(true);
     expect(ledger?.lines.find((l) => l.id === "kept-mortgage")?.amount).toBe(950);
-    expect(ledger?.footer).toMatch(/désolidarisation|banque/i);
+    expect(ledger?.warningNote).toMatch(/désolidarisation/i);
+    expect(ledger?.footer).not.toMatch(/désolidarisation/i);
     expect(ledger?.footer).toMatch(/endettement sera de \d+ %/);
     expect(ledger?.footer).toMatch(/Projet finançable|limite bancaire de 35 %/);
     expect(ledger?.footer).not.toMatch(/capacité max/i);
     expect(ledger?.footer).not.toMatch(/effort de 0/);
+    expect(ledger?.footer).not.toMatch(/:\s*red\b/i);
   });
 
   it("vente : affiche agence, diagnostics et parts bilatérales", () => {
@@ -119,7 +129,8 @@ describe("buildLabLedger", () => {
     });
     expect(ledger?.lines.some((l) => l.id === "departure-capital")).toBe(true);
     expect(ledger?.lines.some((l) => l.id === "relocate-target")).toBe(true);
-    expect(ledger?.footer).toMatch(/Relogement du partant/i);
+    expect(ledger?.footer).toMatch(/Partant :|relogement zone/i);
+    expect(ledger?.footer).not.toMatch(/Relogement du partant :\s*red/i);
   });
 
   it("keep_a + occupation : impute l'indemnité sur le rachat", () => {

@@ -88,9 +88,9 @@ export function LabLedger({ model, className }: LabLedgerProps) {
 
       {model.footer && (
         <div className="mt-8 space-y-2 text-xs leading-relaxed text-slate-500">
-          {model.footer.split("\n").map((line) => (
+          {model.footer.split("\n").map((line, index) => (
             <p
-              key={line}
+              key={`footer-${index}-${line.slice(0, 32)}`}
               className={
                 line.includes("endettement") ||
                 line.includes("finançable") ||
@@ -104,6 +104,15 @@ export function LabLedger({ model, className }: LabLedgerProps) {
             </p>
           ))}
         </div>
+      )}
+
+      {model.warningNote && (
+        <p
+          className="mt-4 rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2.5 text-xs leading-relaxed text-amber-950"
+          role="note"
+        >
+          {model.warningNote}
+        </p>
       )}
 
       <button
