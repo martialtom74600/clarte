@@ -87,14 +87,11 @@ export function EmpreinteFormRow({
   }, [autoFocus, ref]);
 
   return (
-    <div className="w-full text-center">
-      <label
-        htmlFor={id}
-        className="mb-2.5 block text-sm font-medium text-slate-600 sm:text-base"
-      >
+    <div className="w-full text-left">
+      <label htmlFor={id} className="mb-2 block text-sm font-medium text-slate-500">
         {label}
       </label>
-      <div className="relative mx-auto max-w-md">
+      <div className="relative">
         <input
           ref={ref}
           id={id}
@@ -105,8 +102,8 @@ export function EmpreinteFormRow({
           placeholder={placeholder}
           onChange={(e) => onChange(sanitizeInput(type, e.target.value))}
           className={cn(
-            "w-full border-0 border-b border-slate-300/80 bg-transparent pb-2.5 pr-12 text-center",
-            "text-2xl font-normal tracking-tight text-slate-900 placeholder:text-slate-300",
+            "w-full border-0 border-b border-slate-300/80 bg-transparent pb-2.5 pr-12",
+            "text-2xl font-light tracking-tight text-slate-900 placeholder:text-slate-300",
             "outline-none transition-colors focus:border-brand-500/60",
             "md:text-3xl"
           )}
@@ -128,7 +125,7 @@ export function EmpreinteFormRow({
           </span>
         )}
       </div>
-      {hint && <p className="mt-2.5 text-center text-xs text-slate-500 sm:text-sm">{hint}</p>}
+      {hint && <p className="mt-2 text-xs text-slate-400">{hint}</p>}
     </div>
   );
 }
@@ -207,14 +204,12 @@ export function EmpreinteField({
       animate={{ opacity: 1, y: 0 }}
       exit={reduced ? { opacity: 0 } : { opacity: 0, y: -16 }}
       transition={{ duration: duration.slow, ease: ease.out }}
-      className="mx-auto flex w-full max-w-lg flex-col items-center px-2 text-center sm:px-4"
+      className="mx-auto flex w-full max-w-xl flex-col items-center text-center"
     >
       {progress}
-      <p className="mb-8 text-lg font-medium tracking-tight text-slate-700 sm:mb-10 sm:text-xl">
-        {label}
-      </p>
+      <p className="mb-10 text-sm font-medium tracking-wide text-slate-400">{label}</p>
 
-      <div className="relative mx-auto w-full max-w-md">
+      <div className="relative w-full">
         <input
           ref={inputRef}
           type="text"
@@ -227,7 +222,7 @@ export function EmpreinteField({
           aria-label={label}
           className={cn(
             "w-full border-0 border-b border-slate-300/80 bg-transparent pb-3 text-center",
-            "text-4xl font-normal tracking-tight text-slate-900 placeholder:text-slate-300",
+            "text-4xl font-light tracking-tight text-slate-900 placeholder:text-slate-300",
             "outline-none transition-colors focus:border-brand-500/60",
             "md:text-5xl lg:text-6xl"
           )}
@@ -252,7 +247,7 @@ export function EmpreinteField({
         </motion.p>
       )}
 
-      {hint && <p className="mt-4 text-center text-xs text-slate-500 sm:text-sm">{hint}</p>}
+      {hint && <p className="mt-4 text-xs text-slate-400">{hint}</p>}
 
       <EmpreinteContinueButton onClick={onSubmit} disabled={!canContinue} />
     </motion.div>
