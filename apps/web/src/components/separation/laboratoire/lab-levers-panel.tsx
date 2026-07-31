@@ -259,12 +259,11 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
 
   return (
     <div className="space-y-4">
-      <div className="mb-8">
+      <div className="mb-4 lg:mb-6">
         <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Vos ajustements</p>
-        <h2 className="mt-2 text-xl font-light text-slate-900">Affinez votre scénario</h2>
-        <p className="mt-2 text-sm text-slate-500">
-          Chaque interrupteur recalcule le bilan à gauche. Activez seulement ce qui correspond à
-          votre réalité.
+        <h2 className="mt-1 text-lg font-light text-slate-900 lg:mt-2 lg:text-xl">Affinez votre scénario</h2>
+        <p className="mt-1.5 text-sm text-slate-500 lg:mt-2">
+          Chaque interrupteur recalcule le bilan. Le résumé reste visible à gauche (ou dans l&apos;onglet Calcul).
         </p>
       </div>
 
