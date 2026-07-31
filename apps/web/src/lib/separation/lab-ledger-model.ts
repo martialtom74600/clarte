@@ -4,6 +4,7 @@ import type { AssumptionsState, FootprintState, LabState } from "./separation-ty
 import { compileSimulationInput } from "./compile-simulation-input";
 import type { LedgerSectionId } from "./lab-ledger-sections";
 import { normalizeKeepFooterDetail } from "./lab-ledger-insights";
+import { estimateRelocateTarget, relocateMonthlyLine } from "./lab-ledger-parity";
 
 export interface LedgerLine {
   id: string;
@@ -30,6 +31,28 @@ export interface LabLedgerModel {
 
 const NOTARY_FEES_HINT =
   "Droit de partage (CGI 746) et émoluments sur le patrimoine net";
+
+function buildKeepContextNote(
+  doorId: "keep_a" | "keep_b",
+  verdict: DoorVerdictMap[DoorId] | null,
+  negativeEquity: boolean
+): string | undefined {
+  if (negativeEquity) {
+    return "Le crédit dépasse la valeur du bien — la dette se partage, sans rachat classique.";
+  }
+  if (!verdict) return undefined;
+  if (verdict.verdict === "green") {
+    return doorId === "keep_b"
+      ? "Le rachat par l'autre et votre relogement restent tenables dans la zone."
+      : "Votre rachat et le relogement de l'autre restent tenables dans la zone.";
+  }
+  if (verdict.verdict === "orange") {
+    return doorId === "keep_b"
+      ? "Projet serré : l'autre doit convaincre la banque, et le relogement reste juste."
+      : "Projet serré : convaincre la banque, et le relogement du partant reste juste.";
+  }
+  return undefined;
+}
 
 function buildRentContextNote(netMonthly: number): string | undefined {
   if (netMonthly < 0) {
@@ -284,6 +307,7 @@ function buildKeepLedger(
         amount: indemnity,
         tone: "highlight",
         sectionId: "echange",
+        hint: "Indemnité versée à l'autre pour l'occupation exclusive",
       },
       {
         id: "buyout-transfer",
@@ -291,6 +315,7 @@ function buildKeepLedger(
         amount: buyoutTransfer,
         tone: "total",
         sectionId: "echange",
+        hint: "Rachat de parts + indemnité d'occupation le cas échéant",
       }
     );
   }
@@ -310,6 +335,7 @@ function buildKeepLedger(
       amount: cashWithIndemnity,
       tone: "highlight",
       sectionId: "echange",
+      hint: "Rachat + frais de notaire (+ indemnité d'occupation le cas échéant)",
     },
     {
       id: "departure-capital",
@@ -330,6 +356,20 @@ function buildKeepLedger(
       sectionId: "relogement",
       hint: "Repère local pour évaluer le relogement",
     });
+
+    const departingIncome = doorId === "keep_a" ? footprint.incomeB : footprint.incomeA;
+    const relocateMonthly = relocateMonthlyLine({
+      id: "relocate-monthly",
+      label:
+        doorId === "keep_a"
+          ? "Mensualité de relogement (autre)"
+          : "Mensualité de relogement (vous)",
+      incomeMonthly: departingIncome,
+      liquidCapital: departureCapital,
+      targetPrice: relocateTarget,
+      sectionId: "relogement",
+    });
+    if (relocateMonthly) lines.push(relocateMonthly);
   }
 
   if (keepExisting) {
@@ -358,6 +398,7 @@ function buildKeepLedger(
         amount: newLoan,
         tone: "total",
         sectionId: "mensuel",
+        hint: "Montant emprunté pour financer le rachat de parts",
       },
       {
         id: "new-loan-monthly",
@@ -369,6 +410,7 @@ function buildKeepLedger(
         tone: "neutral",
         suffix: "/mois",
         sectionId: "mensuel",
+        hint: "Mensualité estimée du prêt complémentaire pour le rachat",
       },
       {
         id: "monthly",
@@ -394,6 +436,7 @@ function buildKeepLedger(
         amount: newLoan,
         tone: "total",
         sectionId: "mensuel",
+        hint: "Refinancement total du prêt immobilier",
       },
       {
         id: "monthly",
@@ -402,6 +445,7 @@ function buildKeepLedger(
         tone: "neutral",
         suffix: "/mois",
         sectionId: "mensuel",
+        hint: "Mensualité du nouveau crédit après rachat",
       }
     );
   }
@@ -425,6 +469,7 @@ function buildKeepLedger(
     lines,
     footer,
     warningNote,
+    contextNote: buildKeepContextNote(doorId, verdict, negativeEquity),
   };
 }
 
@@ -444,9 +489,9 @@ function buildSellLedger(
   const you = sell?.saleProceedsByPerson?.A.amount ?? saleNet / 2;
   const other = sell?.saleProceedsByPerson?.B.amount ?? saleNet / 2;
   const negativeEquity = saleNet < 0 || sell?.negativeEquity === true;
-  const relocateTarget = sell?.relocateTarget?.amount;
+  const relocateTargetAmount =
+    sell?.relocateTarget?.amount ?? estimateRelocateTarget(footprint);
   const capitalGainsTax = sell?.capitalGainsEstimate?.amount ?? 0;
-  const relocateMonthly = verdict?.monthlyImpact?.amount ?? 0;
 
   const lines: LedgerLine[] = [
     {
@@ -526,27 +571,47 @@ function buildSellLedger(
     }
   );
 
-  if (relocateTarget != null && relocateTarget > 0) {
+  if (relocateTargetAmount > 0) {
     lines.push({
       id: "relocate-target",
       label: "Prix d'un logement équivalent dans votre quartier",
-      amount: relocateTarget,
+      amount: relocateTargetAmount,
       tone: "neutral",
       sectionId: "relogement",
       hint: "Repère local pour évaluer le relogement",
     });
-  }
 
-  if (relocateMonthly > 0 && relocateTarget != null && relocateTarget > 0) {
-    lines.push({
+    const relocatePaymentYou = relocateMonthlyLine({
       id: "relocate-payment-you",
       label: "Mensualité estimée pour vous reloger (zone)",
-      amount: Math.round(relocateMonthly),
-      tone: "neutral",
-      suffix: "/mois",
+      incomeMonthly: footprint.incomeA,
+      liquidCapital: you,
+      targetPrice: relocateTargetAmount,
       sectionId: "relogement",
-      hint: "Simulation de prêt sur un logement équivalent",
     });
+    const relocatePaymentOther = relocateMonthlyLine({
+      id: "relocate-payment-other",
+      label: "Mensualité estimée pour l'autre (zone)",
+      incomeMonthly: footprint.incomeB,
+      liquidCapital: other,
+      targetPrice: relocateTargetAmount,
+      sectionId: "relogement",
+    });
+    if (relocatePaymentYou) lines.push(relocatePaymentYou);
+    if (relocatePaymentOther) lines.push(relocatePaymentOther);
+
+    const monthlyYou = relocatePaymentYou?.amount ?? 0;
+    if (monthlyYou > 0) {
+      lines.push({
+        id: "monthly-balance",
+        label: "Mensualité estimée pour vous reloger",
+        amount: monthlyYou,
+        tone: "neutral",
+        suffix: "/mois",
+        sectionId: "mensuel",
+        hint: "Simulation de prêt sur un logement équivalent dans votre quartier",
+      });
+    }
   }
 
   const pension = childSupportLine(footprint, lab);
@@ -558,8 +623,8 @@ function buildSellLedger(
     relocateVerdict
       ? `Relogement dans le quartier — Vous : ${formatAffordabilityVerdictLabel(relocateVerdict.A)} · Autre : ${formatAffordabilityVerdictLabel(relocateVerdict.B)}.`
       : null,
-    relocateTarget != null && relocateTarget > 0
-      ? `Cible relogement ~${Math.round(relocateTarget).toLocaleString("fr-FR")} € (prix × surface dans votre zone).`
+    relocateTargetAmount > 0
+      ? `Cible relogement ~${Math.round(relocateTargetAmount).toLocaleString("fr-FR")} € (prix × surface dans votre zone).`
       : null,
     negativeEquity
       ? `Dette résiduelle ~${Math.round(Math.abs(saleNet)).toLocaleString("fr-FR")} € à partager.`
@@ -591,8 +656,38 @@ function buildRentLedger(
   const net = bd?.netCashflow.amount ?? scenario?.monthlyPaymentEstimate?.amount ?? 0;
   const mortgagePay =
     bd?.mortgagePayment.amount ?? effectiveMortgagePayment(footprint, assumptions, lab);
+  const netEquity = footprint.propertyValue - footprint.mortgageRemaining;
+  const relocateTargetAmount = estimateRelocateTarget(footprint);
+  const netRounded = Math.round(net);
+  const sharedCapital = Math.max(0, netEquity / 2);
 
   const lines: LedgerLine[] = [
+    {
+      id: "property",
+      label: "Valeur du bien",
+      amount: footprint.propertyValue,
+      sectionId: "bien",
+      hint: "Estimation actuelle du logement conservé en location",
+    },
+    {
+      id: "property-mortgage",
+      label: "Prêt immobilier restant",
+      amount: footprint.mortgageRemaining,
+      tone: "subtract",
+      sectionId: "bien",
+      hint: "Dette encore due sur le bien loué",
+    },
+    {
+      id: "property-net",
+      label: netEquity < 0 ? "Dette nette sur le bien" : "Patrimoine net du logement",
+      amount: netEquity,
+      tone: "highlight",
+      sectionId: "bien",
+      hint:
+        netEquity < 0
+          ? "Le crédit dépasse la valeur du bien"
+          : "Valeur du bien moins le crédit restant",
+    },
     {
       id: "rent",
       label: "Loyer perçu (estimation)",
@@ -614,6 +709,7 @@ function buildRentLedger(
       amount: Math.round(bd?.effectiveRent.amount ?? 0),
       tone: "highlight",
       sectionId: "revenus",
+      hint: "Loyer perçu après vacance locative",
     },
     {
       id: "mortgage-pay",
@@ -623,6 +719,7 @@ function buildRentLedger(
       amount: Math.round(mortgagePay),
       tone: "subtract",
       sectionId: "charges",
+      hint: "Remboursement mensuel du prêt sur le bien loué",
     },
     {
       id: "property-tax",
@@ -638,6 +735,7 @@ function buildRentLedger(
       amount: Math.round(bd?.pnoMonthly.amount ?? 0),
       tone: "subtract",
       sectionId: "charges",
+      hint: "Assurance du propriétaire non occupant",
     },
     {
       id: "management",
@@ -645,6 +743,7 @@ function buildRentLedger(
       amount: Math.round(bd?.managementFees.amount ?? 0),
       tone: "subtract",
       sectionId: "charges",
+      hint: "Honoraires si le bien est géré par une agence",
     },
     {
       id: "tax",
@@ -657,13 +756,49 @@ function buildRentLedger(
     {
       id: "net",
       label: "Argent net chaque mois",
-      amount: Math.round(net),
+      amount: netRounded,
       tone: "total",
       suffix: "/mois",
       sectionId: "resultat",
       hint: "Loyer − charges − impôts",
     },
+    {
+      id: "monthly-balance",
+      label: "Solde mensuel locatif",
+      amount: netRounded,
+      tone: "total",
+      suffix: "/mois",
+      sectionId: "mensuel",
+      hint: "Ce qu'il reste après crédit, charges et impôts sur le loyer",
+    },
+    {
+      id: "relocate-target",
+      label: "Prix d'un logement équivalent dans votre quartier",
+      amount: relocateTargetAmount,
+      tone: "neutral",
+      sectionId: "relogement",
+      hint: "Repère local si vous devez vous reloger ailleurs",
+    },
   ];
+
+  const relocatePaymentYou = relocateMonthlyLine({
+    id: "relocate-payment-you",
+    label: "Mensualité estimée pour vous reloger (zone)",
+    incomeMonthly: footprint.incomeA,
+    liquidCapital: sharedCapital,
+    targetPrice: relocateTargetAmount,
+    sectionId: "relogement",
+  });
+  const relocatePaymentOther = relocateMonthlyLine({
+    id: "relocate-payment-other",
+    label: "Mensualité estimée pour l'autre (zone)",
+    incomeMonthly: footprint.incomeB,
+    liquidCapital: sharedCapital,
+    targetPrice: relocateTargetAmount,
+    sectionId: "relogement",
+  });
+  if (relocatePaymentYou) lines.push(relocatePaymentYou);
+  if (relocatePaymentOther) lines.push(relocatePaymentOther);
 
   if (!lab.enabledLevers.includes("historical_mortgage_rate") && footprint.mortgageRemaining > 0) {
     lines.splice(4, 0, {
@@ -679,7 +814,6 @@ function buildRentLedger(
   const pension = childSupportLine(footprint, lab);
   if (pension) lines.push(pension);
 
-  const netRounded = Math.round(net);
   const footerParts = [
     scenario?.rentOutFormulaDetail,
     verdict?.headline,

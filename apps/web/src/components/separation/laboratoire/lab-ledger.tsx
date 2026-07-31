@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { cn, formatEuro } from "@/lib/utils";
 import type { LabLedgerModel, LedgerLine } from "@/lib/separation/lab-ledger-model";
 import { ledgerFingerprint } from "@/lib/separation/lab-ledger-model";
+import { pickHeadlineLines } from "@/lib/separation/lab-ledger-parity";
 import {
   groupLedgerLines,
   LEDGER_SECTION_META,
@@ -16,19 +17,6 @@ import { LedgerFooterInsights } from "./ledger-footer-insights";
 interface LabLedgerPanelProps {
   model: LabLedgerModel | null;
   className?: string;
-}
-
-function pickHeadlineLines(model: LabLedgerModel): LedgerLine[] {
-  const byDoor: Record<LabLedgerModel["doorId"], string[]> = {
-    keep_a: ["total-cash", "monthly", "soulte"],
-    keep_b: ["total-cash", "monthly", "soulte"],
-    sell: ["you", "net", "relocate-target"],
-    rent_out: ["net", "effective-rent"],
-  };
-
-  return byDoor[model.doorId]
-    .map((id) => model.lines.find((line) => line.id === id))
-    .filter((line): line is LedgerLine => line != null);
 }
 
 function toneStyles(tone: LedgerLine["tone"]) {
