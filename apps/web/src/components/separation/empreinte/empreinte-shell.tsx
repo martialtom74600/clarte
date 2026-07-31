@@ -37,7 +37,7 @@ function EmpreinteProgress({ screenId }: { screenId: EmpreinteScreenId }) {
   return (
     <div className="mb-8 flex w-full flex-col items-center gap-3">
       <div
-        className="flex items-center gap-2"
+        className="flex items-center justify-center gap-2"
         role="progressbar"
         aria-valuemin={1}
         aria-valuemax={EMPREINTE_SCREEN_COUNT}
@@ -58,7 +58,7 @@ function EmpreinteProgress({ screenId }: { screenId: EmpreinteScreenId }) {
           />
         ))}
       </div>
-      <p className="text-xs font-medium tracking-wide text-slate-400">
+      <p className="text-center text-sm font-medium tracking-wide text-slate-500">
         {current + 1} / {EMPREINTE_SCREEN_COUNT}
         <span className="mx-1.5 text-slate-300">·</span>
         {label}
@@ -113,15 +113,17 @@ function ScreenChrome({
       animate={{ opacity: 1, y: 0 }}
       exit={reduced ? { opacity: 0 } : { opacity: 0, y: -16 }}
       transition={{ duration: duration.slow, ease: ease.out }}
-      className="flex w-full max-w-md flex-col items-center text-center"
+      className="mx-auto flex w-full max-w-lg flex-col items-center px-2 text-center sm:px-4"
       onKeyDown={handleKeyDown}
     >
       {progress}
-      <h1 className="mb-10 text-xl font-medium tracking-tight text-slate-800 md:text-2xl">
+      <h1 className="mb-8 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
         {title}
       </h1>
 
-      <div className="flex w-full flex-col gap-8">{children}</div>
+      <div className="flex w-full flex-col gap-7 rounded-2xl border border-slate-200/70 bg-white/70 px-6 py-8 shadow-sm backdrop-blur-sm sm:px-8">
+        {children}
+      </div>
 
       {whisper && (
         <motion.p
@@ -336,9 +338,9 @@ function EmpreinteFlow() {
               animate={{ opacity: 1, y: 0 }}
               exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8 }}
               transition={{ duration: duration.normal, ease: ease.out }}
-              className="flex flex-col gap-8"
+              className="flex flex-col gap-7 border-t border-slate-200/60 pt-7"
             >
-              <p className="text-left text-xs font-medium text-slate-400">
+              <p className="text-center text-sm font-medium text-slate-500">
                 Détails du crédit en cours
               </p>
               <EmpreinteFormRow
@@ -369,7 +371,7 @@ function EmpreinteFlow() {
 
   return (
     <AnimatePresence mode="wait">
-      <div key={screenId} className="w-full">
+      <div key={screenId} className="mx-auto flex w-full max-w-lg justify-center">
         {body}
       </div>
     </AnimatePresence>
@@ -397,7 +399,7 @@ export function EmpreinteShell() {
 
   return (
     <div
-      className={`${clarte.mesh} flex min-h-[100dvh] flex-col items-center justify-center px-6 py-16`}
+      className={`${clarte.mesh} flex min-h-[100dvh] flex-col items-center justify-center px-4 py-12 sm:px-6 sm:py-16`}
     >
       <EmpreinteFlow />
     </div>
