@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { AnalyticsProvider } from "@/components/analytics-provider";
-import { ClarteProviders, ClartePublicChrome } from "@/components/ui";
+import { ClarteProviders } from "@/components/ui";
 import { clarte } from "@/lib/clarte-design";
 import "./globals.css";
 
@@ -33,9 +33,7 @@ export default function RootLayout({
     <html lang="fr">
       <body className={`flex min-h-screen flex-col antialiased ${clarte.mesh}`}>
         <AnalyticsProvider>
-          <ClarteProviders>
-            <ClartePublicChrome>{children}</ClartePublicChrome>
-          </ClarteProviders>
+          <ClarteProviders>{children}</ClarteProviders>
         </AnalyticsProvider>
       </body>
     </html>

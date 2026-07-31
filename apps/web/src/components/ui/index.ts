@@ -4,7 +4,6 @@ export { ClarteProviders } from "./clarte-providers";
 export { ClarteLogo, ClarteLogoPro } from "./clarte-logo";
 export { ClarteHeaderPublic, ClarteHeaderPro } from "./clarte-header";
 export { ClarteFooter } from "./clarte-footer";
-export { ClartePublicChrome } from "./clarte-public-chrome";
 export { FloatingInput, ClarteInput } from "./floating-input";
 export {
   MotionCard,
