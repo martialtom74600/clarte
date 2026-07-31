@@ -74,7 +74,7 @@ describe("compileDoorVerdicts", () => {
     expect(apportsScenario!.soulte!.amount.amount).toBeGreaterThan(
       baseScenario!.soulte!.amount.amount
     );
-    expect(apportsScenario!.soulte!.amount.amount).toBe(120000);
+    expect(apportsScenario!.soulte!.amount.amount).toBe(105000);
     expect(baseVerdict.headline).toBeDefined();
     expect(apportsVerdict.detail).toContain("€");
   });

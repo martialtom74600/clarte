@@ -5,7 +5,7 @@ import type {
   SimulationInput,
   SoulteResult,
 } from "@separation/schemas";
-import { addMoney, eur, getNetAssetValue, getShareForPerson } from "./utils.js";
+import { addMoney, eur, getNetAssetValue, getShareForPerson, round } from "./utils.js";
 
 /** Taux du droit de partage (CGI art. 746) — divorce/PACS vs sortie d'indivision. */
 export const DROIT_PARTAGE_RATE_MARRIAGE_PACS = 0.011;
@@ -14,7 +14,13 @@ export const DROIT_PARTAGE_RATE_CONCUBINAGE = 0.025;
 /** Émoluments + CSI + débours — ordre de grandeur ~1,5 % de l'actif net. */
 export const DEFAULT_EMOLUMENTS_RATE_ON_NET = 0.015;
 
-export type ContributionMode = "none" | "share_rewrite" | "recompense";
+/**
+ * - none : parts légales
+ * - creance : parts légales + prélèvement créances (815-13 / apports) — défaut indivision
+ * - recompense : communauté art. 1433 / 1469 (avec profit si prix d'acquisition)
+ * - share_rewrite : legacy — rewrite des % selon apports (opt-in via options)
+ */
+export type ContributionMode = "none" | "share_rewrite" | "recompense" | "creance";
 
 export function droitDePartageRate(status: SimulationInput["status"]): number {
   return status === "marriage" || status === "pacs"
@@ -48,9 +54,24 @@ function linkedMortgageBalance(asset: Asset, liabilities: Liability[]): number {
 }
 
 /**
+ * Récompense art. 1469 : si prix d'acquisition connu, valorise le profit subsistant
+ * (apport × valeur actuelle / prix d'acquisition). Sinon nominal (dépense).
+ */
+export function computeRecompenseAmount(
+  expense: number,
+  currentValue: number,
+  purchasePrice?: number
+): number {
+  if (expense <= 0) return 0;
+  if (!purchasePrice || purchasePrice <= 0) return round(expense);
+  // Art. 1469 al. 3 — acquisition encore dans la masse : récompense = profit.
+  return round(expense * (currentValue / purchasePrice));
+}
+
+/**
  * Quote-part pour le calcul de soulte.
- * - Indivision / séparation de biens : ratio d'apports si fournis (proxy créance 815-13).
- * - Communauté : parts légales inchangées (récompense gérée dans computeSoulteCore).
+ * - Indivision : parts légales + mode créance (sauf legacy share_rewrite)
+ * - Communauté : parts légales + récompense
  */
 export function resolveEffectiveShares(
   asset: Asset,
@@ -80,11 +101,22 @@ export function resolveEffectiveShares(
     };
   }
 
+  // Legacy opt-in : rewrite des parts selon le ratio d'apports.
+  if (input.options.legacyShareRewrite === true) {
+    return {
+      shareA: contributionA / totalContributions,
+      shareB: contributionB / totalContributions,
+      contributionAdjusted: true,
+      mode: "share_rewrite",
+    };
+  }
+
+  // Défaut 2026.6 : créance / prélèvement avant partage (parts légales conservées).
   return {
-    shareA: contributionA / totalContributions,
-    shareB: contributionB / totalContributions,
+    shareA: legalA,
+    shareB: legalB,
     contributionAdjusted: true,
-    mode: "share_rewrite",
+    mode: "creance",
   };
 }
 
@@ -98,23 +130,48 @@ function computeSoulteAmount(
   mode: ContributionMode;
   recompenseA: number;
   recompenseB: number;
+  creanceA: number;
+  creanceB: number;
 } {
   const contributionA = input.contributionA ?? 0;
   const contributionB = input.contributionB ?? 0;
   const { shareA, shareB, mode } = resolveEffectiveShares(asset, input);
+  const purchasePrice = asset.purchasePrice?.amount;
+  const currentValue = asset.grossValue.amount;
 
   if (mode === "recompense") {
-    // Art. 1433 / 1469 C. civ. (simplifié) : récompense = dépense d'apport, puis partage 50/50 du solde.
-    const massAfter = Math.max(0, netAmount - contributionA - contributionB);
+    const recA = computeRecompenseAmount(contributionA, currentValue, purchasePrice);
+    const recB = computeRecompenseAmount(contributionB, currentValue, purchasePrice);
+    const massAfter = Math.max(0, netAmount - recA - recB);
     const half = massAfter / 2;
-    const claimA = half + contributionA;
-    const claimB = half + contributionB;
+    const claimA = half + recA;
+    const claimB = half + recB;
     const amount = receiver === "A" ? claimA : claimB;
     return {
       amount,
       mode,
-      recompenseA: contributionA,
-      recompenseB: contributionB,
+      recompenseA: recA,
+      recompenseB: recB,
+      creanceA: 0,
+      creanceB: 0,
+    };
+  }
+
+  if (mode === "creance") {
+    // Prélèvement des créances d'apport avant partage selon parts légales.
+    const creA = contributionA;
+    const creB = contributionB;
+    const massAfter = Math.max(0, netAmount - creA - creB);
+    const claimA = massAfter * shareA + creA;
+    const claimB = massAfter * shareB + creB;
+    const amount = receiver === "A" ? claimA : claimB;
+    return {
+      amount,
+      mode,
+      recompenseA: 0,
+      recompenseB: 0,
+      creanceA: creA,
+      creanceB: creB,
     };
   }
 
@@ -124,6 +181,8 @@ function computeSoulteAmount(
     mode,
     recompenseA: 0,
     recompenseB: 0,
+    creanceA: 0,
+    creanceB: 0,
   };
 }
 
@@ -140,7 +199,6 @@ export function computeSoulteCore(
   const mortgageRemaining = linkedMortgageBalance(asset, liabilities);
   const negativeEquity = netAmount < 0;
 
-  // Actif net négatif : pas de soulte à verser — dette résiduelle à partager.
   if (negativeEquity) {
     return {
       payer: keeper,
@@ -156,10 +214,11 @@ export function computeSoulteCore(
       refinanceAmount: eur(mortgageRemaining),
       negativeEquity: true,
       residualDebt: eur(Math.abs(netAmount)),
+      contributionMode: "none",
     };
   }
 
-  const { amount, mode, recompenseA, recompenseB } = computeSoulteAmount(
+  const { amount, mode, recompenseA, recompenseB, creanceA, creanceB } = computeSoulteAmount(
     asset,
     input,
     netAmount,
@@ -191,8 +250,12 @@ export function computeSoulteCore(
     emolumentsEstimate,
     refinanceAmount,
     negativeEquity: false,
+    contributionMode: mode,
     ...(mode === "recompense"
       ? { recompenseA: eur(recompenseA), recompenseB: eur(recompenseB) }
+      : {}),
+    ...(mode === "creance"
+      ? { creanceA: eur(creanceA), creanceB: eur(creanceB) }
       : {}),
   };
 }

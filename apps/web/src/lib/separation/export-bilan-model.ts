@@ -169,12 +169,41 @@ export function buildExportInsights(
 
   if (doorId === "sell") {
     if (scenario?.capitalGainsNote) {
-      insights.push({ title: "Plus-value (CGI 150 U)", body: scenario.capitalGainsNote });
+      insights.push({ title: "Plus-value (CGI 150 U / 150 VC)", body: scenario.capitalGainsNote });
+    }
+    if ((scenario?.capitalGainsEstimate?.amount ?? 0) > 0) {
+      insights.push({
+        title: "Impôt sur la plus-value estimé",
+        body: `${formatEuro(scenario!.capitalGainsEstimate!.amount)} déduit du net vendeur (IR + PS + surtaxe éventuelle).`,
+      });
     }
     if (scenario?.saleProceedsByPerson) {
       insights.push({
         title: "Répartition bilatérale après vente",
-        body: `Vous ${formatEuro(scenario.saleProceedsByPerson.A.amount)} · Autre ${formatEuro(scenario.saleProceedsByPerson.B.amount)} (après agence + diagnostics + CRD).`,
+        body: `Vous ${formatEuro(scenario.saleProceedsByPerson.A.amount)} · Autre ${formatEuro(scenario.saleProceedsByPerson.B.amount)} (après agence + diagnostics + CRD ± PV).`,
+      });
+    }
+  }
+
+  if (result.compensatoryAllowance?.applicable) {
+    insights.push({
+      title: "Prestation compensatoire (art. 270–271)",
+      body: result.compensatoryAllowance.note,
+    });
+  }
+
+  if (doorId === "keep_a" || doorId === "keep_b") {
+    const mode = scenario?.soulte?.contributionMode;
+    if (mode === "creance") {
+      insights.push({
+        title: "Créances d'indivision (art. 815-13)",
+        body: `Apports traités en prélèvement avant partage (parts légales conservées) — créances A ${formatEuro(scenario?.soulte?.creanceA?.amount ?? 0)} / B ${formatEuro(scenario?.soulte?.creanceB?.amount ?? 0)}.`,
+      });
+    }
+    if (mode === "recompense") {
+      insights.push({
+        title: "Récompenses (art. 1469)",
+        body: `Récompenses A ${formatEuro(scenario?.soulte?.recompenseA?.amount ?? 0)} / B ${formatEuro(scenario?.soulte?.recompenseB?.amount ?? 0)} (profit subsistant si prix d'acquisition renseigné).`,
       });
     }
   }
@@ -220,6 +249,6 @@ export function buildExportBilan(params: {
     insights: buildExportInsights(doorId, result, doorVerdicts),
     ledger,
     disclaimer:
-      "Document généré par Clarté (pack 2026.5). Simulation indicative : droit de partage CGI 746 (1,10 % ou 2,50 %) + émoluments ~1,5 % ; vente = agence ~5 % + diagnostics ; plus-value RP exonérée (CGI 150 U) ; location = vacance, TF, PNO, gestion, micro-foncier ; rachat = soulte ± indemnité d'occupation (loyer÷2×mois) + test de relogement du partant. Le mode « garder mon crédit » suppose un accord banque (désolidarisation). Consultez un notaire ou un conseiller avant toute décision.",
+      "Document généré par Clarté (pack 2026.6). Simulation indicative : droit de partage CGI 746 + émoluments ~1,5 % ; vente = agence ~5 % + diagnostics + plus-value CGI 150 U/150 VC ; location = vacance, TF, PNO, gestion, micro-foncier ; rachat = soulte/créance 815-13 ou récompense 1469 ± indemnité d'occupation + relogement du partant ; prestation compensatoire art. 270–271 indicative. Le mode « garder mon crédit » suppose un accord banque. Consultez un notaire ou un conseiller avant toute décision.",
   };
 }

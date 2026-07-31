@@ -108,6 +108,12 @@ export interface Asset {
   grossValue: Money;
   ownership: OwnershipRule;
   acquisitionDate?: string;
+  /** Prix d'acquisition (hors frais) — requis pour plus-value CGI 150 U hors RP. */
+  purchasePrice?: Money;
+  /** Taux frais d'acquisition (défaut moteur ~7,5 %). */
+  acquisitionFeesRate?: number;
+  /** Travaux d'amélioration justifiés ; sinon forfait 15 % du prix d'acquisition. */
+  improvementWorks?: Money;
   linkedLiabilityIds?: string[];
   isPrimaryResidence?: boolean;
 }
@@ -151,6 +157,11 @@ export interface SimulationOptions {
    * Formule indicative : (loyer estimé / 2) × mois.
    */
   occupationMonths?: number;
+  /**
+   * Legacy : rewrite des quote-parts selon le ratio d'apports (pré-2026.6).
+   * Défaut false — on utilise le mode créance (parts légales + prélèvement).
+   */
+  legacyShareRewrite?: boolean;
 }
 
 /** Décomposition cashflow locatif (porte rent_out) — année 2026. */
@@ -244,9 +255,14 @@ export interface SoulteResult {
   emolumentsEstimate?: Money;
   /** Package de refinancement bancaire : CRD + soulte + frais. */
   refinanceAmount?: Money;
-  /** Récompenses / créances d'apport retenues (communauté). */
+  /** Récompenses d'apport retenues (communauté — art. 1433 / 1469). */
   recompenseA?: Money;
   recompenseB?: Money;
+  /** Créances contre l'indivision (art. 815-13 / apports — prélèvement avant partage). */
+  creanceA?: Money;
+  creanceB?: Money;
+  /** Mode de prise en compte des apports. */
+  contributionMode?: "none" | "share_rewrite" | "recompense" | "creance";
   /** True si l'actif net du bien est négatif (CRD > valeur). */
   negativeEquity?: boolean;
   /** Dette résiduelle à partager quand l'actif net est négatif. */
@@ -401,6 +417,16 @@ export interface LegalWarning {
   message: string;
 }
 
+/** Estimation indicative prestation compensatoire (art. 270–271). */
+export interface CompensatoryAllowanceResult {
+  applicable: boolean;
+  payer: PersonId;
+  receiver: PersonId;
+  capitalEstimate: Money;
+  marriageYears: number | null;
+  note: string;
+}
+
 export interface SimulationResult {
   netWorthByPerson: Record<PersonId, Money>;
   communityMass?: Money;
@@ -410,6 +436,8 @@ export interface SimulationResult {
   warnings: LegalWarning[];
   disclaimers: string[];
   rulePackVersion: string;
+  /** Prestation compensatoire indicative (mariage uniquement). */
+  compensatoryAllowance?: CompensatoryAllowanceResult;
 }
 
 export interface LeadQualification {

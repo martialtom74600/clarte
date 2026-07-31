@@ -1,19 +1,11 @@
 import { NextResponse } from "next/server";
+import { pricePerSqmForPostal } from "@separation/engine";
 
 interface DvfRecord {
   valeur_fonciere?: number;
   surface_reelle_bati?: number;
   code_postal?: string;
 }
-
-const FALLBACK_PRICE_PER_SQM: Record<string, number> = {
-  "75": 10500,
-  "69": 4800,
-  "13": 3500,
-  "33": 4200,
-  "06": 5200,
-  default: 2800,
-};
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -59,11 +51,8 @@ export async function GET(request: Request) {
   }
 
   if (!estimatedValue) {
-    const dept = postalCode.slice(0, 2);
-    const pricePerSqm =
-      FALLBACK_PRICE_PER_SQM[dept] ?? FALLBACK_PRICE_PER_SQM.default;
-    medianPricePerSqm = pricePerSqm;
-    estimatedValue = Math.round(pricePerSqm * surface);
+    medianPricePerSqm = pricePerSqmForPostal(postalCode);
+    estimatedValue = Math.round(medianPricePerSqm * surface);
     source = "fallback";
   }
 

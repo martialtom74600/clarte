@@ -25,6 +25,7 @@ import { computeSoulteCore } from "./soulte-core.js";
 import { computeSaleProceeds } from "./sale-proceeds.js";
 import { computeRentOutCashflow } from "./rent-out-cashflow.js";
 import { computeKeepBilateralExtras } from "./keep-buyout.js";
+import { estimateCompensatoryAllowance } from "./compensatory-allowance.js";
 
 export const BANK_KEEP_LOAN_DISCLAIMER =
   "La désolidarisation de l'emprunt initial est soumise à l'accord discrétionnaire de la banque (ratio d'endettement et solvabilité du repreneur). Ce mode n'est pas garanti.";
@@ -486,14 +487,38 @@ export function runSimulation(input: SimulationInput): SimulationResult {
 
   const { communityMass } = normalizePatrimony(input);
 
+  const pc = estimateCompensatoryAllowance(
+    input,
+    baseNet.A.amount,
+    baseNet.B.amount
+  );
+  const warnings = computeWarnings(input);
+  if (pc?.applicable) {
+    warnings.push({
+      code: "COMPENSATORY_ALLOWANCE",
+      severity: "info",
+      message: pc.note,
+    });
+  }
+
   return {
     netWorthByPerson: baseNet,
     communityMass: communityMass.amount !== 0 ? communityMass : undefined,
     soulte: primaryScenario?.soulte,
     scenarios,
     complexityScore: computeComplexityScore(input),
-    warnings: computeWarnings(input),
+    warnings,
     disclaimers: DEFAULT_DISCLAIMERS,
     rulePackVersion: RULE_PACK_VERSION,
+    compensatoryAllowance: pc
+      ? {
+          applicable: pc.applicable,
+          payer: pc.payer,
+          receiver: pc.receiver,
+          capitalEstimate: pc.capitalEstimate,
+          marriageYears: pc.marriageYears,
+          note: pc.note,
+        }
+      : undefined,
   };
 }

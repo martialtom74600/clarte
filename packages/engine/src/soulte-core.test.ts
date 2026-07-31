@@ -56,10 +56,24 @@ describe("resolveEffectiveShares", () => {
     expect(shares.mode).toBe("none");
   });
 
-  it("en indivision, ajuste la quote-part selon les apports (proxy créance)", () => {
+  it("en indivision, conserve les parts légales (mode créance 815-13)", () => {
     const shares = resolveEffectiveShares(
       baseAsset,
       baseInput({ contributionA: 20000, contributionB: 30000 })
+    );
+    expect(shares.shareA).toBe(0.5);
+    expect(shares.shareB).toBe(0.5);
+    expect(shares.mode).toBe("creance");
+  });
+
+  it("legacy share_rewrite reste disponible en opt-in", () => {
+    const shares = resolveEffectiveShares(
+      baseAsset,
+      baseInput({
+        contributionA: 20000,
+        contributionB: 30000,
+        options: { primaryResidenceId: "house", scenario: "keep_a", legacyShareRewrite: true },
+      })
     );
     expect(shares.shareA).toBeCloseTo(0.4);
     expect(shares.shareB).toBeCloseTo(0.6);
@@ -144,14 +158,42 @@ describe("C3 — récompenses en communauté", () => {
     expect(soulte.recompenseB?.amount).toBe(30000);
   });
 
-  it("en indivision, conserve le rewrite d'apports (20k/30k → 120k)", () => {
+  it("en indivision, prélève les créances avant partage (20k/30k → 105k)", () => {
+    // masse 200k − 50k créances = 150k → 75k + créance B 30k = 105k
     const soulte = computeSoulteCore(
       baseAsset,
       baseLiabilities,
       "A",
       baseInput({ contributionA: 20000, contributionB: 30000 })
     );
-    expect(soulte.amount.amount).toBe(120000);
+    expect(soulte.amount.amount).toBe(105000);
+    expect(soulte.contributionMode).toBe("creance");
+    expect(soulte.creanceA?.amount).toBe(20000);
+    expect(soulte.creanceB?.amount).toBe(30000);
+  });
+
+  it("récompense 1469 valorise le profit si prix d'acquisition connu", () => {
+    const asset = {
+      ...communityAsset,
+      purchasePrice: eur(300000),
+      grossValue: eur(400000),
+    };
+    const soulte = computeSoulteCore(
+      asset,
+      [{ ...baseLiabilities[0], responsibility: { kind: "community" } }],
+      "A",
+      baseInput({
+        status: "marriage",
+        marriageRegime: "communaute_legale",
+        contributionA: 30000,
+        contributionB: 0,
+        assets: [asset],
+        liabilities: [{ ...baseLiabilities[0], responsibility: { kind: "community" } }],
+      })
+    );
+    // récompense A = 30k × (400k/300k) = 40k
+    expect(soulte.recompenseA?.amount).toBe(40000);
+    expect(soulte.contributionMode).toBe("recompense");
   });
 });
 

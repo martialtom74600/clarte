@@ -8,7 +8,7 @@ import type {
   SimulationInput,
 } from "@separation/schemas";
 
-export const RULE_PACK_VERSION = "2026.5";
+export const RULE_PACK_VERSION = "2026.6";
 
 export function eur(amount: number): Money {
   return { amount: round(amount), currency: "EUR" };
