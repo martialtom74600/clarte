@@ -3,27 +3,11 @@
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { clarte } from "@/lib/clarte-design";
-import { cn, formatEuro } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { useSeparationStore } from "@/store/separation-store";
 import { buildExportBilan } from "@/lib/separation/export-bilan-model";
-import type { LabLedgerModel } from "@/lib/separation/lab-ledger-model";
+import { ExportLedgerDocument } from "./export-ledger-document";
 import styles from "./export-bilan.module.css";
-
-function LedgerDocumentRow({ line }: { line: LabLedgerModel["lines"][number] }) {
-  const prefix = line.tone === "subtract" ? "−" : "";
-  const isTotal = line.tone === "total";
-
-  return (
-    <div className={cn(styles.ledgerRow, isTotal && styles.ledgerRowTotal)}>
-      <span>{line.label}</span>
-      <span className={styles.ledgerAmount}>
-        {prefix}
-        {formatEuro(line.amount)}
-        {line.suffix ?? ""}
-      </span>
-    </div>
-  );
-}
 
 export function ExportBilanShell() {
   const router = useRouter();
@@ -89,7 +73,7 @@ export function ExportBilanShell() {
 
         {model.insights.length > 0 && (
           <section className={styles.section}>
-            <h2 className={styles.sectionTitle}>Lecture patrimoniale</h2>
+            <h2 className={styles.sectionTitle}>Points d'attention</h2>
             {model.insights.map((insight) => (
               <div key={insight.title} className={styles.insightBlock}>
                 <p className={styles.insightTitle}>{insight.title}</p>
@@ -101,10 +85,7 @@ export function ExportBilanShell() {
 
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Ce que ça donne</h2>
-          {model.ledger.lines.map((line) => (
-            <LedgerDocumentRow key={line.id} line={line} />
-          ))}
-          {model.ledger.footer && <p className={styles.ledgerFooter}>{model.ledger.footer}</p>}
+          <ExportLedgerDocument ledger={model.ledger} />
         </section>
 
         <p className={styles.disclaimer}>{model.disclaimer}</p>

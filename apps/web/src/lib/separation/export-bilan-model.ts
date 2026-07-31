@@ -1,7 +1,12 @@
 import type { DoorId, ScenarioComparison } from "@separation/schemas";
 import { formatEuro } from "@/lib/utils";
 import type { AssumptionsState, FootprintState, LabState } from "./separation-types";
-import { buildLabLedger, defaultMortgagePayment, type LabLedgerModel } from "./lab-ledger-model";
+import { buildLabLedger, defaultMortgagePayment, formatAffordabilityVerdictLabel, type LabLedgerModel } from "./lab-ledger-model";
+import {
+  formatVerdictLabel,
+  normalizeKeepFooterDetail,
+  stripBankDisclaimer,
+} from "./lab-ledger-insights";
 import type { DoorVerdictMap, SimulationResult } from "@separation/schemas";
 
 export interface ExportField {
@@ -117,9 +122,13 @@ export function buildExportInsights(
   const insights: ExportInsight[] = [];
 
   if (verdict) {
+    const detail =
+      doorId === "keep_a" || doorId === "keep_b"
+        ? normalizeKeepFooterDetail(stripBankDisclaimer(verdict.detail), doorId)
+        : verdict.detail;
     insights.push({
-      title: `Lecture du feu — ${verdict.verdict === "green" ? "Tenable" : verdict.verdict === "orange" ? "Serré" : "Difficile"}`,
-      body: `${verdict.headline}. ${verdict.detail}`,
+      title: `Synthèse — ${formatVerdictLabel(verdict.verdict)}`,
+      body: `${verdict.headline}. ${detail.split("\n")[0] ?? detail}`,
     });
   }
 
@@ -132,7 +141,9 @@ export function buildExportInsights(
         title: "Capital du partant & relogement",
         body: `Capital net récupéré : ${formatEuro(departure)}${
           indemnity > 0 ? ` (dont indemnité d'occupation ${formatEuro(indemnity)})` : ""
-        }. Relogement zone : ${relocate ?? "à évaluer"}${
+        }. Relogement zone : ${
+          relocate ? formatAffordabilityVerdictLabel(relocate) : "à évaluer"
+        }${
           scenario?.relocateTarget
             ? ` — cible ~${formatEuro(scenario.relocateTarget.amount)}`
             : ""

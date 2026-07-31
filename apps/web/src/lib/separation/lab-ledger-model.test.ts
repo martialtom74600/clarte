@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildLabLedger, formatAffordabilityVerdictLabel } from "@/lib/separation/lab-ledger-model";
 import { groupLedgerLines } from "@/lib/separation/lab-ledger-sections";
+import { debtThresholdMessage } from "@/lib/separation/lab-ledger-insights";
 import { recomputeSeparationDerived } from "@/lib/separation/recompute-derived";
 import { defaultAssumptions, defaultLabState } from "@/lib/separation/compile-simulation-input";
 import type { FootprintState } from "@/lib/separation/separation-types";
@@ -152,7 +153,21 @@ describe("buildLabLedger", () => {
       doorVerdicts: tightDerived.doorVerdicts,
     });
     expect(ledger?.footer).toMatch(/dépasse la limite bancaire de 35 %/);
-    expect(ledger?.contextNote).toMatch(/dépasse le plafond légal de 35 %/);
+    expect(ledger?.contextNote).toBeUndefined();
+    const pct = Number(ledger?.footer?.match(/endettement sera de (\d+) %/)?.[1]);
+    expect(debtThresholdMessage(pct, "keep_a")).toMatch(/dépasse le plafond légal de 35 %/);
+  });
+
+  it("keep_b : footer endettement du point de vue lecteur", () => {
+    const ledger = buildLabLedger({
+      doorId: "keep_b",
+      footprint,
+      assumptions: defaultAssumptions(),
+      lab: { ...defaultLabState(), activeDoor: "keep_b" },
+      result: derived.lastResult,
+      doorVerdicts: derived.doorVerdicts,
+    });
+    expect(ledger?.footer).toMatch(/L'endettement de l'autre sera/);
   });
 
   it("keep_a : affiche capital du partant et cible de relogement", () => {

@@ -81,7 +81,7 @@ describe("export-bilan-model", () => {
     expect(bilan?.activeLevers).toHaveLength(1);
     expect(bilan?.ledger.lines.some((l) => l.id === "soulte")).toBe(true);
     expect(bilan?.insights.length).toBeGreaterThan(0);
-    expect(bilan?.insights.some((i) => /partant|Lecture/i.test(i.title))).toBe(true);
+    expect(bilan?.insights.some((i) => /partant|Synthèse/i.test(i.title))).toBe(true);
     expect(bilan?.disclaimer).toMatch(/CGI 746/);
     expect(bilan?.disclaimer).toMatch(/1,5 %/);
     expect(bilan?.disclaimer).toMatch(/2026\.6/);

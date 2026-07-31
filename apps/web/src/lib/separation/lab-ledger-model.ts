@@ -3,6 +3,7 @@ import { estimateChildSupport, estimateMonthlyPayment, RENT_GREEN_THRESHOLD } fr
 import type { AssumptionsState, FootprintState, LabState } from "./separation-types";
 import { compileSimulationInput } from "./compile-simulation-input";
 import type { LedgerSectionId } from "./lab-ledger-sections";
+import { normalizeKeepFooterDetail } from "./lab-ledger-insights";
 
 export interface LedgerLine {
   id: string;
@@ -29,27 +30,6 @@ export interface LabLedgerModel {
 
 const NOTARY_FEES_HINT =
   "Droit de partage (CGI 746) et émoluments sur le patrimoine net";
-
-const HCSF_DEBT_CEILING_PCT = 35;
-
-function buildDebtContextNote(params: {
-  verdictDetail?: string;
-  subject?: "vous" | "l'autre";
-}): string | undefined {
-  const detail = params.verdictDetail ?? "";
-  if (!detail.includes("dépasse la limite bancaire de 35 %")) return undefined;
-
-  const match = detail.match(/endettement sera de (\d+) %/i);
-  const pct = match?.[1];
-  const subjectLabel =
-    params.subject === "l'autre"
-      ? "Le taux d'endettement de l'autre"
-      : "Votre taux d'endettement";
-
-  return pct
-    ? `${subjectLabel} (${pct} %) dépasse le plafond légal de ${HCSF_DEBT_CEILING_PCT} %.`
-    : `${subjectLabel} dépasse le plafond légal de ${HCSF_DEBT_CEILING_PCT} %.`;
-}
 
 function buildRentContextNote(netMonthly: number): string | undefined {
   if (netMonthly < 0) {
@@ -98,6 +78,7 @@ function stripDisclaimerFromText(text: string, disclaimer: string): string {
 }
 
 function buildKeepFooter(params: {
+  doorId: "keep_a" | "keep_b";
   negativeEquity: boolean;
   verdictDetail?: string;
   bankDisclaimer?: string | null;
@@ -111,6 +92,7 @@ function buildKeepFooter(params: {
   if (warningNote) {
     body = stripDisclaimerFromText(body, warningNote);
   }
+  body = normalizeKeepFooterDetail(body, params.doorId);
 
   const footerParts = [
     params.negativeEquity ? "Actif net négatif — dette à partager." : null,
@@ -430,13 +412,10 @@ function buildKeepLedger(
   const bankDisclaimer =
     keepExisting && scenario?.bankDisclaimer ? scenario.bankDisclaimer : undefined;
   const { footer, warningNote } = buildKeepFooter({
+    doorId,
     negativeEquity,
     verdictDetail: verdict?.detail,
     bankDisclaimer,
-  });
-  const contextNote = buildDebtContextNote({
-    verdictDetail: verdict?.detail,
-    subject: doorId === "keep_b" ? "l'autre" : "vous",
   });
 
   return {
@@ -446,7 +425,6 @@ function buildKeepLedger(
     lines,
     footer,
     warningNote,
-    contextNote,
   };
 }
 
@@ -467,6 +445,8 @@ function buildSellLedger(
   const other = sell?.saleProceedsByPerson?.B.amount ?? saleNet / 2;
   const negativeEquity = saleNet < 0 || sell?.negativeEquity === true;
   const relocateTarget = sell?.relocateTarget?.amount;
+  const capitalGainsTax = sell?.capitalGainsEstimate?.amount ?? 0;
+  const relocateMonthly = verdict?.monthlyImpact?.amount ?? 0;
 
   const lines: LedgerLine[] = [
     {
@@ -500,6 +480,20 @@ function buildSellLedger(
       sectionId: "bien",
       hint: "Remboursé sur le prix de vente avant le partage",
     },
+  ];
+
+  if (capitalGainsTax > 0) {
+    lines.push({
+      id: "capital-gains-tax",
+      label: "Impôt sur la plus-value (estimation)",
+      amount: capitalGainsTax,
+      tone: "subtract",
+      sectionId: "bien",
+      hint: "Prélevé sur le produit de vente si plus-value imposable",
+    });
+  }
+
+  lines.push(
     {
       id: "net",
       label: negativeEquity ? "Dette nette à partager" : "Argent récolté après tous les frais",
@@ -508,7 +502,7 @@ function buildSellLedger(
       sectionId: "bien",
       hint: negativeEquity
         ? "Le crédit dépasse le produit de vente"
-        : "Valeur − agence − diagnostics − crédit",
+        : "Valeur − agence − diagnostics − crédit ± plus-value",
     },
     {
       id: "you",
@@ -529,8 +523,8 @@ function buildSellLedger(
       hint: negativeEquity
         ? "Quote-part de la dette restante"
         : "Capital disponible pour l'autre",
-    },
-  ];
+    }
+  );
 
   if (relocateTarget != null && relocateTarget > 0) {
     lines.push({
@@ -540,6 +534,18 @@ function buildSellLedger(
       tone: "neutral",
       sectionId: "relogement",
       hint: "Repère local pour évaluer le relogement",
+    });
+  }
+
+  if (relocateMonthly > 0 && relocateTarget != null && relocateTarget > 0) {
+    lines.push({
+      id: "relocate-payment-you",
+      label: "Mensualité estimée pour vous reloger (zone)",
+      amount: Math.round(relocateMonthly),
+      tone: "neutral",
+      suffix: "/mois",
+      sectionId: "relogement",
+      hint: "Simulation de prêt sur un logement équivalent",
     });
   }
 

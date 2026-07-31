@@ -113,6 +113,192 @@
   font-size: 0.9375rem;
 }
 
+.ledgerLabelBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.ledgerHint {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.ledgerToneSubtract .ledgerAmount {
+  color: #be123c;
+}
+
+.ledgerToneHighlight .ledgerAmount {
+  color: #004a85;
+  font-weight: 600;
+}
+
+.ledgerToneTotal {
+  border-top: 1px solid #cbd5e1;
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  font-weight: 500;
+}
+
+.ledgerSection {
+  margin-bottom: 1.25rem;
+  padding-left: 0.75rem;
+  border-left: 3px solid #cbd5e1;
+}
+
+.ledgerSection_bien {
+  border-left-color: #006fc7;
+}
+
+.ledgerSection_echange {
+  border-left-color: #7c3aed;
+}
+
+.ledgerSection_revenus {
+  border-left-color: #059669;
+}
+
+.ledgerSection_charges {
+  border-left-color: #fb7185;
+}
+
+.ledgerSection_resultat {
+  border-left-color: #004a85;
+}
+
+.ledgerSection_mensuel {
+  border-left-color: #d97706;
+}
+
+.ledgerSection_relogement {
+  border-left-color: #64748b;
+}
+
+.ledgerSection_enfants {
+  border-left-color: #db2777;
+}
+
+.ledgerSectionTitle {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.ledgerSectionSubtitle {
+  margin-top: 0.125rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.verdictBanner {
+  margin-bottom: 1rem;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.verdict_green {
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.verdict_orange {
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.verdict_red {
+  background: #fff1f2;
+  color: #9f1239;
+}
+
+.insightsBox {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  background: #f8fafc;
+}
+
+.insightsTitle {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 0.75rem;
+}
+
+.insightAlert {
+  margin-bottom: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.5rem;
+  background: #fff1f2;
+  color: #9f1239;
+  font-size: 0.8125rem;
+}
+
+.insightDebt {
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  background: #eff6ff;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: #1e3a5f;
+}
+
+.insightDebtPct {
+  font-size: 1.25rem;
+  font-weight: 300;
+  margin-bottom: 0.25rem;
+}
+
+.insightEmphasis {
+  margin-top: 0.5rem;
+  font-weight: 600;
+}
+
+.insightMuted {
+  margin-top: 0.375rem;
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+.insightBody {
+  margin-bottom: 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: #475569;
+}
+
+.insightWarning {
+  margin-top: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.5rem;
+  background: #fffbeb;
+  color: #78350f;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+
+.verdictText_green {
+  color: #065f46;
+}
+
+.verdictText_orange {
+  color: #92400e;
+}
+
+.verdictText_red {
+  color: #9f1239;
+}
+
 .ledgerRowTotal {
   border-top: 1px solid #cbd5e1;
   margin-top: 0.75rem;
