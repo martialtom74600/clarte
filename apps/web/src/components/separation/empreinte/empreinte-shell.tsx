@@ -354,6 +354,11 @@ export function EmpreinteShell() {
   const router = useRouter();
   const footprint = useSeparationStore((s) => s.footprint);
   const hydrated = useSeparationHydrated();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (hydrated && footprint.completedAt) {
@@ -361,7 +366,9 @@ export function EmpreinteShell() {
     }
   }, [hydrated, footprint.completedAt, router]);
 
-  if (!hydrated || footprint.completedAt) {
+  const showFlow = mounted && hydrated && !footprint.completedAt;
+
+  if (!showFlow) {
     return (
       <div className={`${clarte.mesh} flex min-h-[100dvh] items-center justify-center`}>
         <div className="h-8 w-8 animate-pulse rounded-full bg-slate-200/80" />
