@@ -8,6 +8,7 @@ import type {
   SimulationInput,
 } from "@separation/schemas";
 import { buildZoneMarketSnapshot, computeAffordability } from "./affordability.js";
+import { estimateCapitalGains } from "./capital-gains.js";
 import { getMortgageRateSnapshot } from "./mortgage-rates.js";
 import { eur, getNetAssetValue, getShareForPerson, round } from "./utils.js";
 
@@ -88,18 +89,16 @@ export function computeSaleProceeds(
   const equityBeforeCosts = getNetAssetValue(asset, liabilities);
   const saleNetProceeds = eur(equityBeforeCosts.amount - sellingCosts.amount);
 
+  const cg = estimateCapitalGains(asset, gross);
+  // Impôt PV déduit du net vendeur (0 si RP exonérée ou prix d'acquisition absent).
+  const afterTaxNet = eur(saleNetProceeds.amount - cg.totalTax.amount);
+
   const shareA = getShareForPerson(asset.ownership, "A");
   const shareB = getShareForPerson(asset.ownership, "B");
   const netProceedsByPerson: Record<PersonId, Money> = {
-    A: eur(saleNetProceeds.amount * shareA),
-    B: eur(saleNetProceeds.amount * shareB),
+    A: eur(afterTaxNet.amount * shareA),
+    B: eur(afterTaxNet.amount * shareB),
   };
-
-  const primaryResidenceExempt = asset.isPrimaryResidence === true;
-  const capitalGainsEstimate = eur(0);
-  const capitalGainsNote = primaryResidenceExempt
-    ? "Plus-value : exonération résidence principale (CGI art. 150 U) — indicative."
-    : "Plus-value : bien hors résidence principale — prix d'acquisition requis pour estimer l'impôt (CGI art. 150 U). Non chiffrée ici.";
 
   const postalCode = input.postalCode ?? "75000";
   const surface = input.propertySurface ?? 65;
@@ -129,14 +128,14 @@ export function computeSaleProceeds(
     diagnosticsFees,
     sellingCosts,
     mortgageRemaining: eur(mortgageRemainingAmt),
-    saleNetProceeds,
+    saleNetProceeds: afterTaxNet,
     shareA,
     shareB,
     netProceedsByPerson,
-    negativeEquity: saleNetProceeds.amount < 0,
-    primaryResidenceExempt,
-    capitalGainsEstimate,
-    capitalGainsNote,
+    negativeEquity: afterTaxNet.amount < 0,
+    primaryResidenceExempt: asset.isPrimaryResidence === true,
+    capitalGainsEstimate: cg.totalTax,
+    capitalGainsNote: cg.note,
     relocateTarget,
     relocateSurfaceSqm: relocateSurface,
     relocateByPerson: {

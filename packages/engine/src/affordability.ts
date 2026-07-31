@@ -11,6 +11,7 @@ import type {
 } from "@separation/schemas";
 import { estimateMonthlyPayment, eur, round } from "./utils.js";
 import { getMortgageRateSnapshot } from "./mortgage-rates.js";
+import { deptFromPostal, pricePerSqmForDept } from "./market-prices.js";
 import {
   computeRentOutCashflowFromParams,
   RENT_GREEN_THRESHOLD,
@@ -23,18 +24,6 @@ const DEFAULT_MAX_EFFORT = 0.35;
 const AGENCY_FEES_RATE = 0.05;
 const DIAGNOSTICS_FLAT = 1800;
 
-const PRICE_PER_SQM_BY_DEPT: Record<string, number> = {
-  "75": 10500,
-  "92": 6200,
-  "93": 4800,
-  "94": 5100,
-  "69": 4800,
-  "13": 3500,
-  "33": 4200,
-  "06": 5200,
-  default: 2800,
-};
-
 const ZONE_DEPARTMENTS: Record<string, string[]> = {
   "75": ["75", "92", "93", "94"],
   "69": ["69", "01", "38", "42"],
@@ -43,16 +32,6 @@ const ZONE_DEPARTMENTS: Record<string, string[]> = {
   "06": ["06", "83"],
   default: [],
 };
-
-function deptFromPostal(postalCode: string): string {
-  if (!postalCode || postalCode.length < 2) return "default";
-  if (postalCode.startsWith("20")) return "2A";
-  return postalCode.slice(0, 2);
-}
-
-function pricePerSqm(dept: string): number {
-  return PRICE_PER_SQM_BY_DEPT[dept] ?? PRICE_PER_SQM_BY_DEPT.default;
-}
 
 export function resolveZoneDepartments(postalCode: string): string[] {
   const dept = deptFromPostal(postalCode);
@@ -69,7 +48,7 @@ export function buildZoneMarketSnapshot(
   >
 ): ZoneMarketSnapshot {
   const departments = overrides?.departments ?? resolveZoneDepartments(postalCode);
-  const prices = departments.map((d) => pricePerSqm(d)).sort((a, b) => a - b);
+  const prices = departments.map((d) => pricePerSqmForDept(d)).sort((a, b) => a - b);
   const median = overrides?.medianPricePerSqm?.amount ?? prices[Math.floor(prices.length / 2)];
   const min = overrides?.minPricePerSqm?.amount ?? prices[0];
   const max = overrides?.maxPricePerSqm?.amount ?? prices[prices.length - 1];

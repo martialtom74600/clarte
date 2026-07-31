@@ -1,17 +1,9 @@
 import { NextResponse } from "next/server";
-import { buildZoneMarketSnapshot, resolveZoneDepartments } from "@separation/engine";
-
-const FALLBACK_PRICE_PER_SQM: Record<string, number> = {
-  "75": 10500,
-  "92": 6200,
-  "93": 4800,
-  "94": 5100,
-  "69": 4800,
-  "13": 3500,
-  "33": 4200,
-  "06": 5200,
-  default: 2800,
-};
+import {
+  buildZoneMarketSnapshot,
+  pricePerSqmForDept,
+  resolveZoneDepartments,
+} from "@separation/engine";
 
 interface DvfRecord {
   valeur_fonciere?: number;
@@ -41,7 +33,7 @@ async function medianPriceForPostal(postalCode: string): Promise<number | null> 
 }
 
 function fallbackPrice(dept: string): number {
-  return FALLBACK_PRICE_PER_SQM[dept] ?? FALLBACK_PRICE_PER_SQM.default;
+  return pricePerSqmForDept(dept);
 }
 
 export async function GET(request: Request) {

@@ -48,6 +48,11 @@ export const assetSchema = z.object({
   ownership: ownershipRuleSchema,
   acquisitionDate: z.string().optional(),
   purchasePrice: moneySchema.optional(),
+<<<<<<< HEAD
+=======
+  acquisitionFeesRate: z.number().min(0).max(0.2).optional(),
+  improvementWorks: moneySchema.optional(),
+>>>>>>> origin/cursor/p3-legal-perfection-f0f0
   linkedLiabilityIds: z.array(z.string()).optional(),
   isPrimaryResidence: z.boolean().optional(),
 });
@@ -98,8 +103,11 @@ export const simulationInputSchema = z.object({
     managementFeeRate: z.number().min(0).max(0.25).optional(),
     marginalIncomeTaxRate: z.number().min(0).max(0.55).optional(),
     occupationMonths: z.number().min(0).max(120).optional(),
+    legacyShareRewrite: z.boolean().optional(),
   }),
   hasMinorChildren: z.boolean().optional(),
+  numberOfChildren: z.number().min(0).max(12).optional(),
+  custodyType: z.enum(["classic", "alternate", "reduced"]).optional(),
   urgencyMonths: z.number().optional(),
   tenantId: z.string().optional(),
   postalCode: z.string().optional(),

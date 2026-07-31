@@ -118,11 +118,14 @@ function buildKeepLedger(
         assumptions.status === "marriage" &&
         (assumptions.marriageRegime === "communaute_legale" ||
           assumptions.marriageRegime === "communaute_universelle");
+      const mode = scenario?.soulte?.contributionMode;
       lines.push({
         id: "contributions",
-        label: isCommunity
-          ? "Récompenses d'apports (à régler avant partage)"
-          : `Apports initiaux (vous ${Math.round((contributionA / (contributionA + contributionB)) * 100)} % · autre ${Math.round((contributionB / (contributionA + contributionB)) * 100)} %)`,
+        label: isCommunity || mode === "recompense"
+          ? "Récompenses d'apports art. 1469 (avant partage)"
+          : mode === "creance"
+            ? "Créances d'apport art. 815-13 (prélèvement avant partage)"
+            : `Apports initiaux (vous ${Math.round((contributionA / (contributionA + contributionB)) * 100)} % · autre ${Math.round((contributionB / (contributionA + contributionB)) * 100)} %)`,
         amount: contributionA + contributionB,
         tone: "neutral",
       });

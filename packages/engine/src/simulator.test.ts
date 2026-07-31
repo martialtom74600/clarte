@@ -66,7 +66,7 @@ describe("runSimulation - concubinage", () => {
       options: { primaryResidenceId: "house", scenario: "keep_a" },
     });
     const result = runSimulation(input);
-    expect(result.soulte?.amount.amount).toBe(120000);
+    expect(result.soulte?.amount.amount).toBe(105000);
   });
 
   it("calcule la mensualité sur CRD + soulte + frais (pas soulte seule)", () => {

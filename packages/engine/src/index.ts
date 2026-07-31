@@ -33,6 +33,26 @@ export {
   estimateGrossRentMonthly,
 } from "./keep-buyout.js";
 export type { KeepBilateralExtras } from "./keep-buyout.js";
+export {
+  estimateCapitalGains,
+  irAllowanceRate,
+  psAllowanceRate,
+  CAPITAL_GAINS_IR_RATE,
+  CAPITAL_GAINS_PS_RATE,
+  DEFAULT_ACQUISITION_FEES_RATE,
+} from "./capital-gains.js";
+export type { CapitalGainsEstimate } from "./capital-gains.js";
+export {
+  estimateCompensatoryAllowance,
+} from "./compensatory-allowance.js";
+export type { CompensatoryAllowanceEstimate } from "./compensatory-allowance.js";
+export {
+  PRICE_PER_SQM_BY_DEPT,
+  pricePerSqmForDept,
+  pricePerSqmForPostal,
+  deptFromPostal,
+} from "./market-prices.js";
+export { computeRecompenseAmount } from "./soulte-core.js";
 export { BANK_KEEP_LOAN_DISCLAIMER } from "./simulator.js";
 export type { ContributionMode } from "./soulte-core.js";
 export { runQuickEstimate } from "./quick-estimate.js";
@@ -55,6 +75,7 @@ export {
   analyzePatrimonyImbalance,
   compareResolutionPaths,
   CEEE_MINIMUM_VITAL,
+  CEEE_TABLE_AS_OF,
   SUPPORT_RATES,
 } from "./support.js";
 export type {

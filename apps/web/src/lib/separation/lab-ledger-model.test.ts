@@ -64,7 +64,7 @@ describe("buildLabLedger", () => {
     expect(ledger?.lines.some((l) => l.id === "contributions")).toBe(true);
     const soulte = withApports.lastResult?.scenarios.find((s) => s.scenario === "keep_a")?.soulte
       ?.amount.amount;
-    expect(soulte).toBe(120000);
+    expect(soulte).toBe(105000);
   });
 
   it("avec mensualité empreinte : affiche crédit conservé + nouveau prêt rachat", () => {

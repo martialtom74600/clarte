@@ -159,5 +159,87 @@ describe("Legal test cases (notaire validation)", () => {
     expect(result.complexityScore).toBeGreaterThanOrEqual(60);
     expect(result.warnings.some((w) => w.code === "MINOR_CHILDREN")).toBe(true);
     expect(result.warnings.some((w) => w.code === "HIGH_PATRIMONY")).toBe(true);
+    expect(result.warnings.some((w) => w.code === "MIXED_OWNERSHIP_DEBT")).toBe(true);
+  });
+
+  it("Cas 4: PACS compte joint + bien propre", () => {
+    const input: SimulationInput = {
+      status: "pacs",
+      persons,
+      assets: [
+        {
+          id: "joint",
+          type: "savings",
+          label: "Compte joint",
+          grossValue: eur(10000),
+          ownership: { kind: "community" },
+        },
+        {
+          id: "car",
+          type: "vehicle",
+          label: "Voiture B",
+          grossValue: eur(15000),
+          ownership: { kind: "own", owner: "B" },
+        },
+      ],
+      liabilities: [],
+      options: { scenario: "compare_all" },
+    };
+    const result = runSimulation(input);
+    expect(result.netWorthByPerson.A.amount).toBe(5000);
+    expect(result.netWorthByPerson.B.amount).toBe(20000);
+  });
+
+  it("Cas 5: mariage communauté + livret propre A", () => {
+    const input: SimulationInput = {
+      status: "marriage",
+      marriageRegime: "communaute_legale",
+      persons,
+      assets: [
+        {
+          id: "house",
+          type: "real_estate",
+          label: "Maison",
+          grossValue: eur(300000),
+          ownership: { kind: "community" },
+          isPrimaryResidence: true,
+        },
+        {
+          id: "livret",
+          type: "savings",
+          label: "Livret A",
+          grossValue: eur(20000),
+          ownership: { kind: "own", owner: "A" },
+        },
+      ],
+      liabilities: [],
+      options: { primaryResidenceId: "house", scenario: "compare_all" },
+    };
+    const result = runSimulation(input);
+    expect(result.netWorthByPerson.A.amount).toBe(170000);
+    expect(result.netWorthByPerson.B.amount).toBe(150000);
+  });
+
+  it("Cas apports indivision: créance 815-13 (pas rewrite) → 105k", () => {
+    const input: SimulationInput = {
+      status: "concubinage",
+      persons,
+      assets: [{
+        id: "house", type: "real_estate", label: "Appart", grossValue: eur(400000),
+        ownership: { kind: "indivision", shares: { A: 0.5, B: 0.5 } },
+        linkedLiabilityIds: ["mortgage"],
+      }],
+      liabilities: [{
+        id: "mortgage", type: "mortgage", remainingBalance: eur(200000),
+        responsibility: { kind: "indivision", shares: { A: 0.5, B: 0.5 } },
+        linkedAssetId: "house",
+      }],
+      options: { primaryResidenceId: "house", scenario: "keep_a" },
+      contributionA: 20000,
+      contributionB: 30000,
+    };
+    const result = runSimulation(input);
+    expect(result.soulte?.amount.amount).toBe(105000);
+    expect(result.soulte?.contributionMode).toBe("creance");
   });
 });

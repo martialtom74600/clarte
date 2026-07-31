@@ -20,8 +20,14 @@ export interface ChildSupportResult {
   availableIncome: number;
 }
 
-/** Minimum vital déduit du revenu du débiteur (barème ministère de la Justice). */
+/**
+ * Minimum vital déduit du revenu du débiteur.
+ * Table de référence ministère de la Justice (RSA personne seule) — figée pack 2026.
+ */
 export const CEEE_MINIMUM_VITAL = 652;
+
+/** Référence documentaire de la grille CEEE utilisée. */
+export const CEEE_TABLE_AS_OF = "2024-04 (figée pack Clarté 2026)";
 
 /**
  * Taux officiels dégressifs (table de référence ministère de la Justice).
@@ -29,7 +35,7 @@ export const CEEE_MINIMUM_VITAL = 652;
  */
 export const SUPPORT_RATES: Record<CustodyType, Record<number, number>> = {
   classic: { 1: 0.135, 2: 0.115, 3: 0.1, 4: 0.088, 5: 0.08, 6: 0.072 },
-  alternate: { 1: 0.09, 2: 0.078, 3: 0.067, 4: 0.059, 5: 0.053, 6: 0.048 },
+  alternate: { 1: 0.09, 2: 0.078, 3: 0.067, 4: 0.059, 5: 0.053, 6: 0.047 },
   reduced: { 1: 0.18, 2: 0.155, 3: 0.133, 4: 0.117, 5: 0.106, 6: 0.095 },
 };
 

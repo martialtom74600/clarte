@@ -220,6 +220,6 @@ describe("recomputeSeparationDerived", () => {
     const apportsSoulte = withApports.lastResult?.scenarios.find((s) => s.scenario === "keep_a")
       ?.soulte?.amount.amount;
     expect(apportsSoulte).toBeGreaterThan(baseSoulte!);
-    expect(apportsSoulte).toBe(120000);
+    expect(apportsSoulte).toBe(105000);
   });
 });

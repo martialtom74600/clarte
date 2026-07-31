@@ -82,10 +82,11 @@ describe("export-bilan-model", () => {
     expect(bilan?.ledger.lines.some((l) => l.id === "soulte")).toBe(true);
     expect(bilan?.insights.length).toBeGreaterThan(0);
     expect(bilan?.insights.some((i) => /partant|Lecture/i.test(i.title))).toBe(true);
-    expect(bilan?.disclaimer).toMatch(/1,10 %|2,50 %/);
+    expect(bilan?.disclaimer).toMatch(/CGI 746/);
     expect(bilan?.disclaimer).toMatch(/1,5 %/);
-    expect(bilan?.disclaimer).toMatch(/2026\.5/);
-    expect(bilan?.disclaimer).not.toMatch(/7[,.]5/);
+    expect(bilan?.disclaimer).toMatch(/2026\.6/);
+    expect(bilan?.disclaimer).toMatch(/815-13|1469/);
+    expect(bilan?.disclaimer).not.toMatch(/7[,.]5 % de la soulte/);
   });
 
   it("exporte le détail fiscal rent_out et l'indemnité keep", () => {
