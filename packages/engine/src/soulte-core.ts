@@ -14,9 +14,6 @@ export const DROIT_PARTAGE_RATE_CONCUBINAGE = 0.025;
 /** Émoluments + CSI + débours — ordre de grandeur ~1,5 % de l'actif net. */
 export const DEFAULT_EMOLUMENTS_RATE_ON_NET = 0.015;
 
-/** Frais de sortie vente (agence + mise en vente) — ordre de grandeur ~5 % du prix brut. */
-export const DEFAULT_SELLING_COSTS_RATE = 0.05;
-
 export type ContributionMode = "none" | "share_rewrite" | "recompense";
 
 export function droitDePartageRate(status: SimulationInput["status"]): number {

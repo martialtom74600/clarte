@@ -225,19 +225,29 @@ function buildSellLedger(
   verdict: DoorVerdictMap[DoorId] | null
 ): LabLedgerModel {
   const sell = scenarioFor(result, "sell");
-  const sellingCosts = sell?.sellingCostsEstimate?.amount ?? footprint.propertyValue * 0.05;
+  const agency = sell?.agencyFeesEstimate?.amount ?? footprint.propertyValue * 0.05;
+  const diagnostics = sell?.diagnosticsEstimate?.amount ?? 1800;
+  const sellingCosts = sell?.sellingCostsEstimate?.amount ?? agency + diagnostics;
   const saleNet =
     sell?.saleNetProceeds?.amount ??
     footprint.propertyValue - sellingCosts - footprint.mortgageRemaining;
-  const proceeds = sell?.netWorthByPerson.A.amount ?? saleNet / 2;
+  const you = sell?.saleProceedsByPerson?.A.amount ?? saleNet / 2;
+  const other = sell?.saleProceedsByPerson?.B.amount ?? saleNet / 2;
   const negativeEquity = saleNet < 0 || sell?.negativeEquity === true;
+  const relocateTarget = sell?.relocateTarget?.amount;
 
   const lines: LedgerLine[] = [
     { id: "property", label: "Valeur du bien", amount: footprint.propertyValue },
     {
-      id: "selling-costs",
-      label: "Frais de sortie (~5 % agence / mise en vente)",
-      amount: sellingCosts,
+      id: "agency",
+      label: "Frais d'agence (~5 %)",
+      amount: agency,
+      tone: "subtract",
+    },
+    {
+      id: "diagnostics",
+      label: "Diagnostics obligatoires (forfait)",
+      amount: diagnostics,
       tone: "subtract",
     },
     {
@@ -255,22 +265,45 @@ function buildSellLedger(
       tone: "highlight",
     },
     {
-      id: "each",
-      label: negativeEquity ? "Votre quote-part de dette" : "Votre part",
-      amount: proceeds,
+      id: "you",
+      label: negativeEquity ? "Votre quote-part de dette" : "Votre part nette",
+      amount: you,
+      tone: "total",
+    },
+    {
+      id: "other",
+      label: negativeEquity ? "Quote-part de dette de l'autre" : "Part nette de l'autre",
+      amount: other,
       tone: "total",
     },
   ];
 
+  if (relocateTarget != null && relocateTarget > 0) {
+    lines.push({
+      id: "relocate-target",
+      label: "Cible relogement zone (prix × surface)",
+      amount: relocateTarget,
+      tone: "neutral",
+    });
+  }
+
   const pension = childSupportLine(footprint, lab);
   if (pension) lines.push(pension);
+
+  const footerParts = [
+    sell?.capitalGainsNote,
+    sell?.relocateVerdictByPerson
+      ? `Relogement zone — Vous : ${sell.relocateVerdictByPerson.A} · Autre : ${sell.relocateVerdictByPerson.B}.`
+      : null,
+    verdict?.detail,
+  ].filter(Boolean);
 
   return {
     doorId: "sell",
     doorTitle: DOOR_TITLES.sell,
     verdict,
     lines,
-    footer: verdict?.detail,
+    footer: footerParts.join(" ") || undefined,
   };
 }
 

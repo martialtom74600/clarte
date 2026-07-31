@@ -89,6 +89,7 @@ export const simulationInputSchema = z.object({
     mortgageDurationYears: z.number().min(1).max(30).optional(),
     monthlyRentOverride: z.number().min(0).optional(),
     sellingCostsRate: z.number().min(0).max(0.15).optional(),
+    diagnosticsFlatFee: z.number().min(0).max(20000).optional(),
   }),
   hasMinorChildren: z.boolean().optional(),
   urgencyMonths: z.number().optional(),

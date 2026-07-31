@@ -1,6 +1,7 @@
 import type {
   AffordabilityResult,
   AffordabilityVerdict,
+  DoorId,
   LifePathDoor,
   Money,
   NewLifeCapInput,
@@ -13,6 +14,9 @@ import { getMortgageRateSnapshot } from "./mortgage-rates.js";
 
 const DEFAULT_MAX_EFFORT = 0.35;
 const CHARGES_ESTIMATE_MONTHLY = 180;
+/** Aligné sur sale-proceeds (éviter import circulaire). */
+const AGENCY_FEES_RATE = 0.05;
+const DIAGNOSTICS_FLAT = 1800;
 
 const RENT_PER_SQM_BY_DEPT: Record<string, number> = {
   "75": 22,
@@ -178,9 +182,9 @@ export function computeAffordability(params: {
   };
 }
 
-function keeperFromIntent(intent: NewLifeCapInput["intent"]): PersonId {
-  if (intent === "walk_away") return "B";
-  return "A";
+function worstVerdict(a: AffordabilityVerdict, b: AffordabilityVerdict): AffordabilityVerdict {
+  const rank: Record<AffordabilityVerdict, number> = { red: 0, orange: 1, green: 2 };
+  return rank[a] <= rank[b] ? a : b;
 }
 
 export function computeNewLifeCap(input: NewLifeCapInput): NewLifeCapResult {
@@ -194,31 +198,34 @@ export function computeNewLifeCap(input: NewLifeCapInput): NewLifeCapResult {
   });
 
   const rateSnapshot = getMortgageRateSnapshot(20);
-  const equityNet = eur(Math.max(0, input.propertyValue - input.mortgageRemaining));
+  const equityGross = input.propertyValue - input.mortgageRemaining;
+  const sellingCosts = input.propertyValue * AGENCY_FEES_RATE + DIAGNOSTICS_FLAT;
+  const equityAfterSaleCosts = equityGross - sellingCosts;
+  const equityNet = eur(equityAfterSaleCosts);
   const contributionsTotal = eur(input.contributionA + input.contributionB);
-  const netDepartureCapital: Record<PersonId, Money> = {
-    A: eur(input.netWorthA),
-    B: eur(input.netWorthB),
+
+  const soulte = input.soulteAmount ?? 0;
+  const liquidAfterSoulte = (person: PersonId, capital: number) => {
+    if (soulte <= 0 || !input.soultePayer) return capital;
+    return input.soultePayer === person
+      ? Math.max(0, capital - soulte)
+      : capital + soulte;
   };
 
-  const keeper = keeperFromIntent(input.intent);
-  const keeperIncome = keeper === "A" ? input.incomeAMonthly : input.incomeBMonthly;
-  const keeperCapital = keeper === "A" ? input.netWorthA : input.netWorthB;
-  const soulte = input.soulteAmount ?? 0;
-  let liquidAfterSoulte = keeperCapital;
-  if (soulte > 0 && input.soultePayer) {
-    liquidAfterSoulte =
-      input.soultePayer === keeper
-        ? Math.max(0, keeperCapital - soulte)
-        : keeperCapital + soulte;
-  }
-
-  const targetBuyPrice = round(zone.medianPricePerSqm.amount * input.propertySurface);
-  const buyAffordability = computeAffordability({
-    incomeMonthly: keeperIncome,
-    liquidCapital: liquidAfterSoulte,
-    targetPropertyPrice: targetBuyPrice,
-    existingMonthlyCharges: 0,
+  const keepTarget = Math.max(
+    soulte,
+    round(zone.medianPricePerSqm.amount * input.propertySurface * 0.35)
+  );
+  const keepAAff = computeAffordability({
+    incomeMonthly: input.incomeAMonthly,
+    liquidCapital: liquidAfterSoulte("A", input.netWorthA),
+    targetPropertyPrice: input.soultePayer === "A" ? Math.max(soulte, keepTarget) : keepTarget,
+    durationYears: rateSnapshot.durationYears,
+  });
+  const keepBAff = computeAffordability({
+    incomeMonthly: input.incomeBMonthly,
+    liquidCapital: liquidAfterSoulte("B", input.netWorthB),
+    targetPropertyPrice: input.soultePayer === "B" ? Math.max(soulte, keepTarget) : keepTarget,
     durationYears: rateSnapshot.durationYears,
   });
 
@@ -231,24 +238,57 @@ export function computeNewLifeCap(input: NewLifeCapInput): NewLifeCapResult {
   const rentVerdict: AffordabilityVerdict =
     netRentMonthly >= 200 ? "green" : netRentMonthly >= 0 ? "orange" : "red";
 
-  const sellProceedsEach = round(equityNet.amount / 2);
-  const relocateTarget = round(zone.minPricePerSqm.amount * Math.max(45, input.propertySurface - 15));
-  const relocateAffordability = computeAffordability({
-    incomeMonthly: keeperIncome,
-    liquidCapital: netDepartureCapital[keeper].amount,
+  const sellProceedsEach = round(Math.max(0, equityAfterSaleCosts) / 2);
+  const relocateTarget = round(
+    zone.minPricePerSqm.amount * Math.max(45, input.propertySurface - 15)
+  );
+  const relocateA = computeAffordability({
+    incomeMonthly: input.incomeAMonthly,
+    liquidCapital: sellProceedsEach,
     targetPropertyPrice: relocateTarget,
     durationYears: rateSnapshot.durationYears,
   });
+  const relocateB = computeAffordability({
+    incomeMonthly: input.incomeBMonthly,
+    liquidCapital: sellProceedsEach,
+    targetPropertyPrice: relocateTarget,
+    durationYears: rateSnapshot.durationYears,
+  });
+  const sellVerdict = worstVerdict(relocateA.verdict, relocateB.verdict);
 
   const doors: LifePathDoor[] = [
     {
-      id: "buy_in_zone",
-      label: "Racheter dans la zone",
-      description: `${keeper === "A" ? "Vous" : "L'autre partie"} conserve le logement ou en rachète un comparable (~25 km).`,
-      verdict: buyAffordability.verdict,
-      headline: buyAffordability.label,
-      detail: buyAffordability.detail,
-      monthlyImpact: buyAffordability.monthlyPayment,
+      id: "keep_a",
+      label: "Vous rachetez",
+      description: "Vous conservez le logement et financez le rachat de la part de l'autre.",
+      verdict: keepAAff.verdict,
+      headline: keepAAff.label,
+      detail: keepAAff.detail,
+      monthlyImpact: keepAAff.monthlyPayment,
+    },
+    {
+      id: "keep_b",
+      label: "L'autre rachète",
+      description: "L'autre partie conserve le logement et finance votre rachat de part.",
+      verdict: keepBAff.verdict,
+      headline: keepBAff.label,
+      detail: keepBAff.detail,
+      monthlyImpact: keepBAff.monthlyPayment,
+    },
+    {
+      id: "sell",
+      label: "Vendre",
+      description:
+        "Liquider le bien après frais d'agence (~5 %) + diagnostics, puis se reloger dans la zone.",
+      verdict: sellVerdict,
+      headline:
+        sellVerdict === "green"
+          ? "Relogement accessible pour les deux"
+          : sellVerdict === "orange"
+            ? "Relogement serré pour au moins une partie"
+            : "Relogement difficile dans la zone",
+      detail: `Net vendeur indicatif ~${Math.round(equityAfterSaleCosts).toLocaleString("fr-FR")} € (après ~5 % + diagnostics) · cible relocation ~${relocateTarget.toLocaleString("fr-FR")} € · Vous ${relocateA.verdict} · Autre ${relocateB.verdict}`,
+      monthlyImpact: relocateA.monthlyPayment,
     },
     {
       id: "rent_out",
@@ -264,21 +304,19 @@ export function computeNewLifeCap(input: NewLifeCapInput): NewLifeCapResult {
       detail: `Loyer estimé ${grossRent.toLocaleString("fr-FR")} € − crédit ${Math.round(mortgagePay).toLocaleString("fr-FR")} € − charges ~${CHARGES_ESTIMATE_MONTHLY} €`,
       monthlyImpact: eur(netRentMonthly),
     },
-    {
-      id: "sell_relocate",
-      label: "Vendre et repartir",
-      description: "Libérer l'équity nette et viser un logement plus accessible dans la zone.",
-      verdict: relocateAffordability.verdict,
-      headline: relocateAffordability.label,
-      detail: `Cible relocation ~${relocateTarget.toLocaleString("fr-FR")} € (${Math.max(45, input.propertySurface - 15)} m²) · ${relocateAffordability.detail}`,
-      monthlyImpact: relocateAffordability.monthlyPayment,
-    },
   ];
 
+  const preferredOrder: DoorId[] =
+    input.intent === "keep_home"
+      ? ["keep_a", "sell", "rent_out", "keep_b"]
+      : input.intent === "walk_away"
+        ? ["keep_b", "sell", "rent_out", "keep_a"]
+        : ["sell", "keep_a", "keep_b", "rent_out"];
+
   const recommendedDoorId =
-    doors.find((d) => d.verdict === "green")?.id ??
-    doors.find((d) => d.verdict === "orange")?.id ??
-    "sell_relocate";
+    preferredOrder.find((id) => doors.find((d) => d.id === id)?.verdict === "green") ??
+    preferredOrder.find((id) => doors.find((d) => d.id === id)?.verdict === "orange") ??
+    "sell";
 
   return {
     zone,
@@ -286,7 +324,10 @@ export function computeNewLifeCap(input: NewLifeCapInput): NewLifeCapResult {
     equityNet,
     contributionsTotal,
     contributionsByPerson: { A: eur(input.contributionA), B: eur(input.contributionB) },
-    netDepartureCapital,
+    netDepartureCapital: {
+      A: eur(input.netWorthA),
+      B: eur(input.netWorthB),
+    },
     doors,
     recommendedDoorId,
   };

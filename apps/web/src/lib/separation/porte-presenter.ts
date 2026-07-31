@@ -1,4 +1,9 @@
-import type { DoorId, DoorVerdictMap, SimulationResult } from "@separation/schemas";
+import type {
+  AffordabilityVerdict,
+  DoorId,
+  DoorVerdictMap,
+  SimulationResult,
+} from "@separation/schemas";
 import { formatEuro } from "@/lib/utils";
 
 export const DOOR_ORDER: DoorId[] = ["keep_a", "keep_b", "sell", "rent_out"];
@@ -10,6 +15,15 @@ const DOOR_TITLES: Record<DoorId, string> = {
   rent_out: "Garder et louer",
 };
 
+export interface PorteBilateralShare {
+  personKey: "A" | "B";
+  personLabel: string;
+  amount: string;
+  caption: string;
+  relocateLabel?: string;
+  relocateVerdict?: AffordabilityVerdict;
+}
+
 export interface PortePresentation {
   doorId: DoorId;
   title: string;
@@ -18,6 +32,8 @@ export interface PortePresentation {
   consequence: string;
   verdict: DoorVerdictMap[DoorId]["verdict"];
   verdictLabel: string;
+  /** Affichage côte à côte (porte sell). */
+  bilateral?: PorteBilateralShare[];
 }
 
 function scenarioFor(result: SimulationResult, doorId: DoorId) {
@@ -27,7 +43,7 @@ function scenarioFor(result: SimulationResult, doorId: DoorId) {
 function buildKeepPresentation(
   doorId: "keep_a" | "keep_b",
   result: SimulationResult
-): Pick<PortePresentation, "heroValue" | "heroCaption" | "consequence"> {
+): Pick<PortePresentation, "heroValue" | "heroCaption" | "consequence" | "bilateral"> {
   const scenario = scenarioFor(result, doorId);
   const keepExisting = scenario?.keepFinancingMode === "keep_existing_loan";
   const negativeEquity =
@@ -72,33 +88,64 @@ function buildKeepPresentation(
   };
 }
 
+function relocateLabel(verdict?: AffordabilityVerdict): string {
+  if (verdict === "green") return "Relogement zone tenable";
+  if (verdict === "orange") return "Relogement zone serré";
+  if (verdict === "red") return "Relogement zone difficile";
+  return "Relogement zone à évaluer";
+}
+
 function buildSellPresentation(
   result: SimulationResult,
   verdict: DoorVerdictMap[DoorId]
-): Pick<PortePresentation, "heroValue" | "heroCaption" | "consequence"> {
+): Pick<PortePresentation, "heroValue" | "heroCaption" | "consequence" | "bilateral"> {
   const scenario = scenarioFor(result, "sell");
-  const proceeds = scenario?.netWorthByPerson.A.amount ?? 0;
+  const you = scenario?.saleProceedsByPerson?.A.amount ?? scenario?.netWorthByPerson.A.amount ?? 0;
+  const other = scenario?.saleProceedsByPerson?.B.amount ?? scenario?.netWorthByPerson.B.amount ?? 0;
   const negativeEquity = scenario?.negativeEquity === true;
+  const relocateA = scenario?.relocateVerdictByPerson?.A;
+  const relocateB = scenario?.relocateVerdictByPerson?.B;
+
+  const bilateral: PorteBilateralShare[] = [
+    {
+      personKey: "A",
+      personLabel: "Vous",
+      amount: formatEuro(Math.abs(you)),
+      caption: negativeEquity ? "quote-part de dette" : "net après frais",
+      relocateLabel: relocateLabel(relocateA),
+      relocateVerdict: relocateA,
+    },
+    {
+      personKey: "B",
+      personLabel: "L'autre",
+      amount: formatEuro(Math.abs(other)),
+      caption: negativeEquity ? "quote-part de dette" : "net après frais",
+      relocateLabel: relocateLabel(relocateB),
+      relocateVerdict: relocateB,
+    },
+  ];
 
   if (negativeEquity) {
     return {
-      heroValue: formatEuro(Math.abs(proceeds)),
+      heroValue: formatEuro(Math.abs(you)),
       heroCaption: "votre quote-part de dette",
       consequence: "Actif net négatif — dette à partager",
+      bilateral,
     };
   }
 
   return {
-    heroValue: formatEuro(proceeds),
-    heroCaption: "votre part, net (après ~5 % frais de sortie)",
+    heroValue: formatEuro(you),
+    heroCaption: "votre part nette",
     consequence: verdict.headline,
+    bilateral,
   };
 }
 
 function buildRentPresentation(
   result: SimulationResult,
   verdict: DoorVerdictMap[DoorId]
-): Pick<PortePresentation, "heroValue" | "heroCaption" | "consequence"> {
+): Pick<PortePresentation, "heroValue" | "heroCaption" | "consequence" | "bilateral"> {
   const scenario = scenarioFor(result, "rent_out");
   const net = scenario?.monthlyPaymentEstimate?.amount ?? 0;
   const prefix = net > 0 ? "+" : net < 0 ? "−" : "";
@@ -124,7 +171,10 @@ export function buildPortePresentation(
   if (!result || !doorVerdicts) return null;
 
   const verdict = doorVerdicts[doorId];
-  let content: Pick<PortePresentation, "heroValue" | "heroCaption" | "consequence">;
+  let content: Pick<
+    PortePresentation,
+    "heroValue" | "heroCaption" | "consequence" | "bilateral"
+  >;
 
   switch (doorId) {
     case "keep_a":

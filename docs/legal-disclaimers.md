@@ -22,15 +22,16 @@ L'utilisateur doit consulter un **notaire**, **avocat** ou **expert-comptable** 
 - Transmission serveur uniquement sur action explicite (email, partage)
 - Conformité RGPD : droit d'accès, rectification, suppression
 
-## Limitations du moteur de calcul (pack 2026.2.1)
+## Limitations du moteur de calcul (pack 2026.3)
 
 - Simplification des régimes matrimoniaux complexes
 - Pas de prise en compte des donations, héritages anticipés, ou clauses particulières
 - Estimation DVF / barèmes marché indicative (±15-20 %)
 - Frais d'acte estimés via **droit de partage CGI art. 746** (1,10 % mariage/PACS · 2,50 % concubinage / sortie d'indivision) **+ émoluments / CSI / débours ~1,5 %** de l'actif net — pas un forfait « 7,5 % »
-- Frais de sortie vente estimés à **~5 %** du prix brut (agence / mise en vente) — hors plus-value éventuelle
+- Frais de sortie vente : **~5 % agence** + **forfait diagnostics ~1 800 €** ; plus-value : exonération RP rappelée (CGI 150 U), non chiffrée hors RP sans prix d'acquisition
 - Mode « garder mon crédit » : **sous accord discrétionnaire de la banque** (désolidarisation)
 - Actif net négatif (CRD > valeur) : alerte « dette à partager », pas de soulte
+- Identifiants de portes unifiés : `keep_a` · `keep_b` · `sell` · `rent_out`
 
 ## Affichage obligatoire
 

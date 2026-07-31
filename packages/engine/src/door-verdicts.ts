@@ -126,20 +126,33 @@ function buildSellDoorVerdict(
   const sellScenario = result.scenarios.find((s) => s.scenario === "sell");
   const rateSnapshot = getMortgageRateSnapshot(input.options.mortgageDurationYears ?? 20);
 
+  const proceedsA =
+    sellScenario?.saleProceedsByPerson?.A.amount ??
+    sellScenario?.netWorthByPerson.A.amount ??
+    0;
+  const proceedsB =
+    sellScenario?.saleProceedsByPerson?.B.amount ??
+    sellScenario?.netWorthByPerson.B.amount ??
+    0;
+
   const affA = computeAffordability({
     incomeMonthly: incomeFor(input, "A"),
-    liquidCapital: sellScenario?.netWorthByPerson.A.amount ?? 0,
+    liquidCapital: Math.max(0, proceedsA),
     targetPropertyPrice: relocateTarget,
     existingMonthlyCharges: childSupportChargeFor(input, "A"),
     durationYears: rateSnapshot.durationYears,
   });
   const affB = computeAffordability({
     incomeMonthly: incomeFor(input, "B"),
-    liquidCapital: sellScenario?.netWorthByPerson.B.amount ?? 0,
+    liquidCapital: Math.max(0, proceedsB),
     targetPropertyPrice: relocateTarget,
     existingMonthlyCharges: childSupportChargeFor(input, "B"),
     durationYears: rateSnapshot.durationYears,
   });
+
+  const agency = sellScenario?.agencyFeesEstimate?.amount ?? 0;
+  const diagnostics = sellScenario?.diagnosticsEstimate?.amount ?? 0;
+  const cgiNote = sellScenario?.capitalGainsNote ?? "";
 
   if (sellScenario?.negativeEquity) {
     const shortfall = Math.abs(sellScenario.saleNetProceeds?.amount ?? 0);
@@ -148,15 +161,22 @@ function buildSellDoorVerdict(
       verdict: "red",
       label: DOOR_LABELS.sell,
       headline: "Actif net négatif — dette à partager",
-      detail: `Après frais de sortie et remboursement du crédit, il resterait ~${Math.round(shortfall).toLocaleString("fr-FR")} € de dette à partager. Relogement zone ~${Math.round(relocateTarget).toLocaleString("fr-FR")} €.`,
+      detail: `Après agence + diagnostics et crédit, dette ~${Math.round(shortfall).toLocaleString("fr-FR")} € à partager (Vous ${Math.round(Math.abs(proceedsA)).toLocaleString("fr-FR")} € · Autre ${Math.round(Math.abs(proceedsB)).toLocaleString("fr-FR")} €). ${cgiNote}`,
       monthlyImpact: affA.monthlyPayment,
     };
   }
 
-  const verdict = worstVerdict(affA.verdict, affB.verdict);
+  const verdict =
+    sellScenario?.relocateVerdictByPerson != null
+      ? worstVerdict(
+          sellScenario.relocateVerdictByPerson.A,
+          sellScenario.relocateVerdictByPerson.B
+        )
+      : worstVerdict(affA.verdict, affB.verdict);
+
   const headline =
     verdict === "green"
-      ? "Relogement accessible dans la zone"
+      ? "Relogement accessible pour les deux"
       : verdict === "orange"
         ? "Relogement serré pour au moins une partie"
         : "Relogement difficile dans la zone";
@@ -166,7 +186,7 @@ function buildSellDoorVerdict(
     verdict,
     label: DOOR_LABELS.sell,
     headline,
-    detail: `Cible relocation ~${Math.round(relocateTarget).toLocaleString("fr-FR")} € · ${affA.detail}`,
+    detail: `Net vendeur Vous ${Math.round(proceedsA).toLocaleString("fr-FR")} € · Autre ${Math.round(proceedsB).toLocaleString("fr-FR")} € (agence ${Math.round(agency).toLocaleString("fr-FR")} € + diagnostics ${Math.round(diagnostics).toLocaleString("fr-FR")} €). Cible zone ~${Math.round(relocateTarget).toLocaleString("fr-FR")} € · Vous ${affA.verdict} · Autre ${affB.verdict}. ${cgiNote}`,
     monthlyImpact: affA.monthlyPayment,
   };
 }

@@ -21,7 +21,8 @@ import {
   round,
   subtractMoney,
 } from "./utils.js";
-import { computeSoulteCore, DEFAULT_SELLING_COSTS_RATE } from "./soulte-core.js";
+import { computeSoulteCore } from "./soulte-core.js";
+import { computeSaleProceeds } from "./sale-proceeds.js";
 import { rentPerSqm } from "./affordability.js";
 
 const CHARGES_ESTIMATE_MONTHLY = 180;
@@ -109,36 +110,42 @@ function buildScenario(
   }
 
   if (scenario === "sell" && primaryAsset) {
-    const sellingCostsRate =
-      input.options.sellingCostsRate ?? DEFAULT_SELLING_COSTS_RATE;
-    const sellingCosts = eur(primaryAsset.grossValue.amount * sellingCostsRate);
-    const equityBeforeCosts = getNetAssetValue(primaryAsset, input.liabilities);
-    const saleNetProceeds = eur(equityBeforeCosts.amount - sellingCosts.amount);
-    const shareA = getShareForPerson(primaryAsset.ownership, "A");
-    const shareB = getShareForPerson(primaryAsset.ownership, "B");
+    const sale = computeSaleProceeds(primaryAsset, input.liabilities, input);
     const netWorth = {
       A: addMoney(
         subtractMoney(baseNet.A, getPersonShareOfAsset(primaryAsset, "A", input.liabilities)),
-        multiplyMoney(saleNetProceeds, shareA)
+        sale.netProceedsByPerson.A
       ),
       B: addMoney(
         subtractMoney(baseNet.B, getPersonShareOfAsset(primaryAsset, "B", input.liabilities)),
-        multiplyMoney(saleNetProceeds, shareB)
+        sale.netProceedsByPerson.B
       ),
     };
-    const negativeEquity = saleNetProceeds.amount < 0;
-    const costsPct = Math.round(sellingCostsRate * 100);
+    const agencyPct = Math.round(
+      (sale.agencyFees.amount / Math.max(1, sale.grossValue.amount)) * 100
+    );
 
     return {
       scenario: "sell",
       label: "Vendre le logement",
       netWorthByPerson: netWorth,
-      sellingCostsEstimate: sellingCosts,
-      saleNetProceeds,
-      negativeEquity,
-      description: negativeEquity
-        ? `Actif net négatif après frais de sortie (~${costsPct} %) et remboursement du crédit — dette à partager selon les quote-parts.`
-        : `Chaque partie récupère sa quote-part du produit net après frais de sortie (~${costsPct} % agence / mise en vente) et remboursement du crédit.`,
+      agencyFeesEstimate: sale.agencyFees,
+      diagnosticsEstimate: sale.diagnosticsFees,
+      sellingCostsEstimate: sale.sellingCosts,
+      saleNetProceeds: sale.saleNetProceeds,
+      saleProceedsByPerson: sale.netProceedsByPerson,
+      negativeEquity: sale.negativeEquity,
+      primaryResidenceExempt: sale.primaryResidenceExempt,
+      capitalGainsEstimate: sale.capitalGainsEstimate,
+      capitalGainsNote: sale.capitalGainsNote,
+      relocateTarget: sale.relocateTarget,
+      relocateVerdictByPerson: {
+        A: sale.relocateByPerson.A.verdict,
+        B: sale.relocateByPerson.B.verdict,
+      },
+      description: sale.negativeEquity
+        ? `Actif net négatif après frais d'agence (~${agencyPct} %), diagnostics et remboursement du crédit — dette à partager. ${sale.capitalGainsNote}`
+        : `Net vendeur bilatéral après agence (~${agencyPct} %) + diagnostics, puis remboursement du crédit. Vous ${Math.round(sale.netProceedsByPerson.A.amount).toLocaleString("fr-FR")} € · Autre ${Math.round(sale.netProceedsByPerson.B.amount).toLocaleString("fr-FR")} €. ${sale.capitalGainsNote}`,
     };
   }
 

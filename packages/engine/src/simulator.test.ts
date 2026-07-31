@@ -122,18 +122,27 @@ describe("runSimulation - concubinage", () => {
     ]);
   });
 
-  it("répartit équitablement en cas de vente après frais de sortie ~5 %", () => {
+  it("répartit équitablement en cas de vente après agence 5 % + diagnostics", () => {
     const input = createConcubinageInput({
       options: { primaryResidenceId: "house", scenario: "sell" },
+      postalCode: "75011",
+      propertySurface: 65,
     });
     const result = runSimulation(input);
     const sellScenario = result.scenarios[0];
-    // 400k − 5% (20k) − 200k CRD = 180k → 90k chacun
-    expect(sellScenario.sellingCostsEstimate?.amount).toBe(20000);
-    expect(sellScenario.saleNetProceeds?.amount).toBe(180000);
-    expect(sellScenario.netWorthByPerson.A.amount).toBe(90000);
-    expect(sellScenario.netWorthByPerson.B.amount).toBe(90000);
+    // 400k − 20k agence − 1,8k diagnostics − 200k CRD = 178 200 → 89 100 chacun
+    expect(sellScenario.agencyFeesEstimate?.amount).toBe(20000);
+    expect(sellScenario.diagnosticsEstimate?.amount).toBe(1800);
+    expect(sellScenario.sellingCostsEstimate?.amount).toBe(21800);
+    expect(sellScenario.saleNetProceeds?.amount).toBe(178200);
+    expect(sellScenario.saleProceedsByPerson?.A.amount).toBe(89100);
+    expect(sellScenario.saleProceedsByPerson?.B.amount).toBe(89100);
+    expect(sellScenario.netWorthByPerson.A.amount).toBe(89100);
+    expect(sellScenario.netWorthByPerson.B.amount).toBe(89100);
+    expect(sellScenario.primaryResidenceExempt).toBe(true);
     expect(sellScenario.negativeEquity).toBe(false);
+    expect(sellScenario.relocateVerdictByPerson?.A).toBeDefined();
+    expect(sellScenario.relocateVerdictByPerson?.B).toBeDefined();
   });
 
   it("avec mensualité historique : ajoute un avertissement banque", () => {
@@ -180,10 +189,10 @@ describe("runSimulation - concubinage", () => {
     expect(keep.soulte?.residualDebt?.amount).toBe(50000);
     expect(keep.negativeEquity).toBe(true);
     const sell = result.scenarios.find((s) => s.scenario === "sell")!;
-    // 200k − 5% (10k) − 250k = −60k
-    expect(sell.saleNetProceeds?.amount).toBe(-60000);
+    // 200k − 10k agence − 1,8k diag − 250k = −61 800
+    expect(sell.saleNetProceeds?.amount).toBe(-61800);
     expect(sell.negativeEquity).toBe(true);
-    expect(sell.netWorthByPerson.A.amount).toBe(-30000);
+    expect(sell.netWorthByPerson.A.amount).toBe(-30900);
   });
 });
 

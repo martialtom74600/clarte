@@ -24,7 +24,7 @@ describe("computeAffordability", () => {
 });
 
 describe("computeNewLifeCap", () => {
-  it("returns three life path doors", () => {
+  it("returns four DoorId-aligned life path doors", () => {
     const result = computeNewLifeCap({
       postalCode: "75011",
       propertyValue: 400000,
@@ -42,13 +42,16 @@ describe("computeNewLifeCap", () => {
       soultePayer: "A",
     });
 
-    expect(result.doors).toHaveLength(3);
+    expect(result.doors).toHaveLength(4);
     expect(result.doors.map((d) => d.id)).toEqual([
-      "buy_in_zone",
+      "keep_a",
+      "keep_b",
+      "sell",
       "rent_out",
-      "sell_relocate",
     ]);
-    expect(result.equityNet.amount).toBe(220000);
+    // 400k − 180k − 5%×400k − 1800 = 198 200
+    expect(result.equityNet.amount).toBe(198200);
     expect(result.contributionsTotal.amount).toBe(60000);
+    expect(["keep_a", "keep_b", "sell", "rent_out"]).toContain(result.recommendedDoorId);
   });
 });

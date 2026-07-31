@@ -130,8 +130,10 @@ export interface SimulationOptions {
   mortgageDurationYears?: number;
   /** Override loyer mensuel brut pour le scénario rent_out (levier labo). */
   monthlyRentOverride?: number;
-  /** Frais de sortie vente sur le prix brut (défaut moteur ~5 % agence / mise en vente). */
+  /** Taux frais d'agence / mise en vente sur le prix brut (défaut moteur ~5 %). */
   sellingCostsRate?: number;
+  /** Forfait diagnostics obligatoires (€) — défaut moteur ~1 800 €. */
+  diagnosticsFlatFee?: number;
 }
 
 export interface SimulationInput {
@@ -211,6 +213,8 @@ export interface SoulteResult {
 
 export type KeepFinancingMode = "full_refinance" | "keep_existing_loan";
 
+export type AffordabilityVerdict = "green" | "orange" | "red";
+
 export interface ScenarioComparison {
   scenario: ScenarioType;
   label: string;
@@ -229,17 +233,30 @@ export interface ScenarioComparison {
   newLoanAmount?: Money;
   /** Mensualité du seul nouveau prêt. */
   newLoanMonthly?: Money;
-  /** Frais de sortie vente (agence / mise en vente) déduits du brut. */
+  /** Frais d'agence estimés (~5 % du brut). */
+  agencyFeesEstimate?: Money;
+  /** Forfait diagnostics obligatoires. */
+  diagnosticsEstimate?: Money;
+  /** Total frais de sortie (agence + diagnostics). */
   sellingCostsEstimate?: Money;
   /** Produit net de vente après frais de sortie et remboursement du crédit. */
   saleNetProceeds?: Money;
+  /** Quote-part nette bilatérale après vente (Vous / Autre). */
+  saleProceedsByPerson?: Record<PersonId, Money>;
   /** True si produit net ou equity du bien est négatif. */
   negativeEquity?: boolean;
   /** Avertissement banque (désolidarisation / keep_existing_loan). */
   bankDisclaimer?: string;
+  /** CGI 150 U — exonération résidence principale. */
+  primaryResidenceExempt?: boolean;
+  /** Plus-value estimée (0 si RP exonérée). */
+  capitalGainsEstimate?: Money;
+  capitalGainsNote?: string;
+  /** Prix cible de relogement dans la zone. */
+  relocateTarget?: Money;
+  /** Verdict de relogement par personne (même zone). */
+  relocateVerdictByPerson?: Record<PersonId, AffordabilityVerdict>;
 }
-
-export type AffordabilityVerdict = "green" | "orange" | "red";
 
 export interface MortgageRateSnapshot {
   annualRate: number;
@@ -261,8 +278,9 @@ export interface AffordabilityResult {
   detail: string;
 }
 
+/** Porte de trajectoire — même identifiants que DoorId (unifié moteur / web). */
 export interface LifePathDoor {
-  id: "buy_in_zone" | "rent_out" | "sell_relocate";
+  id: DoorId;
   label: string;
   description: string;
   verdict: AffordabilityVerdict;
@@ -312,7 +330,7 @@ export interface NewLifeCapResult {
   contributionsByPerson: Record<PersonId, Money>;
   netDepartureCapital: Record<PersonId, Money>;
   doors: LifePathDoor[];
-  recommendedDoorId: LifePathDoor["id"];
+  recommendedDoorId: DoorId;
 }
 
 export interface LegalWarning {

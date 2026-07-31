@@ -90,7 +90,7 @@ describe("buildLabLedger", () => {
     expect(ledger?.footer).toMatch(/désolidarisation|banque/i);
   });
 
-  it("vente : affiche frais de sortie ~5 % et produit net", () => {
+  it("vente : affiche agence, diagnostics et parts bilatérales", () => {
     const ledger = buildLabLedger({
       doorId: "sell",
       footprint,
@@ -99,9 +99,13 @@ describe("buildLabLedger", () => {
       result: derived.lastResult,
       doorVerdicts: derived.doorVerdicts,
     });
-    expect(ledger?.lines.some((l) => l.id === "selling-costs")).toBe(true);
-    expect(ledger?.lines.find((l) => l.id === "selling-costs")?.amount).toBe(20000);
-    expect(ledger?.lines.find((l) => l.id === "net")?.amount).toBe(180000);
-    expect(ledger?.lines.find((l) => l.id === "each")?.amount).toBe(90000);
+    expect(ledger?.lines.some((l) => l.id === "agency")).toBe(true);
+    expect(ledger?.lines.some((l) => l.id === "diagnostics")).toBe(true);
+    expect(ledger?.lines.find((l) => l.id === "agency")?.amount).toBe(20000);
+    expect(ledger?.lines.find((l) => l.id === "diagnostics")?.amount).toBe(1800);
+    expect(ledger?.lines.find((l) => l.id === "net")?.amount).toBe(178200);
+    expect(ledger?.lines.find((l) => l.id === "you")?.amount).toBe(89100);
+    expect(ledger?.lines.find((l) => l.id === "other")?.amount).toBe(89100);
+    expect(ledger?.footer).toMatch(/150 U|Relogement/i);
   });
 });

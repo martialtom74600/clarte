@@ -86,30 +86,20 @@ export function verdictForScenario(
   cap: NewLifeCapResult | null
 ): AffordabilityVerdict | null {
   if (!cap || scenario === "compare_all") return null;
-  const map: Partial<Record<ScenarioType, AffordabilityVerdict>> = {
-    keep_a: cap.doors.find((d) => d.id === "buy_in_zone")?.verdict,
-    keep_b: cap.doors.find((d) => d.id === "buy_in_zone")?.verdict,
-    rent_out: cap.doors.find((d) => d.id === "rent_out")?.verdict,
-    sell: cap.doors.find((d) => d.id === "sell_relocate")?.verdict,
-  };
-  return map[scenario] ?? null;
+  return cap.doors.find((d) => d.id === scenario)?.verdict ?? null;
 }
 
 export function scenarioHeadline(
   comparison: ScenarioComparison,
   cap: NewLifeCapResult | null
 ): string {
-  const door = cap?.doors.find((d) => {
-    if (comparison.scenario === "keep_a" || comparison.scenario === "keep_b") {
-      return d.id === "buy_in_zone";
-    }
-    if (comparison.scenario === "rent_out") return d.id === "rent_out";
-    if (comparison.scenario === "sell") return d.id === "sell_relocate";
-    return false;
-  });
+  const door = cap?.doors.find((d) => d.id === comparison.scenario);
 
   if (door?.headline) return door.headline;
 
+  if (comparison.saleProceedsByPerson) {
+    return `Vous ${formatEuro(comparison.saleProceedsByPerson.A.amount)} · Autre ${formatEuro(comparison.saleProceedsByPerson.B.amount)}`;
+  }
   if (comparison.soulte) {
     return `Soulte ${formatEuro(comparison.soulte.amount.amount)}`;
   }

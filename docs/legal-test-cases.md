@@ -35,14 +35,15 @@ Exécuter avec : `npm run test --workspace=@separation/engine`
 
 **Entrée :**
 - Statut : concubinage
-- Bien : 400 000 €, crédit 200 000 €, 50/50
+- Bien : 400 000 €, crédit 200 000 €, 50/50, résidence principale
 - Scénario : vente
-- Frais de sortie : 5 % du brut (défaut moteur)
+- Frais d'agence : 5 % du brut + diagnostics forfait 1 800 €
 
 **Attendu :**
-- Frais de sortie : 20 000 €
-- Produit net : 180 000 € (400 000 − 20 000 − 200 000)
-- Chaque partie : 90 000 €
+- Agence : 20 000 € · Diagnostics : 1 800 €
+- Produit net : 178 200 € (400 000 − 20 000 − 1 800 − 200 000)
+- Chaque partie : 89 100 €
+- Plus-value : exonération RP (CGI 150 U)
 
 ---
 

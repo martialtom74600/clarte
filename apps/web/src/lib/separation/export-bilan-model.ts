@@ -120,6 +120,6 @@ export function buildExportBilan(params: {
     activeLevers: buildActiveLeverLines(lab, footprint, assumptions),
     ledger,
     disclaimer:
-      "Document généré par Clarté. Simulation indicative : droit de partage CGI 746 (1,10 % ou 2,50 %) + émoluments ~1,5 % ; frais de sortie vente ~5 %. Le mode « garder mon crédit » suppose un accord banque (désolidarisation). Consultez un notaire ou un conseiller avant toute décision.",
+      "Document généré par Clarté. Simulation indicative : droit de partage CGI 746 (1,10 % ou 2,50 %) + émoluments ~1,5 % ; vente = agence ~5 % + diagnostics forfaitaires ; plus-value RP exonérée (CGI 150 U). Le mode « garder mon crédit » suppose un accord banque (désolidarisation). Consultez un notaire ou un conseiller avant toute décision.",
   };
 }

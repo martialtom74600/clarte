@@ -42,4 +42,13 @@ describe("porte-presenter", () => {
     expect(porte?.heroCaption).toBe("reste chaque mois");
     expect(porte?.consequence.length).toBeGreaterThan(0);
   });
+
+  it("affiche un hero bilatéral pour sell", () => {
+    const porte = buildPortePresentation("sell", lastResult, doorVerdicts);
+    expect(porte?.bilateral).toHaveLength(2);
+    expect(porte?.bilateral?.[0].personLabel).toBe("Vous");
+    expect(porte?.bilateral?.[1].personLabel).toBe("L'autre");
+    expect(porte?.bilateral?.[0].relocateVerdict).toMatch(/green|orange|red/);
+    expect(porte?.bilateral?.[1].relocateVerdict).toMatch(/green|orange|red/);
+  });
 });
