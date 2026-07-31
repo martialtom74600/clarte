@@ -332,12 +332,15 @@ function EmpreinteFlow() {
           {loanOpen && (
             <motion.div
               key="loan-details"
-              initial={reduced ? { opacity: 0 } : { opacity: 0, height: 0 }}
-              animate={reduced ? { opacity: 1 } : { opacity: 1, height: "auto" }}
-              exit={reduced ? { opacity: 0 } : { opacity: 0, height: 0 }}
+              initial={reduced ? { opacity: 0 } : { opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8 }}
               transition={{ duration: duration.normal, ease: ease.out }}
-              className="flex flex-col gap-8 overflow-hidden"
+              className="flex flex-col gap-8"
             >
+              <p className="text-left text-xs font-medium text-slate-400">
+                Détails du crédit en cours
+              </p>
               <EmpreinteFormRow
                 id="monthlyMortgagePayment"
                 label="Mensualité actuelle"
