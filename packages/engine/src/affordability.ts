@@ -138,8 +138,11 @@ export function computeAffordability(params: {
     rateSnapshot.annualRate,
     rateSnapshot.durationYears
   );
+  const existingCharges = Math.max(0, params.existingMonthlyCharges ?? 0);
+  // Effort global = (nouveau prêt + charges déjà présentes) / revenus — jamais 0 si mensualité > 0.
+  const totalMonthlyDebt = monthlyPayment.amount + existingCharges;
   const effortRatio =
-    params.incomeMonthly > 0 ? monthlyPayment.amount / params.incomeMonthly : 1;
+    params.incomeMonthly > 0 ? totalMonthlyDebt / params.incomeMonthly : 1;
   const verdict = verdictFromGap(gap.amount, effortRatio);
   const capacity = Math.round(availableBudget.amount).toLocaleString("fr-FR");
   const need = Math.round(params.targetPropertyPrice).toLocaleString("fr-FR");
@@ -157,7 +160,7 @@ export function computeAffordability(params: {
     availableBudget,
     maxBorrowing,
     gap,
-    monthlyPayment,
+    monthlyPayment: eur(totalMonthlyDebt),
     effortRatio: round(effortRatio, 3),
     maxEffortRatio: params.maxEffortRatio ?? DEFAULT_MAX_EFFORT,
     label:

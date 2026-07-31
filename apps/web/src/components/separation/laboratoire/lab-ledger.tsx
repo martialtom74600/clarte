@@ -92,7 +92,10 @@ export function LabLedger({ model, className }: LabLedgerProps) {
             <p
               key={line}
               className={
-                line.includes("HCSF")
+                line.includes("endettement") ||
+                line.includes("finançable") ||
+                line.includes("limite bancaire") ||
+                line.includes("Revenus manquants")
                   ? "font-medium text-slate-700"
                   : undefined
               }

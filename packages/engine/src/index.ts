@@ -44,7 +44,11 @@ export {
   computeMaxBorrowing,
   rentPerSqm,
 } from "./affordability.js";
-export { compileDoorVerdicts, RENT_CHARGES_MONTHLY } from "./door-verdicts.js";
+export {
+  compileDoorVerdicts,
+  computeKeepDebtEffort,
+  RENT_CHARGES_MONTHLY,
+} from "./door-verdicts.js";
 export { getMortgageRateSnapshot } from "./mortgage-rates.js";
 export {
   estimateChildSupport,
