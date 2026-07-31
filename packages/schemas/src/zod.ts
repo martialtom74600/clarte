@@ -48,11 +48,8 @@ export const assetSchema = z.object({
   ownership: ownershipRuleSchema,
   acquisitionDate: z.string().optional(),
   purchasePrice: moneySchema.optional(),
-<<<<<<< HEAD
-=======
   acquisitionFeesRate: z.number().min(0).max(0.2).optional(),
   improvementWorks: moneySchema.optional(),
->>>>>>> origin/cursor/p3-legal-perfection-f0f0
   linkedLiabilityIds: z.array(z.string()).optional(),
   isPrimaryResidence: z.boolean().optional(),
 });

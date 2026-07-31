@@ -108,17 +108,12 @@ export interface Asset {
   grossValue: Money;
   ownership: OwnershipRule;
   acquisitionDate?: string;
-<<<<<<< HEAD
-  /** Prix d'acquisition (hors frais) — utile plus-value / apports. */
-  purchasePrice?: Money;
-=======
   /** Prix d'acquisition (hors frais) — requis pour plus-value CGI 150 U hors RP. */
   purchasePrice?: Money;
   /** Taux frais d'acquisition (défaut moteur ~7,5 %). */
   acquisitionFeesRate?: number;
   /** Travaux d'amélioration justifiés ; sinon forfait 15 % du prix d'acquisition. */
   improvementWorks?: Money;
->>>>>>> origin/cursor/p3-legal-perfection-f0f0
   linkedLiabilityIds?: string[];
   isPrimaryResidence?: boolean;
 }
