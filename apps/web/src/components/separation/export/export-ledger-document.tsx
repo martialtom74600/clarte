@@ -1,6 +1,5 @@
 "use client";
 
-import type { AffordabilityVerdict } from "@separation/schemas";
 import { cn, formatEuro } from "@/lib/utils";
 import type { LabLedgerModel, LedgerLine } from "@/lib/separation/lab-ledger-model";
 import {

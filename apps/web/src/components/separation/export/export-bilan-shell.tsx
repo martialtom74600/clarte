@@ -75,7 +75,7 @@ export function ExportBilanShell() {
 
         {model.insights.length > 0 && (
           <section className={styles.section}>
-            <h2 className={styles.sectionTitle}>Points d'attention</h2>
+            <h2 className={styles.sectionTitle}>Points d&apos;attention</h2>
             {model.insights.map((insight) => (
               <div key={insight.title} className={styles.insightBlock}>
                 <p className={styles.insightTitle}>{insight.title}</p>

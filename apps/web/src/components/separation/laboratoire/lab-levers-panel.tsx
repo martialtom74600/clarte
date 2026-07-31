@@ -252,6 +252,7 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
       historicalPay,
       marketMonthly,
       occupationMonths,
+      footprint.initialMortgageRate,
     ]
   );
 

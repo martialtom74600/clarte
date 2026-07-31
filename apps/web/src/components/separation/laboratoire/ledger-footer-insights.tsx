@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { AffordabilityVerdict } from "@separation/schemas";
 import { cn } from "@/lib/utils";
 import type { LabLedgerModel } from "@/lib/separation/lab-ledger-model";
@@ -54,6 +54,15 @@ export function LedgerFooterInsights({
   ledger: LabLedgerModel;
 }) {
   const { footer, verdict, contextNote, warningNote, doorId } = ledger;
+  const defaultOpen = shouldOpenLedgerInsights(verdict?.verdict);
+  const [insightsOpen, setInsightsOpen] = useState(defaultOpen);
+  const [prevDefaultOpen, setPrevDefaultOpen] = useState(defaultOpen);
+
+  if (defaultOpen !== prevDefaultOpen) {
+    setPrevDefaultOpen(defaultOpen);
+    setInsightsOpen(defaultOpen);
+  }
+
   if (!footer && !contextNote) return null;
 
   const { debtLine, debtPct, relocateLine, negativeEquityLine, otherLines } = footer
@@ -67,11 +76,6 @@ export function LedgerFooterInsights({
       };
   const panel = verdict ? VERDICT_PANEL[verdict.verdict] : null;
   const debtThreshold = debtThresholdMessage(debtPct, doorId);
-  const [insightsOpen, setInsightsOpen] = useState(false);
-
-  useEffect(() => {
-    setInsightsOpen(shouldOpenLedgerInsights(verdict?.verdict));
-  }, [verdict?.verdict]);
 
   return (
     <>

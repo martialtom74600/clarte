@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
@@ -8,7 +8,6 @@ import {
   EmpreinteContinueButton,
   EmpreinteFormRow,
   parseCurrency,
-  parseNumber,
 } from "./empreinte-field";
 import type { EmpreinteDraft } from "./empreinte-screens";
 import {
@@ -63,45 +62,84 @@ export function EmpreinteFinancementScreen({
   const reduced = useReducedMotion();
   const manualMode = draft.financementManual === "1";
   const [overrides, setOverrides] = useState<Set<OverrideField>>(new Set());
+  const lastSyncedKeyRef = useRef("");
 
   const amortization = useMemo(() => {
     if (manualMode || !canComputeAmortization(draft)) return null;
     return computeFinancementFromAmortization(draft);
-  }, [draft, manualMode]);
+  }, [manualMode, draft]);
 
-  const applyComputed = useCallback(
-    (nextOverrides: Set<OverrideField>) => {
-      if (!amortization) return;
-      const fields = amortizationToDraftFields(amortization);
-      const patch: Partial<EmpreinteDraft> = {};
-      if (!nextOverrides.has("crd")) patch.mortgageRemaining = fields.mortgageRemaining;
-      if (!nextOverrides.has("monthly")) {
-        patch.monthlyMortgagePayment = fields.monthlyMortgagePayment;
-      }
-      if (!nextOverrides.has("years")) {
-        patch.mortgageRemainingYears = fields.mortgageRemainingYears;
-      }
-      if (Object.keys(patch).length > 0) onDraftChange(patch);
-    },
-    [amortization, onDraftChange]
+  const computedFields = useMemo(
+    () => (amortization ? amortizationToDraftFields(amortization) : null),
+    [amortization]
   );
 
+  const crdOverridden = overrides.has("crd");
+  const monthlyOverridden = overrides.has("monthly");
+  const yearsOverridden = overrides.has("years");
+
+  const displayCrd = crdOverridden
+    ? draft.mortgageRemaining
+    : (computedFields?.mortgageRemaining ?? draft.mortgageRemaining);
+  const displayMonthly = monthlyOverridden
+    ? draft.monthlyMortgagePayment
+    : (computedFields?.monthlyMortgagePayment ?? draft.monthlyMortgagePayment);
+  const displayYears = yearsOverridden
+    ? draft.mortgageRemainingYears
+    : (computedFields?.mortgageRemainingYears ?? draft.mortgageRemainingYears);
+
+  // Sync computed → draft une seule fois par changement d'inputs (évite boucle infinie).
   useEffect(() => {
-    if (manualMode) return;
-    applyComputed(overrides);
-  }, [amortization, manualMode, overrides, applyComputed]);
+    if (manualMode || !amortization || !computedFields) {
+      lastSyncedKeyRef.current = "";
+      return;
+    }
+
+    const syncKey = [
+      computedFields.mortgageRemaining,
+      computedFields.monthlyMortgagePayment,
+      computedFields.mortgageRemainingYears,
+      crdOverridden,
+      monthlyOverridden,
+      yearsOverridden,
+    ].join("|");
+
+    if (syncKey === lastSyncedKeyRef.current) return;
+    lastSyncedKeyRef.current = syncKey;
+
+    const patch: Partial<EmpreinteDraft> = {};
+    if (!crdOverridden) patch.mortgageRemaining = computedFields.mortgageRemaining;
+    if (!monthlyOverridden) patch.monthlyMortgagePayment = computedFields.monthlyMortgagePayment;
+    if (!yearsOverridden) patch.mortgageRemainingYears = computedFields.mortgageRemainingYears;
+
+    if (Object.keys(patch).length > 0) onDraftChange(patch);
+  }, [
+    amortization,
+    computedFields,
+    manualMode,
+    crdOverridden,
+    monthlyOverridden,
+    yearsOverridden,
+    onDraftChange,
+  ]);
 
   const setManualMode = (manual: boolean) => {
     onDraftChange({ financementManual: manual ? "1" : "" });
     if (!manual) setOverrides(new Set());
+    lastSyncedKeyRef.current = "";
   };
 
   const updateField = (field: keyof EmpreinteDraft, value: string) => {
     onDraftChange({ [field]: value });
   };
 
-  const updateComputedField = (field: OverrideField, draftField: keyof EmpreinteDraft, value: string) => {
+  const updateComputedField = (
+    field: OverrideField,
+    draftField: keyof EmpreinteDraft,
+    value: string
+  ) => {
     setOverrides((prev) => new Set(prev).add(field));
+    lastSyncedKeyRef.current = "";
     onDraftChange({ [draftField]: value });
   };
 
@@ -248,10 +286,10 @@ export function EmpreinteFinancementScreen({
               id="est-crd"
               label="Capital restant dû"
               type="currency"
-              value={draft.mortgageRemaining}
+              value={displayCrd}
               onChange={(v) => updateComputedField("crd", "mortgageRemaining", v)}
               hint={
-                overrides.has("crd")
+                crdOverridden
                   ? "Valeur ajustée manuellement."
                   : "Modifiable si remboursement anticipé."
               }
@@ -260,14 +298,14 @@ export function EmpreinteFinancementScreen({
               id="est-monthly"
               label="Mensualité (capital + intérêts + assurance)"
               type="currency"
-              value={draft.monthlyMortgagePayment}
+              value={displayMonthly}
               onChange={(v) => updateComputedField("monthly", "monthlyMortgagePayment", v)}
             />
             <EmpreinteFormRow
               id="est-years"
               label="Durée restante"
               type="number"
-              value={draft.mortgageRemainingYears}
+              value={displayYears}
               onChange={(v) => updateComputedField("years", "mortgageRemainingYears", v)}
               suffix="ans"
             />
@@ -302,13 +340,14 @@ export function EmpreinteFinancementScreen({
       {!manualMode && (
         <button
           type="button"
-          onClick={() =>
+          onClick={() => {
+            lastSyncedKeyRef.current = "";
             onDraftChange({
               mortgageRemaining: "0",
               monthlyMortgagePayment: "",
               mortgageRemainingYears: "",
-            })
-          }
+            });
+          }}
           className="mb-4 text-xs text-slate-400 underline-offset-2 transition-colors hover:text-slate-600 hover:underline"
         >
           Je n&apos;ai plus de crédit

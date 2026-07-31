@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { clarte } from "@/lib/clarte-design";
@@ -159,6 +166,15 @@ function EmpreinteFlow() {
 
   const updateField = useCallback((field: FootprintField, value: string) => {
     setDraft((prev) => ({ ...prev, [field]: value }));
+  }, []);
+
+  const patchDraft = useCallback((patch: Partial<EmpreinteDraft>) => {
+    setDraft((prev) => {
+      const hasChange = (Object.keys(patch) as (keyof EmpreinteDraft)[]).some(
+        (key) => prev[key] !== patch[key]
+      );
+      return hasChange ? { ...prev, ...patch } : prev;
+    });
   }, []);
 
   const goNext = () => {
@@ -333,7 +349,7 @@ function EmpreinteFlow() {
     body = (
       <EmpreinteFinancementScreen
         draft={draft}
-        onDraftChange={(patch) => setDraft((prev) => ({ ...prev, ...patch }))}
+        onDraftChange={patchDraft}
         canContinue={canContinue}
         onContinue={goNext}
         progress={progress}
@@ -350,15 +366,19 @@ function EmpreinteFlow() {
   );
 }
 
+function useClientMounted(): boolean {
+  return useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+}
+
 export function EmpreinteShell() {
   const router = useRouter();
   const footprint = useSeparationStore((s) => s.footprint);
   const hydrated = useSeparationHydrated();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useClientMounted();
 
   useEffect(() => {
     if (hydrated && footprint.completedAt) {
