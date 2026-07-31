@@ -54,26 +54,26 @@ const LEVER_COPY: Record<
   },
   historical_mortgage_rate: {
     keep_a: {
-      title: "Garder mon crédit actuel",
+      title: "Ajuster la mensualité du crédit",
       description:
-        "Hypothèse : la banque accepte de vous laisser reprendre le prêt aux conditions actuelles (désolidarisation). Vous ne refinancez alors que le rachat de part — pas tout le capital restant au taux du marché. Accord discrétionnaire : endettement et solvabilité du repreneur.",
-      impact: "Baisse souvent la mensualité vs un refinancement complet — sous réserve d'accord banque.",
+        "La mensualité vient de l'empreinte. Affinez-la ici si besoin. Hypothèse : la banque accepte la désolidarisation — vous ne refinancez alors que le rachat de part.",
+      impact: "Affine la mensualité déjà saisie — sous réserve d'accord banque.",
     },
     keep_b: {
-      title: "Garder le crédit actuel",
+      title: "Ajuster la mensualité du crédit",
       description:
         "Hypothèse : la banque laisse l'autre reprendre le prêt aux conditions actuelles et ne refinance que votre rachat de part. La désolidarisation reste à l'appréciation de la banque.",
-      impact: "Change la mensualité et le verdict — sous réserve d'accord banque.",
+      impact: "Affine la mensualité et le verdict — sous réserve d'accord banque.",
     },
     sell: {
-      title: "Garder mon crédit actuel",
+      title: "Ajuster la mensualité du crédit",
       description: "Sans bien à garder, ce levier ne s'applique pas — le crédit est remboursé à la vente.",
       impact: "Sans effet sur ce scénario.",
     },
     rent_out: {
-      title: "Garder mon crédit actuel",
+      title: "Ajuster la mensualité du crédit",
       description:
-        "On utilise votre vraie mensualité (souvent plus basse que le taux marché) pour voir si le loyer couvre le crédit.",
+        "Affine votre mensualité (souvent plus basse que le taux marché) pour voir si le loyer couvre le crédit.",
       impact: "Recalcule l'excédent ou le déficit locatif.",
     },
   },
@@ -151,7 +151,10 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
   );
   const [historicalPay, setHistoricalPay] = useState(
     formatAmount(
-      lab.overrides.historical_mortgage_rate?.monthlyMortgagePayment ?? marketMonthly
+      lab.overrides.historical_mortgage_rate?.monthlyMortgagePayment ??
+        (footprint.monthlyMortgagePayment > 0
+          ? footprint.monthlyMortgagePayment
+          : marketMonthly)
     )
   );
   const [occupationMonths, setOccupationMonths] = useState(

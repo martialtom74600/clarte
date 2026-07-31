@@ -8,6 +8,7 @@ import type { LeverId, SimulationInput } from "@separation/schemas";
 import { getMortgageRateSnapshot } from "@separation/engine";
 
 const DEFAULT_SURFACE = 65;
+const DEFAULT_MORTGAGE_YEARS = 20;
 
 function mergeAssumptionsWithLevers(
   assumptions: AssumptionsState,
@@ -71,6 +72,9 @@ function buildAssetsAndLiabilities(
           : { kind: "indivision", shares: { A: shareA, B: shareB } },
       isPrimaryResidence: true,
       linkedLiabilityIds: footprint.mortgageRemaining > 0 ? ["mortgage"] : undefined,
+      ...(footprint.purchasePrice > 0
+        ? { purchasePrice: { amount: footprint.purchasePrice, currency: "EUR" as const } }
+        : {}),
     });
   }
 
@@ -111,6 +115,36 @@ function buildAssetsAndLiabilities(
   return { assets, liabilities };
 }
 
+/** Mensualité crédit : levier labo prioritaire, sinon empreinte. */
+function resolveMonthlyMortgagePayment(
+  footprint: FootprintState,
+  merged: AssumptionsState,
+  lab: LabState
+): number | undefined {
+  const historicalActive = lab.enabledLevers.includes("historical_mortgage_rate");
+  if (historicalActive && lab.overrides.historical_mortgage_rate) {
+    const v = lab.overrides.historical_mortgage_rate.monthlyMortgagePayment;
+    return v > 0 ? v : undefined;
+  }
+  if (footprint.monthlyMortgagePayment > 0) return footprint.monthlyMortgagePayment;
+  if (merged.monthlyMortgagePayment > 0) return merged.monthlyMortgagePayment;
+  return undefined;
+}
+
+/** Durée restante emprunt → horizon du refinancement / nouveau prêt. */
+function resolveMortgageDurationYears(
+  footprint: FootprintState,
+  merged: AssumptionsState
+): number {
+  if (footprint.mortgageRemainingYears >= 1 && footprint.mortgageRemainingYears <= 30) {
+    return footprint.mortgageRemainingYears;
+  }
+  if (merged.mortgageDurationYears >= 1 && merged.mortgageDurationYears <= 30) {
+    return merged.mortgageDurationYears;
+  }
+  return DEFAULT_MORTGAGE_YEARS;
+}
+
 /** Fusion footprint + assumptions + leviers actifs → SimulationInput moteur. */
 export function compileSimulationInput(
   state: Pick<SeparationState, "footprint" | "assumptions" | "lab">
@@ -126,7 +160,6 @@ export function compileSimulationInput(
       : undefined;
 
   const contributionsActive = lab.enabledLevers.includes("initial_contributions");
-  const historicalActive = lab.enabledLevers.includes("historical_mortgage_rate");
   const occupationActive = lab.enabledLevers.includes("occupation_indemnity");
   const occupationMonths =
     occupationActive && (lab.overrides.occupation_indemnity?.occupationMonths ?? 0) > 0
@@ -136,6 +169,13 @@ export function compileSimulationInput(
     lab.enabledLevers.includes("children_impact") &&
     Boolean(lab.overrides.children_impact?.hasMinorChildren) &&
     (lab.overrides.children_impact?.numberOfChildren ?? 0) > 0;
+
+  const surface =
+    footprint.propertySurface > 0
+      ? footprint.propertySurface
+      : merged.propertySurface || DEFAULT_SURFACE;
+  const monthlyMortgagePayment = resolveMonthlyMortgagePayment(footprint, merged, lab);
+  const mortgageDurationYears = resolveMortgageDurationYears(footprint, merged);
 
   return {
     status: merged.status,
@@ -162,7 +202,7 @@ export function compileSimulationInput(
       primaryResidenceId: footprint.propertyValue > 0 ? "primary-residence" : undefined,
       scenario: "compare_all",
       mortgageRate: merged.mortgageRate,
-      mortgageDurationYears: merged.mortgageDurationYears,
+      mortgageDurationYears,
       monthlyRentOverride,
       occupationMonths,
     },
@@ -172,28 +212,39 @@ export function compileSimulationInput(
       : undefined,
     custodyType: childrenActive ? lab.overrides.children_impact!.custodyType : undefined,
     postalCode: footprint.postalCode,
-    propertySurface: merged.propertySurface || DEFAULT_SURFACE,
+    propertySurface: surface,
     contributionA: contributionsActive ? merged.contributionA : undefined,
     contributionB: contributionsActive ? merged.contributionB : undefined,
-    // Mensualité actuelle : active le mode « garder mon crédit » (keep) + loyer net (rent_out).
-    monthlyMortgagePayment: historicalActive
-      ? lab.overrides.historical_mortgage_rate?.monthlyMortgagePayment
-      : undefined,
+    // Mensualité réelle → mode « garder mon crédit » (keep) + charge locative (rent_out).
+    monthlyMortgagePayment,
   };
 }
 
 export function isFootprintComplete(footprint: FootprintState): boolean {
-  return (
+  const base =
     footprint.postalCode.length >= 5 &&
     footprint.propertyValue > 0 &&
+    footprint.propertySurface > 0 &&
     footprint.mortgageRemaining >= 0 &&
+    footprint.purchasePrice >= 0 &&
     footprint.incomeA > 0 &&
-    footprint.incomeB > 0
-  );
+    footprint.incomeB > 0;
+
+  if (!base) return false;
+
+  if (footprint.mortgageRemaining > 0) {
+    return (
+      footprint.monthlyMortgagePayment > 0 &&
+      footprint.mortgageRemainingYears >= 1 &&
+      footprint.mortgageRemainingYears <= 30
+    );
+  }
+
+  return true;
 }
 
 export function defaultAssumptions(): AssumptionsState {
-  const rate = getMortgageRateSnapshot(20);
+  const rate = getMortgageRateSnapshot(DEFAULT_MORTGAGE_YEARS);
   return {
     status: "concubinage",
     shareA: 50,
@@ -223,4 +274,19 @@ export function defaultLabState(): LabState {
 
 export function leverRequiresOverride(leverId: LeverId): boolean {
   return leverId !== "children_impact";
+}
+
+export function defaultFootprint(): FootprintState {
+  return {
+    postalCode: "",
+    propertyValue: 0,
+    propertySurface: 0,
+    purchasePrice: 0,
+    mortgageRemaining: 0,
+    monthlyMortgagePayment: 0,
+    mortgageRemainingYears: 0,
+    incomeA: 0,
+    incomeB: 0,
+    completedAt: null,
+  };
 }

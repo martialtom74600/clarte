@@ -115,13 +115,21 @@ describe("SeparationStore (in-memory)", () => {
     store = createTestSeparationStore();
   });
 
-  it("progresse footprint → portes avec recompute", () => {
+  const fillCompleteFootprint = () => {
     const s = store.getState();
     s.setFootprintField("postalCode", "75011");
     s.setFootprintField("propertyValue", 400000);
+    s.setFootprintField("propertySurface", 65);
+    s.setFootprintField("purchasePrice", 320000);
     s.setFootprintField("mortgageRemaining", 200000);
+    s.setFootprintField("monthlyMortgagePayment", 950);
+    s.setFootprintField("mortgageRemainingYears", 15);
     s.setFootprintField("incomeA", 5000);
     s.setFootprintField("incomeB", 4000);
+  };
+
+  it("progresse footprint → portes avec recompute", () => {
+    fillCompleteFootprint();
 
     expect(store.getState().derived.lastResult).not.toBeNull();
     expect(store.getState().derived.doorVerdicts?.keep_a).toBeDefined();
@@ -133,12 +141,7 @@ describe("SeparationStore (in-memory)", () => {
   });
 
   it("injecte un levier apports et met à jour les verdicts", () => {
-    const s = store.getState();
-    s.setFootprintField("postalCode", "75011");
-    s.setFootprintField("propertyValue", 400000);
-    s.setFootprintField("mortgageRemaining", 200000);
-    s.setFootprintField("incomeA", 5000);
-    s.setFootprintField("incomeB", 4000);
+    fillCompleteFootprint();
 
     const before = store.getState().derived.lastResult?.scenarios.find(
       (sc) => sc.scenario === "keep_a"
@@ -158,12 +161,7 @@ describe("SeparationStore (in-memory)", () => {
   });
 
   it("revert apports quand le levier est désactivé", () => {
-    const s = store.getState();
-    s.setFootprintField("postalCode", "75011");
-    s.setFootprintField("propertyValue", 400000);
-    s.setFootprintField("mortgageRemaining", 200000);
-    s.setFootprintField("incomeA", 5000);
-    s.setFootprintField("incomeB", 4000);
+    fillCompleteFootprint();
 
     const baseline = store.getState().derived.lastResult?.scenarios.find(
       (sc) => sc.scenario === "keep_a"
@@ -184,13 +182,8 @@ describe("SeparationStore (in-memory)", () => {
   });
 
   it("ouvre le laboratoire sur une porte sans perdre derived", () => {
-    const s = store.getState();
-    s.setFootprintField("postalCode", "75011");
-    s.setFootprintField("propertyValue", 400000);
-    s.setFootprintField("mortgageRemaining", 200000);
-    s.setFootprintField("incomeA", 5000);
-    s.setFootprintField("incomeB", 4000);
-    s.completeFootprint();
+    fillCompleteFootprint();
+    store.getState().completeFootprint();
 
     const verdictsBefore = store.getState().derived.doorVerdicts;
     store.getState().openDoor("rent_out");

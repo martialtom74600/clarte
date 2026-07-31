@@ -11,8 +11,17 @@ import type {
 
 export interface FootprintState {
   postalCode: string;
+  /** Valeur actuelle estimée du bien. */
   propertyValue: number;
+  /** Surface habitable (m²) — loyer zone, DVF, relogement. */
+  propertySurface: number;
+  /** Prix d'achat à l'époque (0 = inconnu). */
+  purchasePrice: number;
   mortgageRemaining: number;
+  /** Mensualité réelle du crédit en cours (0 si pas de crédit). */
+  monthlyMortgagePayment: number;
+  /** Années restantes sur le crédit (durée du refinancement indicatif). */
+  mortgageRemainingYears: number;
   incomeA: number;
   incomeB: number;
   completedAt: string | null;

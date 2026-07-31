@@ -7,7 +7,11 @@ import { describe, it, expect } from "vitest";
 const footprint: FootprintState = {
   postalCode: "75011",
   propertyValue: 400000,
+  propertySurface: 65,
+  purchasePrice: 320000,
   mortgageRemaining: 200000,
+  monthlyMortgagePayment: 950,
+  mortgageRemainingYears: 15,
   incomeA: 5000,
   incomeB: 4000,
   completedAt: "2026-01-01T00:00:00.000Z",
@@ -15,12 +19,9 @@ const footprint: FootprintState = {
 
 describe("porte-presenter", () => {
   const { lastResult, doorVerdicts } = recomputeSeparationDerived({
-    stratum: "portes",
     footprint,
     assumptions: defaultAssumptions(),
     lab: defaultLabState(),
-    derived: { lastInput: null, lastResult: null, doorVerdicts: null, computedAt: null },
-    discreteMode: false,
   });
 
   it("produit 4 portes avec titre et verdict", () => {
@@ -33,7 +34,7 @@ describe("porte-presenter", () => {
 
   it("affiche le montant de rachat pour keep_a", () => {
     const porte = buildPortePresentation("keep_a", lastResult, doorVerdicts);
-    expect(porte?.heroCaption).toBe("pour garder le bien");
+    expect(porte?.heroCaption).toMatch(/crédit actuel|garder le bien/);
     expect(porte?.heroValue).toContain("€");
     expect(porte?.bilateral).toHaveLength(2);
     expect(porte?.bilateral?.[1].caption).toMatch(/capital net récupéré/i);

@@ -108,6 +108,8 @@ export interface Asset {
   grossValue: Money;
   ownership: OwnershipRule;
   acquisitionDate?: string;
+  /** Prix d'acquisition (hors frais) — utile plus-value / apports. */
+  purchasePrice?: Money;
   linkedLiabilityIds?: string[];
   isPrimaryResidence?: boolean;
 }

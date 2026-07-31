@@ -47,6 +47,7 @@ export const assetSchema = z.object({
   grossValue: moneySchema,
   ownership: ownershipRuleSchema,
   acquisitionDate: z.string().optional(),
+  purchasePrice: moneySchema.optional(),
   linkedLiabilityIds: z.array(z.string()).optional(),
   isPrimaryResidence: z.boolean().optional(),
 });
