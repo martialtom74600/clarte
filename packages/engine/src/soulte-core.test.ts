@@ -162,3 +162,30 @@ describe("C4 — package de refinancement", () => {
     expect(soulte.refinanceAmount?.amount).toBe(200000 + 100000 + fees);
   });
 });
+
+describe("equity négative", () => {
+  it("CRD > valeur : soulte nulle + residualDebt", () => {
+    const underwater = {
+      ...baseAsset,
+      grossValue: eur(200000),
+    };
+    const liabilities = [
+      {
+        id: "mortgage",
+        type: "mortgage" as const,
+        remainingBalance: eur(250000),
+        responsibility: { kind: "indivision" as const, shares: { A: 0.5, B: 0.5 } },
+        linkedAssetId: "house",
+      },
+    ];
+    const soulte = computeSoulteCore(underwater, liabilities, "A", baseInput({
+      assets: [underwater],
+      liabilities,
+    }));
+    expect(soulte.negativeEquity).toBe(true);
+    expect(soulte.amount.amount).toBe(0);
+    expect(soulte.residualDebt?.amount).toBe(50000);
+    expect(soulte.notaryFeesEstimate?.amount).toBe(0);
+    expect(soulte.refinanceAmount?.amount).toBe(250000);
+  });
+});

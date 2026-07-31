@@ -93,6 +93,7 @@ function buildKeepLedger(
   const notary = scenario?.soulte?.notaryFeesEstimate?.amount ?? 0;
   const totalCash = scenario?.soulte?.totalCashNeeded?.amount ?? soulte;
   const monthly = scenario?.monthlyPaymentEstimate?.amount ?? 0;
+  const negativeEquity = net < 0 || scenario?.negativeEquity === true;
 
   const lines: LedgerLine[] = [
     { id: "property", label: "Valeur du bien", amount: footprint.propertyValue },
@@ -102,7 +103,12 @@ function buildKeepLedger(
       amount: footprint.mortgageRemaining,
       tone: "subtract",
     },
-    { id: "net", label: "Valeur nette du bien", amount: net, tone: "highlight" },
+    {
+      id: "net",
+      label: negativeEquity ? "Actif net négatif — dette à partager" : "Valeur nette du bien",
+      amount: net,
+      tone: "highlight",
+    },
   ];
 
   if (lab.enabledLevers.includes("initial_contributions") && lab.overrides.initial_contributions) {
@@ -123,10 +129,13 @@ function buildKeepLedger(
     }
   }
 
-  const soulteLabel =
-    doorId === "keep_a" ? "Vous devez verser" : "Vous recevrez";
+  const soulteLabel = negativeEquity
+    ? "Soulte (aucune — equity négative)"
+    : doorId === "keep_a"
+      ? "Vous devez verser"
+      : "Vous recevrez";
   const totalCashLabel =
-    doorId === "keep_a" ? "Total à prévoir (rachat + frais)" : "Total que l'autre doit prévoir";
+    doorId === "keep_a" ? "Total à prévoir (rachat + frais d'acte)" : "Total que l'autre doit prévoir";
   const keepExisting = scenario?.keepFinancingMode === "keep_existing_loan";
   const newLoan = scenario?.newLoanAmount?.amount ?? totalCash;
   const newLoanMonthly = scenario?.newLoanMonthly?.amount ?? 0;
@@ -136,7 +145,7 @@ function buildKeepLedger(
     { id: "soulte", label: soulteLabel, amount: soulte, tone: "highlight" },
     {
       id: "notary",
-      label: "Droit de partage & frais d'acte",
+      label: "Droit de partage (CGI 746) + émoluments ~1,5 %",
       amount: notary,
       tone: "subtract",
     },
@@ -194,12 +203,18 @@ function buildKeepLedger(
   const pension = childSupportLine(footprint, lab);
   if (pension) lines.push(pension);
 
+  const footerParts = [
+    negativeEquity ? "Actif net négatif — dette à partager." : null,
+    keepExisting ? scenario?.bankDisclaimer : null,
+    verdict?.detail,
+  ].filter(Boolean);
+
   return {
     doorId,
     doorTitle: DOOR_TITLES[doorId],
     verdict,
     lines,
-    footer: verdict?.detail,
+    footer: footerParts.join(" ") || undefined,
   };
 }
 
@@ -209,19 +224,42 @@ function buildSellLedger(
   result: SimulationResult,
   verdict: DoorVerdictMap[DoorId] | null
 ): LabLedgerModel {
-  const net = footprint.propertyValue - footprint.mortgageRemaining;
-  const proceeds = scenarioFor(result, "sell")?.netWorthByPerson.A.amount ?? net / 2;
+  const sell = scenarioFor(result, "sell");
+  const sellingCosts = sell?.sellingCostsEstimate?.amount ?? footprint.propertyValue * 0.05;
+  const saleNet =
+    sell?.saleNetProceeds?.amount ??
+    footprint.propertyValue - sellingCosts - footprint.mortgageRemaining;
+  const proceeds = sell?.netWorthByPerson.A.amount ?? saleNet / 2;
+  const negativeEquity = saleNet < 0 || sell?.negativeEquity === true;
 
   const lines: LedgerLine[] = [
     { id: "property", label: "Valeur du bien", amount: footprint.propertyValue },
+    {
+      id: "selling-costs",
+      label: "Frais de sortie (~5 % agence / mise en vente)",
+      amount: sellingCosts,
+      tone: "subtract",
+    },
     {
       id: "mortgage",
       label: "Crédit restant",
       amount: footprint.mortgageRemaining,
       tone: "subtract",
     },
-    { id: "net", label: "Produit net de vente", amount: net, tone: "highlight" },
-    { id: "each", label: "Votre part", amount: proceeds, tone: "total" },
+    {
+      id: "net",
+      label: negativeEquity
+        ? "Actif net négatif — dette à partager"
+        : "Produit net de vente (après frais)",
+      amount: saleNet,
+      tone: "highlight",
+    },
+    {
+      id: "each",
+      label: negativeEquity ? "Votre quote-part de dette" : "Votre part",
+      amount: proceeds,
+      tone: "total",
+    },
   ];
 
   const pension = childSupportLine(footprint, lab);

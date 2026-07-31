@@ -52,14 +52,14 @@ const LEVER_COPY: Record<
     keep_a: {
       title: "Garder mon crédit actuel",
       description:
-        "La banque vous laisse reprendre le prêt aux conditions d'aujourd'hui. Vous ne refinancez que le rachat de part — pas tout le capital restant au taux du marché.",
-      impact: "Baisse souvent la mensualité totale vs un refinancement complet.",
+        "Hypothèse : la banque accepte de vous laisser reprendre le prêt aux conditions actuelles (désolidarisation). Vous ne refinancez alors que le rachat de part — pas tout le capital restant au taux du marché. Accord discrétionnaire : endettement et solvabilité du repreneur.",
+      impact: "Baisse souvent la mensualité vs un refinancement complet — sous réserve d'accord banque.",
     },
     keep_b: {
       title: "Garder le crédit actuel",
       description:
-        "L'autre reprend le prêt aux conditions actuelles et ne refinance que votre rachat de part.",
-      impact: "Change la mensualité et le verdict de faisabilité pour l'autre.",
+        "Hypothèse : la banque laisse l'autre reprendre le prêt aux conditions actuelles et ne refinance que votre rachat de part. La désolidarisation reste à l'appréciation de la banque.",
+      impact: "Change la mensualité et le verdict — sous réserve d'accord banque.",
     },
     sell: {
       title: "Garder mon crédit actuel",
@@ -270,8 +270,15 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
                 <span className="font-medium text-slate-800">Avec ce levier :</span>{" "}
                 {doorId === "rent_out"
                   ? "on part de votre vraie mensualité pour le cashflow locatif."
-                  : "vous gardez cette mensualité sur le crédit restant, et n'empruntez que pour le rachat."}
+                  : "vous gardez cette mensualité sur le crédit restant, et n'empruntez que pour le rachat — uniquement si la banque accepte la désolidarisation."}
               </p>
+              {(doorId === "keep_a" || doorId === "keep_b") && (
+                <p className="mt-2 rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs leading-relaxed text-amber-900">
+                  La désolidarisation de l&apos;emprunt initial est soumise à l&apos;accord
+                  discrétionnaire de la banque (ratio d&apos;endettement et étude de solvabilité du
+                  repreneur). Ce n&apos;est pas une option garantie.
+                </p>
+              )}
               <p className="mt-2 text-xs text-slate-500">{histCopy.impact}</p>
             </div>
             <LabField

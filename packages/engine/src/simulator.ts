@@ -21,10 +21,13 @@ import {
   round,
   subtractMoney,
 } from "./utils.js";
-import { computeSoulteCore } from "./soulte-core.js";
+import { computeSoulteCore, DEFAULT_SELLING_COSTS_RATE } from "./soulte-core.js";
 import { rentPerSqm } from "./affordability.js";
 
 const CHARGES_ESTIMATE_MONTHLY = 180;
+
+export const BANK_KEEP_LOAN_DISCLAIMER =
+  "La désolidarisation de l'emprunt initial est soumise à l'accord discrétionnaire de la banque (ratio d'endettement et solvabilité du repreneur). Ce mode n'est pas garanti.";
 
 export interface Strategy {
   computeBaseNetWorth(input: SimulationInput): Record<PersonId, import("@separation/schemas").Money>;
@@ -106,26 +109,36 @@ function buildScenario(
   }
 
   if (scenario === "sell" && primaryAsset) {
-    const net = getNetAssetValue(primaryAsset, input.liabilities);
+    const sellingCostsRate =
+      input.options.sellingCostsRate ?? DEFAULT_SELLING_COSTS_RATE;
+    const sellingCosts = eur(primaryAsset.grossValue.amount * sellingCostsRate);
+    const equityBeforeCosts = getNetAssetValue(primaryAsset, input.liabilities);
+    const saleNetProceeds = eur(equityBeforeCosts.amount - sellingCosts.amount);
     const shareA = getShareForPerson(primaryAsset.ownership, "A");
     const shareB = getShareForPerson(primaryAsset.ownership, "B");
     const netWorth = {
       A: addMoney(
         subtractMoney(baseNet.A, getPersonShareOfAsset(primaryAsset, "A", input.liabilities)),
-        multiplyMoney(net, shareA)
+        multiplyMoney(saleNetProceeds, shareA)
       ),
       B: addMoney(
         subtractMoney(baseNet.B, getPersonShareOfAsset(primaryAsset, "B", input.liabilities)),
-        multiplyMoney(net, shareB)
+        multiplyMoney(saleNetProceeds, shareB)
       ),
     };
+    const negativeEquity = saleNetProceeds.amount < 0;
+    const costsPct = Math.round(sellingCostsRate * 100);
 
     return {
       scenario: "sell",
       label: "Vendre le logement",
       netWorthByPerson: netWorth,
-      description:
-        "Chaque partie récupère sa quote-part du produit net de vente après remboursement du crédit.",
+      sellingCostsEstimate: sellingCosts,
+      saleNetProceeds,
+      negativeEquity,
+      description: negativeEquity
+        ? `Actif net négatif après frais de sortie (~${costsPct} %) et remboursement du crédit — dette à partager selon les quote-parts.`
+        : `Chaque partie récupère sa quote-part du produit net après frais de sortie (~${costsPct} % agence / mise en vente) et remboursement du crédit.`,
     };
   }
 
@@ -171,7 +184,11 @@ function buildScenario(
       keptMortgageMonthly: eur(keptMonthly),
       newLoanAmount: eur(newLoanAmount),
       newLoanMonthly,
-      description: `${keeper === "A" ? "A" : "B"} conserve le logement et le crédit actuel (${Math.round(keptMonthly).toLocaleString("fr-FR")} €/mois), et finance uniquement le rachat (~${Math.round(newLoanAmount).toLocaleString("fr-FR")} €).`,
+      bankDisclaimer: BANK_KEEP_LOAN_DISCLAIMER,
+      negativeEquity: soulte.negativeEquity === true,
+      description: soulte.negativeEquity
+        ? `Actif net négatif — dette à partager. Hypothèse indicative : conservation du crédit actuel (${Math.round(keptMonthly).toLocaleString("fr-FR")} €/mois), sous accord banque.`
+        : `${keeper === "A" ? "A" : "B"} conserve le logement et le crédit actuel (${Math.round(keptMonthly).toLocaleString("fr-FR")} €/mois), et finance uniquement le rachat (~${Math.round(newLoanAmount).toLocaleString("fr-FR")} €). Sous réserve d'accord banque (désolidarisation).`,
     };
   }
 
@@ -192,7 +209,10 @@ function buildScenario(
     keepFinancingMode: "full_refinance",
     newLoanAmount: eur(fullRefinance),
     newLoanMonthly: monthlyPayment,
-    description: `${keeper === "A" ? "A" : "B"} conserve le logement et verse une soulte de ${soulte.amount.amount.toLocaleString("fr-FR")} € à l'autre partie (refinancement estimé ${Math.round(fullRefinance).toLocaleString("fr-FR")} €).`,
+    negativeEquity: soulte.negativeEquity === true,
+    description: soulte.negativeEquity
+      ? `Actif net négatif — dette à partager (~${Math.round(Math.abs(soulte.netAssetValue.amount)).toLocaleString("fr-FR")} €). Pas de soulte ; refinancement du CRD estimé à ${Math.round(fullRefinance).toLocaleString("fr-FR")} €.`
+      : `${keeper === "A" ? "A" : "B"} conserve le logement et verse une soulte de ${soulte.amount.amount.toLocaleString("fr-FR")} € à l'autre partie (refinancement estimé ${Math.round(fullRefinance).toLocaleString("fr-FR")} €).`,
   };
 }
 
@@ -226,6 +246,35 @@ export function computeComplexityScore(input: SimulationInput): number {
 
 export function computeWarnings(input: SimulationInput): LegalWarning[] {
   const warnings: LegalWarning[] = [];
+
+  const primaryAsset =
+    input.assets.find((a) => a.id === input.options.primaryResidenceId) ??
+    input.assets.find((a) => a.type === "real_estate");
+  if (primaryAsset) {
+    const net = getNetAssetValue(primaryAsset, input.liabilities);
+    if (net.amount < 0) {
+      warnings.push({
+        code: "NEGATIVE_EQUITY",
+        severity: "critical",
+        message:
+          "Actif net négatif — dette à partager : le crédit restant dépasse la valeur estimée du bien. Aucune soulte n'est due ; la dette résiduelle doit être anticipée avec la banque et un notaire.",
+      });
+    }
+  }
+
+  if (
+    input.monthlyMortgagePayment != null &&
+    input.monthlyMortgagePayment > 0 &&
+    (input.options.scenario === "keep_a" ||
+      input.options.scenario === "keep_b" ||
+      input.options.scenario === "compare_all")
+  ) {
+    warnings.push({
+      code: "BANK_DISSOLIDARIZATION",
+      severity: "warning",
+      message: BANK_KEEP_LOAN_DISCLAIMER,
+    });
+  }
 
   if (input.hasMinorChildren) {
     warnings.push({

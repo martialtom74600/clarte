@@ -76,5 +76,8 @@ describe("export-bilan-model", () => {
     expect(bilan?.footprint).toHaveLength(5);
     expect(bilan?.activeLevers).toHaveLength(1);
     expect(bilan?.ledger.lines.some((l) => l.id === "soulte")).toBe(true);
+    expect(bilan?.disclaimer).toMatch(/1,10 %|2,50 %/);
+    expect(bilan?.disclaimer).toMatch(/1,5 %/);
+    expect(bilan?.disclaimer).not.toMatch(/7[,.]5/);
   });
 });

@@ -122,14 +122,68 @@ describe("runSimulation - concubinage", () => {
     ]);
   });
 
-  it("répartit équitablement en cas de vente", () => {
+  it("répartit équitablement en cas de vente après frais de sortie ~5 %", () => {
     const input = createConcubinageInput({
       options: { primaryResidenceId: "house", scenario: "sell" },
     });
     const result = runSimulation(input);
     const sellScenario = result.scenarios[0];
-    expect(sellScenario.netWorthByPerson.A.amount).toBe(100000);
-    expect(sellScenario.netWorthByPerson.B.amount).toBe(100000);
+    // 400k − 5% (20k) − 200k CRD = 180k → 90k chacun
+    expect(sellScenario.sellingCostsEstimate?.amount).toBe(20000);
+    expect(sellScenario.saleNetProceeds?.amount).toBe(180000);
+    expect(sellScenario.netWorthByPerson.A.amount).toBe(90000);
+    expect(sellScenario.netWorthByPerson.B.amount).toBe(90000);
+    expect(sellScenario.negativeEquity).toBe(false);
+  });
+
+  it("avec mensualité historique : ajoute un avertissement banque", () => {
+    const input = createConcubinageInput({
+      monthlyMortgagePayment: 900,
+      options: { primaryResidenceId: "house", scenario: "keep_a" },
+    });
+    const result = runSimulation(input);
+    expect(result.warnings.some((w) => w.code === "BANK_DISSOLIDARIZATION")).toBe(true);
+    const keep = result.scenarios.find((s) => s.scenario === "keep_a")!;
+    expect(keep.bankDisclaimer).toMatch(/désolidarisation/i);
+  });
+
+  it("actif net négatif : alerte + pas de soulte + dette à partager", () => {
+    const input = createConcubinageInput({
+      assets: [
+        {
+          id: "house",
+          type: "real_estate",
+          label: "Appartement sous-eau",
+          grossValue: eur(200000),
+          ownership: { kind: "indivision", shares: { A: 0.5, B: 0.5 } },
+          isPrimaryResidence: true,
+          linkedLiabilityIds: ["mortgage"],
+        },
+      ],
+      liabilities: [
+        {
+          id: "mortgage",
+          type: "mortgage",
+          remainingBalance: eur(250000),
+          responsibility: { kind: "indivision", shares: { A: 0.5, B: 0.5 } },
+          linkedAssetId: "house",
+        },
+      ],
+      options: { primaryResidenceId: "house", scenario: "compare_all" },
+    });
+    const result = runSimulation(input);
+    expect(getNetAssetValue(input.assets[0], input.liabilities).amount).toBe(-50000);
+    expect(result.warnings.some((w) => w.code === "NEGATIVE_EQUITY")).toBe(true);
+    const keep = result.scenarios.find((s) => s.scenario === "keep_a")!;
+    expect(keep.soulte?.amount.amount).toBe(0);
+    expect(keep.soulte?.negativeEquity).toBe(true);
+    expect(keep.soulte?.residualDebt?.amount).toBe(50000);
+    expect(keep.negativeEquity).toBe(true);
+    const sell = result.scenarios.find((s) => s.scenario === "sell")!;
+    // 200k − 5% (10k) − 250k = −60k
+    expect(sell.saleNetProceeds?.amount).toBe(-60000);
+    expect(sell.negativeEquity).toBe(true);
+    expect(sell.netWorthByPerson.A.amount).toBe(-30000);
   });
 });
 

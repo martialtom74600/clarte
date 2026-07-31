@@ -138,7 +138,7 @@ export function WowMoment({ result }: WowMomentProps) {
           </p>
           {soulte.totalCashNeeded && (
             <p className="mt-4 text-sm text-slate-500">
-              Cash total estimé (soulte + frais notaire) :{" "}
+              Cash total estimé (soulte + droit de partage + émoluments) :{" "}
               <span className="font-medium text-slate-800">
                 {formatEuro(soulte.totalCashNeeded.amount)}
               </span>

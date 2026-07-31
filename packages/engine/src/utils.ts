@@ -8,7 +8,7 @@ import type {
   SimulationInput,
 } from "@separation/schemas";
 
-export const RULE_PACK_VERSION = "2026.2";
+export const RULE_PACK_VERSION = "2026.2.1";
 
 export function eur(amount: number): Money {
   return { amount: round(amount), currency: "EUR" };
@@ -58,7 +58,8 @@ export function getNetAssetValue(asset: Asset, liabilities: Liability[]): Money 
     )
     .reduce((sum, l) => sum + l.remainingBalance.amount, 0);
 
-  return eur(Math.max(0, asset.grossValue.amount - linkedDebt));
+  // Peut être négatif (CRD > valeur) — ne pas masquer l'equity négative.
+  return eur(asset.grossValue.amount - linkedDebt);
 }
 
 export function getPersonShareOfAsset(

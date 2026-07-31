@@ -14,6 +14,9 @@ export const DROIT_PARTAGE_RATE_CONCUBINAGE = 0.025;
 /** Émoluments + CSI + débours — ordre de grandeur ~1,5 % de l'actif net. */
 export const DEFAULT_EMOLUMENTS_RATE_ON_NET = 0.015;
 
+/** Frais de sortie vente (agence + mise en vente) — ordre de grandeur ~5 % du prix brut. */
+export const DEFAULT_SELLING_COSTS_RATE = 0.05;
+
 export type ContributionMode = "none" | "share_rewrite" | "recompense";
 
 export function droitDePartageRate(status: SimulationInput["status"]): number {
@@ -137,6 +140,27 @@ export function computeSoulteCore(
   const receiver: PersonId = keeper === "A" ? "B" : "A";
   const net = getNetAssetValue(asset, liabilities);
   const netAmount = net.amount;
+  const mortgageRemaining = linkedMortgageBalance(asset, liabilities);
+  const negativeEquity = netAmount < 0;
+
+  // Actif net négatif : pas de soulte à verser — dette résiduelle à partager.
+  if (negativeEquity) {
+    return {
+      payer: keeper,
+      receiver,
+      amount: eur(0),
+      assetId: asset.id,
+      assetLabel: asset.label,
+      netAssetValue: net,
+      notaryFeesEstimate: eur(0),
+      totalCashNeeded: eur(0),
+      droitDePartage: eur(0),
+      emolumentsEstimate: eur(0),
+      refinanceAmount: eur(mortgageRemaining),
+      negativeEquity: true,
+      residualDebt: eur(Math.abs(netAmount)),
+    };
+  }
 
   const { amount, mode, recompenseA, recompenseB } = computeSoulteAmount(
     asset,
@@ -153,7 +177,6 @@ export function computeSoulteCore(
   const notaryFees = addMoney(droitDePartage, emolumentsEstimate);
   const totalCashNeeded = addMoney(soulteAmount, notaryFees);
 
-  const mortgageRemaining = linkedMortgageBalance(asset, liabilities);
   const refinanceAmount = eur(
     mortgageRemaining + soulteAmount.amount + notaryFees.amount
   );
@@ -170,6 +193,7 @@ export function computeSoulteCore(
     droitDePartage,
     emolumentsEstimate,
     refinanceAmount,
+    negativeEquity: false,
     ...(mode === "recompense"
       ? { recompenseA: eur(recompenseA), recompenseB: eur(recompenseB) }
       : {}),

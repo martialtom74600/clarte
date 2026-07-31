@@ -30,6 +30,18 @@ function buildKeepPresentation(
 ): Pick<PortePresentation, "heroValue" | "heroCaption" | "consequence"> {
   const scenario = scenarioFor(result, doorId);
   const keepExisting = scenario?.keepFinancingMode === "keep_existing_loan";
+  const negativeEquity =
+    scenario?.negativeEquity === true || scenario?.soulte?.negativeEquity === true;
+
+  if (negativeEquity) {
+    const residual = scenario?.soulte?.residualDebt?.amount ?? 0;
+    return {
+      heroValue: formatEuro(residual),
+      heroCaption: "dette résiduelle à partager",
+      consequence: "Actif net négatif — dette à partager",
+    };
+  }
+
   const financing = keepExisting
     ? (scenario?.newLoanAmount?.amount ??
       scenario?.cashNeeded?.amount ??
@@ -45,7 +57,7 @@ function buildKeepPresentation(
     doorId === "keep_a" ? "Vous conservez le bien" : "L'autre partie conserve le bien";
 
   const heroCaption = keepExisting
-    ? "à emprunter en plus du crédit actuel"
+    ? "à emprunter en plus du crédit actuel (sous accord banque)"
     : doorId === "keep_a"
       ? "pour garder le bien"
       : "rachat de votre part";
@@ -66,10 +78,19 @@ function buildSellPresentation(
 ): Pick<PortePresentation, "heroValue" | "heroCaption" | "consequence"> {
   const scenario = scenarioFor(result, "sell");
   const proceeds = scenario?.netWorthByPerson.A.amount ?? 0;
+  const negativeEquity = scenario?.negativeEquity === true;
+
+  if (negativeEquity) {
+    return {
+      heroValue: formatEuro(Math.abs(proceeds)),
+      heroCaption: "votre quote-part de dette",
+      consequence: "Actif net négatif — dette à partager",
+    };
+  }
 
   return {
     heroValue: formatEuro(proceeds),
-    heroCaption: "votre part, net",
+    heroCaption: "votre part, net (après ~5 % frais de sortie)",
     consequence: verdict.headline,
   };
 }

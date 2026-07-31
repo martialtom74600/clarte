@@ -7,7 +7,9 @@ export {
   DROIT_PARTAGE_RATE_MARRIAGE_PACS,
   DROIT_PARTAGE_RATE_CONCUBINAGE,
   DEFAULT_EMOLUMENTS_RATE_ON_NET,
+  DEFAULT_SELLING_COSTS_RATE,
 } from "./soulte-core.js";
+export { BANK_KEEP_LOAN_DISCLAIMER } from "./simulator.js";
 export type { ContributionMode } from "./soulte-core.js";
 export { runQuickEstimate } from "./quick-estimate.js";
 export {

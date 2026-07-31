@@ -87,5 +87,21 @@ describe("buildLabLedger", () => {
     expect(ledger?.lines.some((l) => l.id === "kept-mortgage")).toBe(true);
     expect(ledger?.lines.some((l) => l.id === "new-loan")).toBe(true);
     expect(ledger?.lines.find((l) => l.id === "kept-mortgage")?.amount).toBe(950);
+    expect(ledger?.footer).toMatch(/désolidarisation|banque/i);
+  });
+
+  it("vente : affiche frais de sortie ~5 % et produit net", () => {
+    const ledger = buildLabLedger({
+      doorId: "sell",
+      footprint,
+      assumptions: defaultAssumptions(),
+      lab: { ...defaultLabState(), activeDoor: "sell" },
+      result: derived.lastResult,
+      doorVerdicts: derived.doorVerdicts,
+    });
+    expect(ledger?.lines.some((l) => l.id === "selling-costs")).toBe(true);
+    expect(ledger?.lines.find((l) => l.id === "selling-costs")?.amount).toBe(20000);
+    expect(ledger?.lines.find((l) => l.id === "net")?.amount).toBe(180000);
+    expect(ledger?.lines.find((l) => l.id === "each")?.amount).toBe(90000);
   });
 });

@@ -130,6 +130,8 @@ export interface SimulationOptions {
   mortgageDurationYears?: number;
   /** Override loyer mensuel brut pour le scénario rent_out (levier labo). */
   monthlyRentOverride?: number;
+  /** Frais de sortie vente sur le prix brut (défaut moteur ~5 % agence / mise en vente). */
+  sellingCostsRate?: number;
 }
 
 export interface SimulationInput {
@@ -201,6 +203,10 @@ export interface SoulteResult {
   /** Récompenses / créances d'apport retenues (communauté). */
   recompenseA?: Money;
   recompenseB?: Money;
+  /** True si l'actif net du bien est négatif (CRD > valeur). */
+  negativeEquity?: boolean;
+  /** Dette résiduelle à partager quand l'actif net est négatif. */
+  residualDebt?: Money;
 }
 
 export type KeepFinancingMode = "full_refinance" | "keep_existing_loan";
@@ -223,6 +229,14 @@ export interface ScenarioComparison {
   newLoanAmount?: Money;
   /** Mensualité du seul nouveau prêt. */
   newLoanMonthly?: Money;
+  /** Frais de sortie vente (agence / mise en vente) déduits du brut. */
+  sellingCostsEstimate?: Money;
+  /** Produit net de vente après frais de sortie et remboursement du crédit. */
+  saleNetProceeds?: Money;
+  /** True si produit net ou equity du bien est négatif. */
+  negativeEquity?: boolean;
+  /** Avertissement banque (désolidarisation / keep_existing_loan). */
+  bankDisclaimer?: string;
 }
 
 export type AffordabilityVerdict = "green" | "orange" | "red";

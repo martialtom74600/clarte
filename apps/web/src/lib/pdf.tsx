@@ -92,7 +92,7 @@ function SimulationPdfDocument({
             </Text>
             {result.soulte.totalCashNeeded && (
               <Text>
-                Cash total (soulte + frais notaire) :{" "}
+                Cash total (soulte + droit de partage + émoluments) :{" "}
                 {formatEuro(result.soulte.totalCashNeeded.amount)}
               </Text>
             )}

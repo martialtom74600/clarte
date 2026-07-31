@@ -37,9 +37,12 @@ Exécuter avec : `npm run test --workspace=@separation/engine`
 - Statut : concubinage
 - Bien : 400 000 €, crédit 200 000 €, 50/50
 - Scénario : vente
+- Frais de sortie : 5 % du brut (défaut moteur)
 
 **Attendu :**
-- Chaque partie : 100 000 €
+- Frais de sortie : 20 000 €
+- Produit net : 180 000 € (400 000 − 20 000 − 200 000)
+- Chaque partie : 90 000 €
 
 ---
 
@@ -93,15 +96,18 @@ Exécuter avec : `npm run test --workspace=@separation/engine`
 
 ---
 
-## Cas 8 — Soulte avec frais notaire
+## Cas 8 — Soulte avec droit de partage + émoluments
 
 **Entrée :**
 - Concubinage, bien net 200 000 €, 50/50, A rachète
-- Frais notaire : 7,5%
+- Droit de partage CGI 746 : 2,50 % de l'actif net
+- Émoluments / CSI / débours : ~1,5 % de l'actif net
 
 **Attendu :**
 - Soulte : 100 000 €
-- Cash total : 107 500 €
+- Droit de partage : 5 000 €
+- Émoluments : 3 000 €
+- Cash total : 108 000 €
 
 ---
 

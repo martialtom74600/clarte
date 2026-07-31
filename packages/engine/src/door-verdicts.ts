@@ -87,12 +87,30 @@ function buildKeepDoorVerdict(
     maxEffortRatio: 0.35,
   });
 
+  if (scenario?.soulte?.negativeEquity || scenario?.negativeEquity) {
+    const residual = scenario?.soulte?.residualDebt?.amount ?? 0;
+    return {
+      doorId,
+      verdict: "red",
+      label: DOOR_LABELS[doorId],
+      headline: "Actif net négatif — dette à partager",
+      detail: `Le crédit dépasse la valeur du bien (~${Math.round(residual).toLocaleString("fr-FR")} € de dette résiduelle). Pas de soulte ; anticipez un accord banque et notaire. ${
+        scenario?.bankDisclaimer ?? ""
+      }`.trim(),
+      monthlyImpact: scenario?.monthlyPaymentEstimate ?? affordability.monthlyPayment,
+    };
+  }
+
+  const bankNote = scenario?.bankDisclaimer
+    ? `\n${scenario.bankDisclaimer}`
+    : "";
+
   return {
     doorId,
     verdict: affordability.verdict,
     label: DOOR_LABELS[doorId],
     headline: affordability.label,
-    detail: affordability.detail,
+    detail: `${affordability.detail}${bankNote}`,
     monthlyImpact: scenario?.monthlyPaymentEstimate ?? affordability.monthlyPayment,
   };
 }
@@ -122,6 +140,18 @@ function buildSellDoorVerdict(
     existingMonthlyCharges: childSupportChargeFor(input, "B"),
     durationYears: rateSnapshot.durationYears,
   });
+
+  if (sellScenario?.negativeEquity) {
+    const shortfall = Math.abs(sellScenario.saleNetProceeds?.amount ?? 0);
+    return {
+      doorId: "sell",
+      verdict: "red",
+      label: DOOR_LABELS.sell,
+      headline: "Actif net négatif — dette à partager",
+      detail: `Après frais de sortie et remboursement du crédit, il resterait ~${Math.round(shortfall).toLocaleString("fr-FR")} € de dette à partager. Relogement zone ~${Math.round(relocateTarget).toLocaleString("fr-FR")} €.`,
+      monthlyImpact: affA.monthlyPayment,
+    };
+  }
 
   const verdict = worstVerdict(affA.verdict, affB.verdict);
   const headline =

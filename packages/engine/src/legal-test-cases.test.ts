@@ -40,6 +40,30 @@ describe("Legal test cases (notaire validation)", () => {
     expect(result.soulte?.amount.amount).toBe(120000);
   });
 
+  it("Cas 3: vente avec frais de sortie 5 % → 90k chacun", () => {
+    const input: SimulationInput = {
+      status: "concubinage",
+      persons,
+      assets: [{
+        id: "house", type: "real_estate", label: "Appart", grossValue: eur(400000),
+        ownership: { kind: "indivision", shares: { A: 0.5, B: 0.5 } },
+        linkedLiabilityIds: ["mortgage"],
+      }],
+      liabilities: [{
+        id: "mortgage", type: "mortgage", remainingBalance: eur(200000),
+        responsibility: { kind: "indivision", shares: { A: 0.5, B: 0.5 } },
+        linkedAssetId: "house",
+      }],
+      options: { primaryResidenceId: "house", scenario: "sell" },
+    };
+    const result = runSimulation(input);
+    const sell = result.scenarios[0];
+    expect(sell.sellingCostsEstimate?.amount).toBe(20000);
+    expect(sell.saleNetProceeds?.amount).toBe(180000);
+    expect(sell.netWorthByPerson.A.amount).toBe(90000);
+    expect(sell.netWorthByPerson.B.amount).toBe(90000);
+  });
+
   it("Cas 6: mariage séparation de biens soulte 150k", () => {
     const input: SimulationInput = {
       status: "marriage",
