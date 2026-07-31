@@ -335,6 +335,180 @@
   margin-top: 2.5rem;
 }
 
+.sidePanels {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 0 1.5rem 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.sidePanel {
+  display: flex;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.04);
+}
+
+.sidePanelMediation {
+  border-left: 4px solid #64748b;
+}
+
+.sidePanelPartner {
+  border-left: 4px solid #006fc7;
+  background: linear-gradient(180deg, #ffffff 0%, #f0f7ff 100%);
+}
+
+.sidePanelIcon,
+.sidePanelIconPartner {
+  display: flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  color: #475569;
+  background: #f1f5f9;
+}
+
+.sidePanelIconPartner {
+  color: #004a85;
+  background: #dbeafe;
+}
+
+.sidePanelEyebrow {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #006fc7;
+  margin-bottom: 0.375rem;
+}
+
+.sidePanelTitle {
+  font-size: 1.125rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: #0f172a;
+}
+
+.sidePanelLead {
+  margin-top: 0.625rem;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: #475569;
+}
+
+.sidePanelForm {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.formGrid {
+  display: grid;
+  gap: 0.875rem;
+}
+
+@media (min-width: 640px) {
+  .formGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.fieldLabelBlock {
+  display: block;
+  margin-bottom: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.sidePanelInput {
+  width: 100%;
+  font-size: 0.875rem;
+}
+
+.sidePanelButton {
+  align-self: flex-start;
+  margin-top: 0.25rem;
+  padding: 0.625rem 1rem;
+  font-size: 0.8125rem;
+}
+
+.sidePanelButtonPrimary {
+  width: 100%;
+  padding: 0.875rem 1.25rem;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+.checkboxRow {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: #334155;
+  cursor: pointer;
+}
+
+.checkbox {
+  margin-top: 0.2rem;
+  height: 1rem;
+  width: 1rem;
+  shrink: 0;
+  accent-color: #006fc7;
+}
+
+.legalNote {
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: #94a3b8;
+}
+
+.successBox,
+.successBoxPartner {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.successBoxPartner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.successTitle {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.successBody {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: #475569;
+}
+
+.shareHint {
+  font-size: 0.75rem;
+  color: #64748b;
+  word-break: break-all;
+}
+
 @media print {
   @page {
     margin: 1.5cm;

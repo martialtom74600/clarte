@@ -2,6 +2,7 @@ import { scoreLead, buildLeadPayload } from "@separation/lead-scoring";
 import { leadQualificationSchema, simulationInputSchema } from "@separation/schemas";
 import type { SimulationInput, SimulationResult } from "@separation/schemas";
 import { saveLead, saveSimulation } from "@/lib/supabase";
+import { publishLeadToMarketplace } from "@/lib/marketplace-publish";
 import { generateSimulationPdf } from "@/lib/pdf";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
@@ -62,6 +63,7 @@ export async function POST(request: Request) {
     const {
       email,
       phone,
+      fullName,
       simulation,
       result,
       urgencyMonths,
@@ -70,9 +72,11 @@ export async function POST(request: Request) {
       tenantId,
       proofId,
       postalCode,
+      optInPartnerMatch,
     } = body as {
       email: string;
       phone?: string;
+      fullName?: string;
       postalCode?: string;
       simulation: SimulationInput;
       result: SimulationResult;
@@ -81,13 +85,22 @@ export async function POST(request: Request) {
       scenarioPreference?: SimulationInput["options"]["scenario"];
       tenantId?: string;
       proofId?: string;
+      optInPartnerMatch?: boolean;
     };
+
+    const partnerOptIn = optInPartnerMatch === true;
+    if (partnerOptIn && (!phone || phone.trim().length < 8)) {
+      return NextResponse.json(
+        { error: "VALIDATION_ERROR", message: "Un numéro de téléphone valide est requis." },
+        { status: 400 }
+      );
+    }
 
     const qualification = leadQualificationSchema.parse({
       email,
       urgencyMonths,
       hasMinorChildren,
-      optInPartnerMatch: false,
+      optInPartnerMatch: partnerOptIn,
       scenarioPreference,
       tenantId: tenantId ?? simulation.tenantId,
     });
@@ -117,11 +130,35 @@ export async function POST(request: Request) {
       simulation_data: {
         ...payload.simulationSummary,
         phone: phone?.trim() || null,
+        fullName: fullName?.trim() || null,
         shareToken,
       },
     });
 
     await sendReportEmail(email, simulation, result, proofId);
+
+    let marketplaceListed = false;
+    let marketplaceMessage: string | undefined;
+
+    if (partnerOptIn && phone) {
+      const marketplaceOutcome = await publishLeadToMarketplace({
+        email: qualification.email,
+        phone: phone.trim(),
+        postalCode: postalCode ?? simulation.postalCode ?? "",
+        proofId,
+        shareToken,
+        simulation,
+        result,
+        urgencyMonths,
+        hasMinorChildren,
+        simulationId: savedSimulation?.id,
+      });
+
+      marketplaceListed = marketplaceOutcome.listed;
+      marketplaceMessage = marketplaceOutcome.listed
+        ? undefined
+        : marketplaceOutcome.message ?? "Dossier enregistré — publication marketplace en attente.";
+    }
 
     if (leadScore.qualifiesForCpl) {
       await sendPartnerWebhook({
@@ -137,6 +174,8 @@ export async function POST(request: Request) {
       shareToken,
       simulationId: savedSimulation?.id,
       shareUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/partage/${shareToken}`,
+      marketplaceListed,
+      marketplaceMessage,
     });
   } catch (error) {
     console.error("Lead capture error:", error);

@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 import { useSeparationStore } from "@/store/separation-store";
 import { buildExportBilan } from "@/lib/separation/export-bilan-model";
 import { ExportLedgerDocument } from "./export-ledger-document";
+import { ExportMediationPanel } from "./export-mediation-panel";
+import { ExportPartnerOptInPanel } from "./export-partner-optin-panel";
 import styles from "./export-bilan.module.css";
 
 export function ExportBilanShell() {
@@ -107,6 +109,13 @@ export function ExportBilanShell() {
           </button>
         </div>
       </div>
+
+      {lastResult && (
+        <div className={cn(styles.sidePanels, styles.noPrint)}>
+          <ExportMediationPanel scenarioTitle={model.scenarioTitle} />
+          <ExportPartnerOptInPanel result={lastResult} />
+        </div>
+      )}
     </div>
   );
 }
