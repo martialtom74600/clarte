@@ -91,6 +91,9 @@ describe("buildLabLedger", () => {
     expect(ledger?.lines.some((l) => l.id === "kept-mortgage")).toBe(true);
     expect(ledger?.lines.some((l) => l.id === "new-loan")).toBe(true);
     expect(ledger?.lines.find((l) => l.id === "kept-mortgage")?.amount).toBe(950);
+    expect(ledger?.lines.find((l) => l.id === "notary")?.hint).toBe(
+      "Droit de partage (CGI 746) et émoluments sur le patrimoine net"
+    );
     expect(ledger?.warningNote).toMatch(/désolidarisation/i);
     expect(ledger?.footer).not.toMatch(/désolidarisation/i);
     expect(ledger?.footer).toMatch(/endettement sera de \d+ %/);
@@ -116,7 +119,40 @@ describe("buildLabLedger", () => {
     expect(ledger?.lines.find((l) => l.id === "net")?.amount).toBe(178200);
     expect(ledger?.lines.find((l) => l.id === "you")?.amount).toBe(89100);
     expect(ledger?.lines.find((l) => l.id === "other")?.amount).toBe(89100);
-    expect(ledger?.footer).toMatch(/150 U|Relogement/i);
+    expect(ledger?.footer).toMatch(/Relogement dans le quartier/i);
+    expect(ledger?.contextNote).toBeTruthy();
+  });
+
+  it("keep_b : même structure que keep_a avec perspective inversée", () => {
+    const ledger = buildLabLedger({
+      doorId: "keep_b",
+      footprint,
+      assumptions: defaultAssumptions(),
+      lab: { ...defaultLabState(), activeDoor: "keep_b" },
+      result: derived.lastResult,
+      doorVerdicts: derived.doorVerdicts,
+    });
+    expect(ledger?.lines.find((l) => l.id === "notary")?.hint).toContain("patrimoine net");
+    expect(ledger?.lines.find((l) => l.id === "monthly")?.label).toMatch(/autre/i);
+    expect(ledger?.lines.every((l) => l.sectionId)).toBe(true);
+  });
+
+  it("contextNote endettement si dépassement 35 %", () => {
+    const tightFootprint = { ...footprint, incomeA: 2200 };
+    const tightDerived = recomputeSeparationDerived({
+      ...baseState,
+      footprint: tightFootprint,
+    });
+    const ledger = buildLabLedger({
+      doorId: "keep_a",
+      footprint: tightFootprint,
+      assumptions: defaultAssumptions(),
+      lab: baseState.lab,
+      result: tightDerived.lastResult,
+      doorVerdicts: tightDerived.doorVerdicts,
+    });
+    expect(ledger?.footer).toMatch(/dépasse la limite bancaire de 35 %/);
+    expect(ledger?.contextNote).toMatch(/dépasse le plafond légal de 35 %/);
   });
 
   it("keep_a : affiche capital du partant et cible de relogement", () => {
@@ -176,7 +212,8 @@ describe("buildLabLedger", () => {
     expect(ledger?.lines.some((l) => l.id === "management")).toBe(true);
     expect(ledger?.lines.some((l) => l.id === "tax")).toBe(true);
     expect(ledger?.lines.find((l) => l.id === "net")?.label).toMatch(/Argent net/i);
-    expect(ledger?.footer).toMatch(/micro-foncier|Feu/i);
+    expect(ledger?.footer).toMatch(/Cashflow|Zone 75011/i);
+    expect(ledger?.contextNote).toBeTruthy();
     const rentScenario = derived.lastResult?.scenarios.find((s) => s.scenario === "rent_out");
     expect(ledger?.lines.find((l) => l.id === "net")?.amount).toBe(
       Math.round(rentScenario?.rentOutBreakdown?.netCashflow.amount ?? NaN)

@@ -1,5 +1,5 @@
 import type { AffordabilityVerdict, DoorId, DoorVerdictMap, SimulationResult } from "@separation/schemas";
-import { estimateChildSupport, estimateMonthlyPayment } from "@separation/engine";
+import { estimateChildSupport, estimateMonthlyPayment, RENT_GREEN_THRESHOLD } from "@separation/engine";
 import type { AssumptionsState, FootprintState, LabState } from "./separation-types";
 import { compileSimulationInput } from "./compile-simulation-input";
 import type { LedgerSectionId } from "./lab-ledger-sections";
@@ -23,6 +23,62 @@ export interface LabLedgerModel {
   footer?: string;
   /** Note d'avertissement (ex. accord banque) — une seule fois, hors footer principal. */
   warningNote?: string;
+  /** Message pédagogique court (ex. dépassement 35 %) — affiché dans « Ce que ça signifie ». */
+  contextNote?: string;
+}
+
+const NOTARY_FEES_HINT =
+  "Droit de partage (CGI 746) et émoluments sur le patrimoine net";
+
+const HCSF_DEBT_CEILING_PCT = 35;
+
+function buildDebtContextNote(params: {
+  verdictDetail?: string;
+  subject?: "vous" | "l'autre";
+}): string | undefined {
+  const detail = params.verdictDetail ?? "";
+  if (!detail.includes("dépasse la limite bancaire de 35 %")) return undefined;
+
+  const match = detail.match(/endettement sera de (\d+) %/i);
+  const pct = match?.[1];
+  const subjectLabel =
+    params.subject === "l'autre"
+      ? "Le taux d'endettement de l'autre"
+      : "Votre taux d'endettement";
+
+  return pct
+    ? `${subjectLabel} (${pct} %) dépasse le plafond légal de ${HCSF_DEBT_CEILING_PCT} %.`
+    : `${subjectLabel} dépasse le plafond légal de ${HCSF_DEBT_CEILING_PCT} %.`;
+}
+
+function buildRentContextNote(netMonthly: number): string | undefined {
+  if (netMonthly < 0) {
+    return "Le loyer ne couvre pas toutes les charges : vous complétez de votre poche chaque mois.";
+  }
+  if (netMonthly < RENT_GREEN_THRESHOLD) {
+    return "Le loyer couvre à peine les charges : peu de marge de sécurité.";
+  }
+  return "Le loyer dépasse les charges : il reste un excédent mensuel après impôts.";
+}
+
+function buildSellContextNote(
+  relocateVerdict: { A: AffordabilityVerdict; B: AffordabilityVerdict } | undefined,
+  negativeEquity: boolean
+): string | undefined {
+  if (negativeEquity) {
+    return "La vente ne couvre pas le crédit : la dette restante se partage entre vous.";
+  }
+  if (!relocateVerdict) return undefined;
+  const worst = [relocateVerdict.A, relocateVerdict.B].sort(
+    (a, b) => ({ red: 0, orange: 1, green: 2 }[a] - { red: 0, orange: 1, green: 2 }[b])
+  )[0];
+  if (worst === "red") {
+    return "Le produit de la vente ne suffit pas, pour au moins l'un de vous, à financer un logement équivalent dans le quartier.";
+  }
+  if (worst === "orange") {
+    return "Le relogement dans le quartier sera serré pour au moins l'un de vous.";
+  }
+  return "Vos parts nettes permettent, en principe, de vous reloger dans le quartier.";
 }
 
 const RELOCATE_VERDICT_LABELS: Record<AffordabilityVerdict, string> = {
@@ -264,7 +320,7 @@ function buildKeepLedger(
       amount: notary,
       tone: "subtract",
       sectionId: "echange",
-      hint: "Environ 1,5 % du montant racheté",
+      hint: NOTARY_FEES_HINT,
     },
     {
       id: "total-cash",
@@ -298,23 +354,35 @@ function buildKeepLedger(
     lines.push(
       {
         id: "kept-mortgage",
-        label: "Votre crédit actuel (conservé)",
+        label:
+          doorId === "keep_a"
+            ? "Votre crédit actuel (conservé)"
+            : "Crédit actuel conservé par l'autre",
         amount: keptMonthly,
         tone: "neutral",
         suffix: "/mois",
         sectionId: "mensuel",
-        hint: "Mensualité du prêt déjà en cours",
+        hint:
+          doorId === "keep_a"
+            ? "Mensualité du prêt déjà en cours"
+            : "Mensualité que l'autre continue à payer",
       },
       {
         id: "new-loan",
-        label: "Nouveau prêt pour le rachat",
+        label:
+          doorId === "keep_a"
+            ? "Nouveau prêt pour le rachat"
+            : "Nouveau prêt de l'autre pour le rachat",
         amount: newLoan,
         tone: "total",
         sectionId: "mensuel",
       },
       {
         id: "new-loan-monthly",
-        label: "Mensualité de ce nouveau prêt",
+        label:
+          doorId === "keep_a"
+            ? "Mensualité de ce nouveau prêt"
+            : "Mensualité du nouveau prêt de l'autre",
         amount: newLoanMonthly,
         tone: "neutral",
         suffix: "/mois",
@@ -322,25 +390,32 @@ function buildKeepLedger(
       },
       {
         id: "monthly",
-        label: "Total à rembourser chaque mois",
+        label:
+          doorId === "keep_a"
+            ? "Total à rembourser chaque mois"
+            : "Total mensuel de l'autre après rachat",
         amount: monthly,
         tone: "total",
         suffix: "/mois",
         sectionId: "mensuel",
+        hint: "Crédit conservé + nouveau prêt (si la banque accepte)",
       }
     );
   } else {
     lines.push(
       {
         id: "refinance",
-        label: "Nouveau crédit (rachat + dette + frais)",
+        label:
+          doorId === "keep_a"
+            ? "Nouveau crédit (rachat + dette + frais)"
+            : "Nouveau crédit de l'autre (rachat + dette + frais)",
         amount: newLoan,
         tone: "total",
         sectionId: "mensuel",
       },
       {
         id: "monthly",
-        label: "Mensualité estimée",
+        label: doorId === "keep_a" ? "Mensualité estimée" : "Mensualité estimée pour l'autre",
         amount: monthly,
         tone: "neutral",
         suffix: "/mois",
@@ -359,6 +434,10 @@ function buildKeepLedger(
     verdictDetail: verdict?.detail,
     bankDisclaimer,
   });
+  const contextNote = buildDebtContextNote({
+    verdictDetail: verdict?.detail,
+    subject: doorId === "keep_b" ? "l'autre" : "vous",
+  });
 
   return {
     doorId,
@@ -367,6 +446,7 @@ function buildKeepLedger(
     lines,
     footer,
     warningNote,
+    contextNote,
   };
 }
 
@@ -402,6 +482,7 @@ function buildSellLedger(
       amount: agency,
       tone: "subtract",
       sectionId: "bien",
+      hint: "Frais habituels à la charge du vendeur",
     },
     {
       id: "diagnostics",
@@ -417,6 +498,7 @@ function buildSellLedger(
       amount: footprint.mortgageRemaining,
       tone: "subtract",
       sectionId: "bien",
+      hint: "Remboursé sur le prix de vente avant le partage",
     },
     {
       id: "net",
@@ -424,6 +506,9 @@ function buildSellLedger(
       amount: saleNet,
       tone: "highlight",
       sectionId: "bien",
+      hint: negativeEquity
+        ? "Le crédit dépasse le produit de vente"
+        : "Valeur − agence − diagnostics − crédit",
     },
     {
       id: "you",
@@ -431,6 +516,9 @@ function buildSellLedger(
       amount: you,
       tone: "total",
       sectionId: "echange",
+      hint: negativeEquity
+        ? "Quote-part de la dette restante"
+        : "Capital disponible pour vous reloger",
     },
     {
       id: "other",
@@ -438,6 +526,9 @@ function buildSellLedger(
       amount: other,
       tone: "total",
       sectionId: "echange",
+      hint: negativeEquity
+        ? "Quote-part de la dette restante"
+        : "Capital disponible pour l'autre",
     },
   ];
 
@@ -455,20 +546,29 @@ function buildSellLedger(
   const pension = childSupportLine(footprint, lab);
   if (pension) lines.push(pension);
 
+  const relocateVerdict = sell?.relocateVerdictByPerson;
   const footerParts = [
     sell?.capitalGainsNote,
-    sell?.relocateVerdictByPerson
-      ? `Relogement zone — Vous : ${formatAffordabilityVerdictLabel(sell.relocateVerdictByPerson.A)} · Autre : ${formatAffordabilityVerdictLabel(sell.relocateVerdictByPerson.B)}.`
+    relocateVerdict
+      ? `Relogement dans le quartier — Vous : ${formatAffordabilityVerdictLabel(relocateVerdict.A)} · Autre : ${formatAffordabilityVerdictLabel(relocateVerdict.B)}.`
       : null,
-    verdict?.detail,
+    relocateTarget != null && relocateTarget > 0
+      ? `Cible relogement ~${Math.round(relocateTarget).toLocaleString("fr-FR")} € (prix × surface dans votre zone).`
+      : null,
+    negativeEquity
+      ? `Dette résiduelle ~${Math.round(Math.abs(saleNet)).toLocaleString("fr-FR")} € à partager.`
+      : `Produit net partagé — Vous : ${Math.round(you).toLocaleString("fr-FR")} € · Autre : ${Math.round(other).toLocaleString("fr-FR")} €.`,
   ].filter(Boolean);
+
+  const contextNote = buildSellContextNote(relocateVerdict, negativeEquity);
 
   return {
     doorId: "sell",
     doorTitle: DOOR_TITLES.sell,
     verdict,
     lines,
-    footer: footerParts.join(" ") || undefined,
+    footer: footerParts.join("\n") || undefined,
+    contextNote,
   };
 }
 
@@ -573,12 +673,11 @@ function buildRentLedger(
   const pension = childSupportLine(footprint, lab);
   if (pension) lines.push(pension);
 
+  const netRounded = Math.round(net);
   const footerParts = [
     scenario?.rentOutFormulaDetail,
-    verdict?.headline
-      ? `Feu ${verdict.verdict} — ${verdict.headline}`
-      : null,
-    input.postalCode ? `Zone ${input.postalCode}` : null,
+    verdict?.headline,
+    input.postalCode ? `Zone ${input.postalCode} · ${footprint.propertySurface} m²` : null,
   ].filter(Boolean);
 
   return {
@@ -586,7 +685,8 @@ function buildRentLedger(
     doorTitle: DOOR_TITLES.rent_out,
     verdict,
     lines,
-    footer: footerParts.join(" · ") || undefined,
+    footer: footerParts.join("\n") || undefined,
+    contextNote: buildRentContextNote(netRounded),
   };
 }
 

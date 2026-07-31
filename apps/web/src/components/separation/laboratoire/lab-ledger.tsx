@@ -182,27 +182,49 @@ function parseFooterBlocks(footer: string) {
   const lines = footer.split("\n").map((l) => l.trim()).filter(Boolean);
   const debtLine = lines.find((l) => /endettement sera de \d+ %/i.test(l));
   const debtMatch = debtLine?.match(/endettement sera de (\d+) %/i);
-  const relocateLine = lines.find((l) => l.startsWith("Partant :"));
+  const relocateLine = lines.find(
+    (l) => l.startsWith("Partant :") || l.startsWith("Relogement dans le quartier")
+  );
   const negativeEquityLine = lines.find(
-    (l) => l.includes("Actif net négatif") || l.includes("dette à partager")
+    (l) =>
+      l.includes("Actif net négatif") ||
+      l.includes("dette à partager") ||
+      l.includes("Dette résiduelle")
   );
   const otherLines = lines.filter(
     (l) =>
       l !== debtLine &&
       l !== relocateLine &&
       l !== negativeEquityLine &&
-      !l.includes("désolidarisation")
+      !l.includes("désolidarisation") &&
+      !l.startsWith("Produit net partagé") &&
+      !l.startsWith("Cible relogement")
   );
 
   return { debtLine, debtPct: debtMatch ? Number(debtMatch[1]) : null, relocateLine, negativeEquityLine, otherLines };
 }
 
+function contextNoteStyles(verdict: LabLedgerModel["verdict"]) {
+  switch (verdict?.verdict) {
+    case "green":
+      return "border-emerald-200 bg-emerald-50/80 text-emerald-950";
+    case "orange":
+      return "border-amber-200 bg-amber-50/80 text-amber-950";
+    case "red":
+      return "border-rose-200 bg-rose-50/80 text-rose-950";
+    default:
+      return "border-slate-200 bg-slate-50/80 text-slate-800";
+  }
+}
+
 function LedgerFooterInsights({
   footer,
   verdict,
+  contextNote,
 }: {
   footer: string;
   verdict: LabLedgerModel["verdict"];
+  contextNote?: string;
 }) {
   const { debtLine, debtPct, relocateLine, negativeEquityLine, otherLines } = parseFooterBlocks(footer);
   const panel = verdict ? VERDICT_PANEL[verdict.verdict] : null;
@@ -235,6 +257,9 @@ function LedgerFooterInsights({
                   </p>
                 )}
                 <p className={cn("mt-1 text-xs leading-relaxed", panel.text)}>{debtLine}</p>
+                <p className="mt-2 text-[11px] leading-relaxed text-slate-600">
+                  Calcul : mensualités totales ÷ revenus nets mensuels (plafond HCSF {35} %).
+                </p>
               </div>
               <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1", panel.border, panel.bg, panel.text)}>
                 {panel.label}
@@ -255,6 +280,17 @@ function LedgerFooterInsights({
             {line}
           </p>
         ))}
+
+        {contextNote && (
+          <p
+            className={cn(
+              "rounded-lg border px-3 py-2 text-xs font-medium leading-relaxed",
+              contextNoteStyles(verdict)
+            )}
+          >
+            {contextNote}
+          </p>
+        )}
       </div>
     </details>
   );
@@ -320,7 +356,13 @@ export function LabLedgerDetails({ model, className }: LabLedgerPanelProps) {
         ))}
       </motion.div>
 
-      {model.footer && <LedgerFooterInsights footer={model.footer} verdict={model.verdict} />}
+      {model.footer && (
+        <LedgerFooterInsights
+          footer={model.footer}
+          verdict={model.verdict}
+          contextNote={model.contextNote}
+        />
+      )}
 
       {model.warningNote && (
         <p
