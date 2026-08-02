@@ -86,7 +86,7 @@ export const simulationInputSchema = z.object({
   liabilities: z.array(liabilitySchema),
   options: z.object({
     primaryResidenceId: z.string().optional(),
-    scenario: z.enum(["keep_a", "keep_b", "sell", "rent_out", "compare_all"]),
+    scenario: z.enum(["keep_a", "keep_b", "sell", "sell_rent", "rent_out", "compare_all"]),
     notaryFeesRate: z.number().min(0).max(0.15).optional(),
     mortgageRate: z.number().min(0).max(0.2).optional(),
     mortgageDurationYears: z.number().min(1).max(30).optional(),
@@ -101,6 +101,8 @@ export const simulationInputSchema = z.object({
     marginalIncomeTaxRate: z.number().min(0).max(0.55).optional(),
     occupationMonths: z.number().min(0).max(120).optional(),
     legacyShareRewrite: z.boolean().optional(),
+    relocateSurfaceSqm: z.number().min(25).max(150).optional(),
+    relocateMarketTier: z.enum(["entry", "median", "high"]).optional(),
   }),
   hasMinorChildren: z.boolean().optional(),
   numberOfChildren: z.number().min(0).max(12).optional(),
@@ -121,7 +123,7 @@ export const leadQualificationSchema = z.object({
   hasMinorChildren: z.boolean().optional(),
   propertyValue: z.number().optional(),
   scenarioPreference: z
-    .enum(["keep_a", "keep_b", "sell", "rent_out", "compare_all"])
+    .enum(["keep_a", "keep_b", "sell", "sell_rent", "rent_out", "compare_all"])
     .optional(),
   optInPartnerMatch: z.boolean().optional(),
   tenantId: z.string().optional(),
@@ -148,6 +150,17 @@ export const footprintSchema = z.object({
   mortgageInsuranceMonthly: z.number().min(0),
   incomeA: z.number().min(0),
   incomeB: z.number().min(0),
+  contributionA: z.number().min(0),
+  contributionB: z.number().min(0),
+  apportsDeclared: z.boolean(),
+  financementDeclared: z.boolean(),
+  legalStatus: z.union([
+    z.enum(["concubinage", "pacs", "marriage"]),
+    z.literal(""),
+  ]),
+  ownershipShareA: z.number().min(0).max(100),
+  ownershipShareB: z.number().min(0).max(100),
+  cadreJuridiqueDeclared: z.boolean(),
   completedAt: z.string().nullable(),
 });
 

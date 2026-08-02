@@ -28,19 +28,15 @@ export function droitDePartageRate(status: SimulationInput["status"]): number {
     : DROIT_PARTAGE_RATE_CONCUBINAGE;
 }
 
-/** Communauté légale / universelle : les apports créent une récompense, pas un rewrite de parts. */
+/**
+ * Récompense (art. 1433 / 1469) uniquement si le bien est en communauté.
+ * Un bien en indivision (acte / quote-parts) utilise le mode créance 815-13,
+ * même pour un couple marié — le statut seul ne suffit pas.
+ */
 export function usesRecompenseModel(asset: Asset, input: SimulationInput): boolean {
   const total = (input.contributionA ?? 0) + (input.contributionB ?? 0);
   if (total <= 0) return false;
-
-  if (asset.ownership.kind === "community") return true;
-
-  if (input.status === "marriage") {
-    const regime = input.marriageRegime ?? "communaute_legale";
-    return regime === "communaute_legale" || regime === "communaute_universelle";
-  }
-
-  return false;
+  return asset.ownership.kind === "community";
 }
 
 function linkedMortgageBalance(asset: Asset, liabilities: Liability[]): number {

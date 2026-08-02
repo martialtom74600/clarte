@@ -23,10 +23,18 @@ const footprint: FootprintState = {
   mortgageInsuranceMonthly: 0,
   incomeA: 5000,
   incomeB: 4000,
+  contributionA: 0,
+  contributionB: 0,
+  legalStatus: "concubinage",
+  ownershipShareA: 50,
+  ownershipShareB: 50,
+  cadreJuridiqueDeclared: true,
+  apportsDeclared: true,
+  financementDeclared: true,
   completedAt: "2026-01-01T00:00:00.000Z",
 };
 
-const DOORS: DoorId[] = ["keep_a", "keep_b", "sell", "rent_out"];
+const DOORS: DoorId[] = ["keep_a", "keep_b", "sell", "sell_rent", "rent_out"];
 
 describe("lab-ledger parity", () => {
   const baseState = {

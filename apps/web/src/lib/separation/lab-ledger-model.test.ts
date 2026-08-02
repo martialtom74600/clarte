@@ -23,6 +23,14 @@ const footprint: FootprintState = {
   mortgageInsuranceMonthly: 0,
   incomeA: 5000,
   incomeB: 4000,
+  contributionA: 0,
+  contributionB: 0,
+  legalStatus: "concubinage",
+  ownershipShareA: 50,
+  ownershipShareB: 50,
+  cadreJuridiqueDeclared: true,
+  apportsDeclared: true,
+  financementDeclared: true,
   completedAt: "2026-01-01T00:00:00.000Z",
 };
 
@@ -84,6 +92,45 @@ describe("buildLabLedger", () => {
     expect(soulte).toBe(105000);
   });
 
+  it("affiche les apports footprint sans levier, en mode créance", () => {
+    const fp = {
+      ...footprint,
+      contributionA: 20000,
+      contributionB: 30000,
+      ownershipShareA: 60,
+      ownershipShareB: 40,
+      legalStatus: "marriage" as const,
+    };
+    const withApports = recomputeSeparationDerived({
+      ...baseState,
+      footprint: fp,
+      assumptions: {
+        ...defaultAssumptions(),
+        status: "marriage",
+        shareA: 60,
+        shareB: 40,
+      },
+    });
+    const ledger = buildLabLedger({
+      doorId: "keep_a",
+      footprint: fp,
+      assumptions: {
+        ...defaultAssumptions(),
+        status: "marriage",
+        marriageRegime: "communaute_legale",
+        shareA: 60,
+        shareB: 40,
+      },
+      lab: defaultLabState(),
+      result: withApports.lastResult,
+      doorVerdicts: withApports.doorVerdicts,
+    });
+    const contrib = ledger?.lines.find((l) => l.id === "contributions");
+    expect(contrib).toBeDefined();
+    expect(contrib?.label).toMatch(/créances/i);
+    expect(ledger?.lines.find((l) => l.id === "soulte")?.label).toMatch(/40 %/);
+  });
+
   it("avec mensualité empreinte : affiche crédit conservé + nouveau prêt rachat", () => {
     const keep = derived.lastResult?.scenarios.find((s) => s.scenario === "keep_a");
     expect(keep?.keepFinancingMode).toBe("keep_existing_loan");
@@ -127,8 +174,78 @@ describe("buildLabLedger", () => {
     expect(ledger?.lines.find((l) => l.id === "net")?.amount).toBe(178200);
     expect(ledger?.lines.find((l) => l.id === "you")?.amount).toBe(89100);
     expect(ledger?.lines.find((l) => l.id === "other")?.amount).toBe(89100);
-    expect(ledger?.footer).toMatch(/Relogement dans le quartier/i);
+    expect(ledger?.footer).toMatch(/Relogement solo \(rachat\)/i);
+    expect(ledger?.footer).toMatch(/Cible solo/i);
     expect(ledger?.contextNote).toBeTruthy();
+  });
+
+  it("vente : levier relocate_housing recalcule la cible (surface + médian)", () => {
+    const lab = {
+      ...defaultLabState(),
+      activeDoor: "sell" as const,
+      enabledLevers: ["relocate_housing" as const],
+      overrides: {
+        relocate_housing: { surfaceSqm: 70, marketTier: "median" as const },
+      },
+    };
+    const withLever = recomputeSeparationDerived({
+      footprint,
+      assumptions: defaultAssumptions(),
+      lab,
+    });
+    const ledger = buildLabLedger({
+      doorId: "sell",
+      footprint,
+      assumptions: defaultAssumptions(),
+      lab,
+      result: withLever.lastResult,
+      doorVerdicts: withLever.doorVerdicts,
+    });
+    const baseTarget = derived.lastResult?.scenarios.find((s) => s.scenario === "sell")
+      ?.relocateTarget?.amount;
+    const leverTarget = withLever.lastResult?.scenarios.find((s) => s.scenario === "sell")
+      ?.relocateTarget?.amount;
+    expect(leverTarget).toBeGreaterThan(baseTarget ?? 0);
+    expect(ledger?.lines.find((l) => l.id === "relocate-target")?.label).toMatch(/70 m²/);
+    expect(ledger?.footer).toMatch(/médiane de zone/i);
+  });
+
+  it("sell_rent : levier relocate_housing recalcule le loyer cible", () => {
+    const lab = {
+      ...defaultLabState(),
+      activeDoor: "sell_rent" as const,
+      enabledLevers: ["relocate_housing" as const],
+      overrides: {
+        relocate_housing: { surfaceSqm: 80, marketTier: "high" as const },
+      },
+    };
+    const withLever = recomputeSeparationDerived({
+      footprint,
+      assumptions: defaultAssumptions(),
+      lab,
+    });
+    const baseRent = derived.lastResult?.scenarios.find((s) => s.scenario === "sell_rent")
+      ?.tenantRentMonthly?.amount;
+    const leverRent = withLever.lastResult?.scenarios.find((s) => s.scenario === "sell_rent")
+      ?.tenantRentMonthly?.amount;
+    expect(leverRent).toBeGreaterThan(baseRent ?? 0);
+    const ledger = buildLabLedger({
+      doorId: "sell_rent",
+      footprint,
+      assumptions: defaultAssumptions(),
+      lab,
+      result: withLever.lastResult,
+      doorVerdicts: withLever.doorVerdicts,
+    });
+    expect(ledger?.lines.find((l) => l.id === "tenant-rent")?.label).toMatch(/80 m²/);
+    expect(ledger?.footer).toMatch(/haut de zone/i);
+  });
+
+  it("keep_a : expose note de relogement solo sur le scénario", () => {
+    const keep = derived.lastResult?.scenarios.find((s) => s.scenario === "keep_a");
+    expect(keep?.relocateHousingNote).toMatch(/Cible solo ~\d+ m²/);
+    expect(keep?.relocateSurfaceSqm).toBe(36); // 65 × 0,55
+    expect(keep?.relocateMarketTier).toBe("entry");
   });
 
   it("keep_b : même structure que keep_a avec perspective inversée", () => {
@@ -188,7 +305,7 @@ describe("buildLabLedger", () => {
     });
     expect(ledger?.lines.some((l) => l.id === "departure-capital")).toBe(true);
     expect(ledger?.lines.some((l) => l.id === "relocate-target")).toBe(true);
-    expect(ledger?.footer).toMatch(/Partant :|relogement zone/i);
+    expect(ledger?.footer).toMatch(/Partant :|relogement solo/i);
     expect(ledger?.footer).not.toMatch(/Relogement du partant :\s*red/i);
   });
 

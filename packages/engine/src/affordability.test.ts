@@ -59,16 +59,19 @@ describe("computeNewLifeCap", () => {
       soultePayer: "A",
     });
 
-    expect(result.doors).toHaveLength(4);
+    expect(result.doors).toHaveLength(5);
     expect(result.doors.map((d) => d.id)).toEqual([
       "keep_a",
       "keep_b",
       "sell",
+      "sell_rent",
       "rent_out",
     ]);
     // 400k − 180k − 5%×400k − 1800 = 198 200
     expect(result.equityNet.amount).toBe(198200);
     expect(result.contributionsTotal.amount).toBe(60000);
-    expect(["keep_a", "keep_b", "sell", "rent_out"]).toContain(result.recommendedDoorId);
+    expect(["keep_a", "keep_b", "sell", "sell_rent", "rent_out"]).toContain(
+      result.recommendedDoorId
+    );
   });
 });

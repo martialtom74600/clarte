@@ -32,7 +32,14 @@ export function parseFooterBlocks(footer: string) {
   const debtLine = lines.find((l) => /endettement sera de \d+ %/i.test(l));
   const debtMatch = debtLine?.match(/endettement sera de (\d+) %/i);
   const relocateLine = lines.find(
-    (l) => l.startsWith("Partant :") || l.startsWith("Relogement dans le quartier")
+    (l) =>
+      l.startsWith("Partant :") ||
+      l.startsWith("Relogement dans le quartier") ||
+      l.startsWith("Relogement (rachat)") ||
+      l.startsWith("Relogement solo") ||
+      l.startsWith("Location dans le quartier") ||
+      l.startsWith("Location solo") ||
+      l.startsWith("Cible solo")
   );
   const negativeEquityLine = lines.find(
     (l) =>
@@ -48,6 +55,8 @@ export function parseFooterBlocks(footer: string) {
       !l.includes("désolidarisation") &&
       !l.startsWith("Produit net partagé") &&
       !l.startsWith("Cible relogement") &&
+      !l.startsWith("Cible rachat") &&
+      !l.startsWith("Loyer zone") &&
       !l.startsWith("->")
   );
 

@@ -1,10 +1,11 @@
 import type { DoorId } from "@separation/schemas";
 import {
-  buildZoneMarketSnapshot,
   computeAffordability,
   getMortgageRateSnapshot,
+  resolveRelocateHousing,
 } from "@separation/engine";
-import type { FootprintState } from "./separation-types";
+import type { FootprintState, LabState } from "./separation-types";
+import { compileSimulationInput, defaultAssumptions } from "./compile-simulation-input";
 import type { LabLedgerModel, LedgerLine } from "./lab-ledger-model";
 
 /** Chips résumé en tête de ledger — même nombre de clés par porte. */
@@ -12,6 +13,7 @@ export const LEDGER_HEADLINE_IDS: Record<DoorId, readonly string[]> = {
   keep_a: ["total-cash", "monthly", "soulte"],
   keep_b: ["soulte", "departure-capital", "monthly"],
   sell: ["you", "net", "relocate-target"],
+  sell_rent: ["you", "net", "tenant-rent"],
   rent_out: ["net", "monthly-balance", "relocate-target"],
 };
 
@@ -20,6 +22,7 @@ export const LEDGER_REQUIRED_SECTIONS: Record<DoorId, readonly string[]> = {
   keep_a: ["bien", "echange", "relogement", "mensuel"],
   keep_b: ["bien", "echange", "relogement", "mensuel"],
   sell: ["bien", "echange", "relogement", "mensuel"],
+  sell_rent: ["bien", "echange", "relogement", "mensuel"],
   rent_out: ["bien", "revenus", "charges", "resultat", "relogement", "mensuel"],
 };
 
@@ -29,11 +32,20 @@ export function pickHeadlineLines(model: LabLedgerModel): LedgerLine[] {
     .filter((line): line is LedgerLine => line != null);
 }
 
-export function estimateRelocateTarget(footprint: FootprintState): number {
-  const surface = footprint.propertySurface > 0 ? footprint.propertySurface : 65;
-  const postal = footprint.postalCode.replace(/\D/g, "").padStart(5, "0").slice(0, 5) || "75000";
-  const zone = buildZoneMarketSnapshot(postal, surface);
-  return Math.round(zone.minPricePerSqm.amount * Math.max(45, surface - 15));
+export function estimateRelocateTarget(
+  footprint: FootprintState,
+  lab?: LabState
+): number {
+  const input = compileSimulationInput({
+    footprint,
+    assumptions: defaultAssumptions(),
+    lab: lab ?? {
+      activeDoor: null,
+      enabledLevers: [],
+      overrides: {},
+    },
+  });
+  return resolveRelocateHousing(input).targetPrice.amount;
 }
 
 export function estimateRelocateMonthlyPayment(params: {
@@ -71,7 +83,7 @@ export function relocateMonthlyLine(params: {
     tone: "neutral",
     suffix: "/mois",
     sectionId: params.sectionId,
-    hint: "Simulation de prêt pour un logement équivalent dans le quartier",
+    hint: "Simulation de prêt pour un logement solo dans votre zone",
   };
 }
 

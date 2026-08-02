@@ -7,15 +7,18 @@ import { clarte } from "@/lib/clarte-design";
 import { cn } from "@/lib/utils";
 import { useSeparationStore } from "@/store/separation-store";
 import { buildAllPortes } from "@/lib/separation/porte-presenter";
+import { buildEmpreinteContextLine } from "@/lib/separation/empreinte-context";
 import { PorteCard } from "./porte-card";
 
 export function PortesGrid() {
   const router = useRouter();
   const openDoor = useSeparationStore((s) => s.openDoor);
+  const footprint = useSeparationStore((s) => s.footprint);
   const lastResult = useSeparationStore((s) => s.derived.lastResult);
   const doorVerdicts = useSeparationStore((s) => s.derived.doorVerdicts);
 
-  const portes = buildAllPortes(lastResult, doorVerdicts);
+  const portes = buildAllPortes(lastResult, doorVerdicts, footprint);
+  const contextLine = buildEmpreinteContextLine(footprint);
 
   const handleOpen = (doorId: DoorId) => {
     openDoor(doorId);
@@ -35,8 +38,13 @@ export function PortesGrid() {
       <header className="mb-10 text-center md:mb-14">
         <p className="text-sm font-medium tracking-wide text-slate-400">Vos options</p>
         <h1 className="mt-3 text-2xl font-light tracking-tight text-slate-900 md:text-3xl">
-          Quatre chemins possibles
+          Cinq chemins possibles
         </h1>
+        {contextLine && (
+          <p className="mx-auto mt-4 max-w-lg text-sm leading-relaxed text-slate-500">
+            {contextLine}
+          </p>
+        )}
       </header>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">
@@ -50,10 +58,11 @@ export function PortesGrid() {
 
 export function PortesShell() {
   const router = useRouter();
-  const reset = useSeparationStore((s) => s.reset);
+  const reopenEmpreinte = useSeparationStore((s) => s.reopenEmpreinte);
 
   const handleEditInfo = () => {
-    reset();
+    // Conserve toutes les données — rouvre le wizard à l'étape 1.
+    reopenEmpreinte();
     router.push("/simulation");
   };
 

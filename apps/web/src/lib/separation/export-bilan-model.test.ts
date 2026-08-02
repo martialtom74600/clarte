@@ -26,6 +26,14 @@ const footprint: FootprintState = {
   mortgageInsuranceMonthly: 0,
   incomeA: 5000,
   incomeB: 4000,
+  contributionA: 0,
+  contributionB: 0,
+  legalStatus: "concubinage",
+  ownershipShareA: 50,
+  ownershipShareB: 50,
+  cadreJuridiqueDeclared: true,
+  apportsDeclared: true,
+  financementDeclared: true,
   completedAt: "2026-01-01T00:00:00.000Z",
 };
 
@@ -49,18 +57,26 @@ describe("export-bilan-model", () => {
   it("liste uniquement les leviers activés", () => {
     const lab = {
       ...defaultLabState(),
-      enabledLevers: ["initial_contributions" as const, "historical_mortgage_rate" as const],
+      enabledLevers: [
+        "initial_contributions" as const,
+        "historical_mortgage_rate" as const,
+        "relocate_housing" as const,
+      ],
       overrides: {
         initial_contributions: { contributionA: 20000, contributionB: 30000 },
         historical_mortgage_rate: { monthlyMortgagePayment: 950 },
+        relocate_housing: { surfaceSqm: 55, marketTier: "median" as const },
       },
     };
 
     const lines = buildActiveLeverLines(lab, footprint, defaultAssumptions());
-    expect(lines).toHaveLength(2);
+    expect(lines).toHaveLength(3);
     expect(lines[0].value).toContain("20");
     expect(lines[0].value).toContain("30");
     expect(lines[1].value).toContain("/mois");
+    expect(lines[2].id).toBe("relocate_housing");
+    expect(lines[2].value).toMatch(/55 m²/);
+    expect(lines[2].value).toMatch(/médian/);
   });
 
   it("assemble le document exportable", () => {
@@ -84,7 +100,9 @@ describe("export-bilan-model", () => {
     });
 
     expect(bilan?.scenarioTitle).toBe(EXPORT_SCENARIO_TITLES.keep_a);
-    expect(bilan?.footprint.length).toBeGreaterThanOrEqual(5);
+    expect(bilan?.footprint.length).toBeGreaterThanOrEqual(7);
+    expect(bilan?.footprint.some((f) => f.label === "Statut du couple")).toBe(true);
+    expect(bilan?.footprint.some((f) => f.label === "Répartition de la propriété")).toBe(true);
     expect(bilan?.activeLevers).toHaveLength(1);
     expect(bilan?.ledger.lines.some((l) => l.id === "soulte")).toBe(true);
     expect(bilan?.insights.length).toBeGreaterThan(0);

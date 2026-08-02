@@ -145,10 +145,13 @@ function SimulationPdfDocument({
                   </Text>
                 </View>
               )}
-              {s.scenario === "sell" && s.saleNetProceeds && (
+              {(s.scenario === "sell" || s.scenario === "sell_rent") && s.saleNetProceeds && (
                 <Text>
                   Net vendeur : {formatEuro(s.saleNetProceeds.amount)}
                   {s.capitalGainsNote ? ` — ${s.capitalGainsNote}` : ""}
+                  {s.scenario === "sell_rent" && s.tenantRentMonthly
+                    ? ` — loyer zone ~${formatEuro(s.tenantRentMonthly.amount)}/mois`
+                    : ""}
                 </Text>
               )}
             </View>

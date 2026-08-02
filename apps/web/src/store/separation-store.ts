@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import type { DoorId, LeverId } from "@separation/schemas";
+import type { DoorId, LeverId, RelationshipStatus } from "@separation/schemas";
 import type {
   FootprintField,
   LabState,
@@ -15,9 +15,11 @@ import {
   defaultFootprint,
   defaultLabState,
   isFootprintComplete,
+  seedLabFromFootprint,
 } from "@/lib/separation/compile-simulation-input";
 import { recomputeSeparationDerived } from "@/lib/separation/recompute-derived";
 import { EMPREINTE_STEP_KEY } from "@/components/separation/empreinte/empreinte-screens";
+import type { ResolvedFinancementValues } from "@/components/separation/empreinte/empreinte-amortization";
 
 export const STORAGE_KEY = "clarte-separation-v2";
 
@@ -50,8 +52,17 @@ export function clearSeparationPersistence(): void {
 }
 
 export interface SeparationStore extends SeparationState {
-  setFootprintField: (field: FootprintField, value: string | number) => void;
+  setFootprintField: (field: FootprintField, value: string | number | boolean) => void;
+  setFinancementFootprint: (values: ResolvedFinancementValues) => void;
+  setCadreJuridique: (
+    legalStatus: RelationshipStatus,
+    ownershipShareA: number,
+    ownershipShareB: number
+  ) => void;
   completeFootprint: () => boolean;
+  completeFootprintWithIncomes: (incomeA: number, incomeB: number) => boolean;
+  /** Rouvre l'Empreinte sans effacer les données déjà saisies. */
+  reopenEmpreinte: () => void;
   openDoor: (doorId: DoorId) => void;
   closeLab: () => void;
   enableLever: (leverId: LeverId) => void;
@@ -95,30 +106,94 @@ export const createSeparationStore = () =>
           );
         },
 
+        setFinancementFootprint: (values) => {
+          set((state) => {
+            const footprint = {
+              ...state.footprint,
+              mortgageRemaining: values.mortgageRemaining,
+              monthlyMortgagePayment: values.monthlyMortgagePayment,
+              mortgageRemainingYears: values.mortgageRemainingYears,
+              initialMortgagePrincipal: values.initialMortgagePrincipal,
+              initialMortgageDurationYears: values.initialMortgageDurationYears,
+              mortgageStartMonth: values.mortgageStartMonth,
+              mortgageStartYear: values.mortgageStartYear,
+              initialMortgageRate: values.initialMortgageRate,
+              mortgageInsuranceMonthly: values.mortgageInsuranceMonthly,
+            };
+            return withRecompute({ footprint }, { ...state, footprint });
+          });
+        },
+
+        setCadreJuridique: (legalStatus, ownershipShareA, ownershipShareB) => {
+          set((state) => {
+            const footprint = {
+              ...state.footprint,
+              legalStatus,
+              ownershipShareA,
+              ownershipShareB,
+              cadreJuridiqueDeclared: true,
+            };
+            const assumptions = {
+              ...state.assumptions,
+              status: legalStatus,
+              shareA: ownershipShareA,
+              shareB: ownershipShareB,
+            };
+            const next = { ...state, footprint, assumptions };
+            return withRecompute({ footprint, assumptions }, next);
+          });
+        },
+
         completeFootprint: () => {
-          const { footprint } = get();
+          const { footprint, lab } = get();
           if (!isFootprintComplete(footprint)) return false;
 
-          set((state) =>
-            withRecompute(
-              {
-                stratum: "portes",
-                footprint: {
-                  ...state.footprint,
-                  completedAt: new Date().toISOString(),
-                },
-              },
-              {
-                ...state,
-                stratum: "portes",
-                footprint: {
-                  ...state.footprint,
-                  completedAt: new Date().toISOString(),
-                },
-              }
-            )
-          );
+          const completedAt = new Date().toISOString();
+          set((state) => {
+            const nextFootprint = { ...state.footprint, completedAt };
+            const nextLab = seedLabFromFootprint(nextFootprint, lab);
+            return withRecompute(
+              { stratum: "portes", footprint: nextFootprint, lab: nextLab },
+              { ...state, stratum: "portes", footprint: nextFootprint, lab: nextLab }
+            );
+          });
           return true;
+        },
+
+        /** Écrit les revenus puis finalise l'empreinte en un seul état cohérent. */
+        completeFootprintWithIncomes: (incomeA: number, incomeB: number) => {
+          const { footprint, lab } = get();
+          const nextFootprintBase = {
+            ...footprint,
+            incomeA,
+            incomeB,
+          };
+          if (!isFootprintComplete(nextFootprintBase)) return false;
+
+          const completedAt = new Date().toISOString();
+          set((state) => {
+            const nextFootprint = { ...state.footprint, incomeA, incomeB, completedAt };
+            const nextLab = seedLabFromFootprint(nextFootprint, lab);
+            return withRecompute(
+              { stratum: "portes", footprint: nextFootprint, lab: nextLab },
+              { ...state, stratum: "portes", footprint: nextFootprint, lab: nextLab }
+            );
+          });
+          return true;
+        },
+
+        reopenEmpreinte: () => {
+          if (typeof window !== "undefined") {
+            sessionStorage.setItem(EMPREINTE_STEP_KEY, "0");
+          }
+          set((state) => {
+            const footprint = { ...state.footprint, completedAt: null };
+            const lab = { ...state.lab, activeDoor: null };
+            return withRecompute(
+              { stratum: "empreinte", footprint, lab },
+              { ...state, stratum: "empreinte", footprint, lab }
+            );
+          });
         },
 
         openDoor: (doorId) => {

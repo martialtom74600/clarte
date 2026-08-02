@@ -47,7 +47,13 @@ describe("compileDoorVerdicts", () => {
     const result = runSimulation(input);
     const verdicts = compileDoorVerdicts(input, result);
 
-    expect(Object.keys(verdicts)).toEqual(["keep_a", "keep_b", "sell", "rent_out"]);
+    expect(Object.keys(verdicts)).toEqual([
+      "keep_a",
+      "keep_b",
+      "sell",
+      "sell_rent",
+      "rent_out",
+    ]);
     expect(verdicts.keep_a.doorId).toBe("keep_a");
     expect(verdicts.keep_b.doorId).toBe("keep_b");
     expect(["green", "orange", "red"]).toContain(verdicts.keep_a.verdict);

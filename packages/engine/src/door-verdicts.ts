@@ -8,10 +8,11 @@ import type {
   SimulationResult,
 } from "@separation/schemas";
 import {
-  buildZoneMarketSnapshot,
   computeAffordability,
+  computeTenantRentAffordability,
 } from "./affordability.js";
 import { getMortgageRateSnapshot } from "./mortgage-rates.js";
+import { resolveRelocateHousing } from "./relocate-housing.js";
 import { RENT_GREEN_THRESHOLD } from "./rent-out-cashflow.js";
 import { estimateChildSupport } from "./support.js";
 import {
@@ -24,7 +25,8 @@ import { eur, round } from "./utils.js";
 const DOOR_LABELS: Record<DoorId, string> = {
   keep_a: "Vous rachetez",
   keep_b: "L'autre rachète",
-  sell: "Vendre",
+  sell: "Vendre pour se reloger",
+  sell_rent: "Vendre puis louer",
   rent_out: "Garder et louer",
 };
 
@@ -170,10 +172,10 @@ function buildKeepDoorVerdict(
 
   const relocateNote =
     departureRelocate === "green"
-      ? `Partant : capital ${Math.round(departureCapital).toLocaleString("fr-FR")} € — relogement zone tenable (cible ~${Math.round(relocateTarget).toLocaleString("fr-FR")} €).`
+      ? `Partant : capital ${Math.round(departureCapital).toLocaleString("fr-FR")} € — relogement solo tenable (${scenario?.relocateHousingNote ?? `cible ~${Math.round(relocateTarget).toLocaleString("fr-FR")} €`}).`
       : departureRelocate === "orange"
-        ? `Partant : capital ${Math.round(departureCapital).toLocaleString("fr-FR")} € — relogement zone serré (cible ~${Math.round(relocateTarget).toLocaleString("fr-FR")} €).`
-        : `Partant : capital ${Math.round(departureCapital).toLocaleString("fr-FR")} € — relogement zone difficile (cible ~${Math.round(relocateTarget).toLocaleString("fr-FR")} €).`;
+        ? `Partant : capital ${Math.round(departureCapital).toLocaleString("fr-FR")} € — relogement solo serré (${scenario?.relocateHousingNote ?? `cible ~${Math.round(relocateTarget).toLocaleString("fr-FR")} €`}).`
+        : `Partant : capital ${Math.round(departureCapital).toLocaleString("fr-FR")} € — relogement solo difficile (${scenario?.relocateHousingNote ?? `cible ~${Math.round(relocateTarget).toLocaleString("fr-FR")} €`}).`;
 
   const occupationNote =
     indemnity > 0 && scenario?.occupationNote ? ` ${scenario.occupationNote}` : "";
@@ -207,10 +209,10 @@ function buildSellDoorVerdict(
   input: SimulationInput,
   result: SimulationResult
 ): DoorVerdict {
-  const postalCode = input.postalCode ?? "75000";
-  const surface = input.propertySurface ?? 65;
-  const zone = buildZoneMarketSnapshot(postalCode, surface);
-  const relocateTarget = round(zone.minPricePerSqm.amount * Math.max(45, surface - 15));
+  const housing = resolveRelocateHousing(input);
+  const relocateTarget =
+    result.scenarios.find((s) => s.scenario === "sell")?.relocateTarget?.amount ??
+    housing.targetPrice.amount;
   const sellScenario = result.scenarios.find((s) => s.scenario === "sell");
   const rateSnapshot = getMortgageRateSnapshot(input.options.mortgageDurationYears ?? 20);
 
@@ -274,8 +276,76 @@ function buildSellDoorVerdict(
     verdict,
     label: DOOR_LABELS.sell,
     headline,
-    detail: `Net vendeur Vous ${Math.round(proceedsA).toLocaleString("fr-FR")} € · Autre ${Math.round(proceedsB).toLocaleString("fr-FR")} € (agence ${Math.round(agency).toLocaleString("fr-FR")} € + diagnostics ${Math.round(diagnostics).toLocaleString("fr-FR")} €). Cible zone ~${Math.round(relocateTarget).toLocaleString("fr-FR")} € · Vous ${affA.verdict} · Autre ${affB.verdict}. ${cgiNote}`,
+    detail: `Net vendeur Vous ${Math.round(proceedsA).toLocaleString("fr-FR")} € · Autre ${Math.round(proceedsB).toLocaleString("fr-FR")} € (agence ${Math.round(agency).toLocaleString("fr-FR")} € + diagnostics ${Math.round(diagnostics).toLocaleString("fr-FR")} €). ${sellScenario?.relocateHousingNote ?? housing.note} · cible ~${Math.round(relocateTarget).toLocaleString("fr-FR")} € · Vous ${affA.verdict} · Autre ${affB.verdict}. ${cgiNote}`,
     monthlyImpact: affA.monthlyPayment,
+  };
+}
+
+function buildSellRentDoorVerdict(
+  input: SimulationInput,
+  result: SimulationResult
+): DoorVerdict {
+  const housing = resolveRelocateHousing(input);
+  const sellRentScenario = result.scenarios.find((s) => s.scenario === "sell_rent");
+  const tenantRent =
+    sellRentScenario?.tenantRentMonthly?.amount ?? housing.tenantRentMonthly.amount;
+  const proceedsA =
+    sellRentScenario?.saleProceedsByPerson?.A.amount ??
+    sellRentScenario?.netWorthByPerson.A.amount ??
+    0;
+  const proceedsB =
+    sellRentScenario?.saleProceedsByPerson?.B.amount ??
+    sellRentScenario?.netWorthByPerson.B.amount ??
+    0;
+  const cgiNote = sellRentScenario?.capitalGainsNote ?? "";
+
+  if (sellRentScenario?.negativeEquity) {
+    const shortfall = Math.abs(sellRentScenario.saleNetProceeds?.amount ?? 0);
+    return {
+      doorId: "sell_rent",
+      verdict: "red",
+      label: DOOR_LABELS.sell_rent,
+      headline: "Actif net négatif — dette à partager",
+      detail: `Après agence + diagnostics et crédit, dette ~${Math.round(shortfall).toLocaleString("fr-FR")} € à partager. ${cgiNote}`,
+      monthlyImpact: eur(tenantRent),
+    };
+  }
+
+  const rentA = computeTenantRentAffordability({
+    incomeMonthly: incomeFor(input, "A"),
+    rentMonthly: tenantRent,
+    liquidCapital: Math.max(0, proceedsA),
+    existingMonthlyCharges: childSupportChargeFor(input, "A"),
+  });
+  const rentB = computeTenantRentAffordability({
+    incomeMonthly: incomeFor(input, "B"),
+    rentMonthly: tenantRent,
+    liquidCapital: Math.max(0, proceedsB),
+    existingMonthlyCharges: childSupportChargeFor(input, "B"),
+  });
+
+  const verdict =
+    sellRentScenario?.relocateVerdictByPerson != null
+      ? worstVerdict(
+          sellRentScenario.relocateVerdictByPerson.A,
+          sellRentScenario.relocateVerdictByPerson.B
+        )
+      : worstVerdict(rentA.verdict, rentB.verdict);
+
+  const headline =
+    verdict === "green"
+      ? "Location accessible pour les deux"
+      : verdict === "orange"
+        ? "Location serrée pour au moins une partie"
+        : "Location difficile dans la zone";
+
+  return {
+    doorId: "sell_rent",
+    verdict,
+    label: DOOR_LABELS.sell_rent,
+    headline,
+    detail: `Net vendeur Vous ${Math.round(proceedsA).toLocaleString("fr-FR")} € · Autre ${Math.round(proceedsB).toLocaleString("fr-FR")} €. ${sellRentScenario?.relocateHousingNote ?? housing.note} · loyer ~${Math.round(tenantRent).toLocaleString("fr-FR")} €/mois · Vous ${rentA.verdict} · Autre ${rentB.verdict}. ${cgiNote}`,
+    monthlyImpact: eur(tenantRent),
   };
 }
 
@@ -315,7 +385,7 @@ function buildRentOutDoorVerdict(
   };
 }
 
-/** Verdicts tricolores pour les 4 portes — Strate 2 du funnel. */
+/** Verdicts tricolores pour les portes — Strate 2 du funnel. */
 export function compileDoorVerdicts(
   input: SimulationInput,
   result: SimulationResult
@@ -324,6 +394,7 @@ export function compileDoorVerdicts(
     keep_a: buildKeepDoorVerdict(input, result, "A"),
     keep_b: buildKeepDoorVerdict(input, result, "B"),
     sell: buildSellDoorVerdict(input, result),
+    sell_rent: buildSellRentDoorVerdict(input, result),
     rent_out: buildRentOutDoorVerdict(input, result),
   };
 }

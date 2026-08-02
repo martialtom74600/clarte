@@ -12,6 +12,8 @@ import type {
 import {
   CURRENT_MARKET_MORTGAGE_RATE,
   DEFAULT_MORTGAGE_DURATION_YEARS,
+  DEBT_VERDICT_GREEN_MAX_RATIO,
+  DEBT_VERDICT_ORANGE_MAX_RATIO,
   HCSF_MAX_EFFORT_PERCENT,
   HCSF_MAX_EFFORT_RATIO,
 } from "./constants.js";
@@ -22,8 +24,9 @@ import {
   computeRentOutCashflowFromParams,
   RENT_GREEN_THRESHOLD,
 } from "./rent-out-cashflow.js";
+import { rentPerSqm } from "./market-rents.js";
 
-export { rentPerSqm } from "./market-rents.js";
+export { rentPerSqm };
 
 const DEFAULT_MAX_EFFORT = HCSF_MAX_EFFORT_RATIO;
 /** Aligné sur sale-proceeds (éviter import circulaire). */
@@ -163,6 +166,58 @@ function worstVerdict(a: AffordabilityVerdict, b: AffordabilityVerdict): Afforda
   return rank[a] <= rank[b] ? a : b;
 }
 
+/**
+ * Capacité locative après vente — effort loyer / revenus + coussin capital.
+ * Seuils alignés sur les verdicts d'endettement keep (≈ HCSF).
+ */
+export function computeTenantRentAffordability(params: {
+  incomeMonthly: number;
+  rentMonthly: number;
+  liquidCapital?: number;
+  existingMonthlyCharges?: number;
+}): {
+  verdict: AffordabilityVerdict;
+  effortRatio: number | null;
+  monthsBuffer: number;
+  detail: string;
+} {
+  const rent = Math.max(0, params.rentMonthly);
+  const charges = Math.max(0, params.existingMonthlyCharges ?? 0);
+  const totalHousing = rent + charges;
+  const income = params.incomeMonthly;
+  const monthsBuffer = rent > 0 ? Math.max(0, params.liquidCapital ?? 0) / rent : 99;
+
+  if (income <= 0) {
+    return {
+      verdict: "orange",
+      effortRatio: null,
+      monthsBuffer: round(monthsBuffer, 1),
+      detail: "Revenus manquants pour évaluer le loyer.",
+    };
+  }
+
+  const effortRatio = totalHousing / income;
+  const effortPct = Math.round(effortRatio * 100);
+  let verdict: AffordabilityVerdict =
+    effortRatio <= DEBT_VERDICT_GREEN_MAX_RATIO
+      ? "green"
+      : effortRatio <= DEBT_VERDICT_ORANGE_MAX_RATIO
+        ? "orange"
+        : "red";
+
+  // Coussin de vente : 6 mois de loyer peuvent adoucir un orange.
+  if (verdict === "orange" && monthsBuffer >= 6) {
+    verdict = "green";
+  }
+
+  return {
+    verdict,
+    effortRatio: round(effortRatio, 3),
+    monthsBuffer: round(monthsBuffer, 1),
+    detail: `Effort locatif ~${effortPct} % (${Math.round(totalHousing).toLocaleString("fr-FR")} € / ${Math.round(income).toLocaleString("fr-FR")} €) · coussin ~${Math.round(monthsBuffer)} mois.`,
+  };
+}
+
 export function computeNewLifeCap(input: NewLifeCapInput): NewLifeCapResult {
   const zone = buildZoneMarketSnapshot(input.postalCode, input.propertySurface, {
     medianPricePerSqm: input.zoneMedianPricePerSqm
@@ -228,9 +283,12 @@ export function computeNewLifeCap(input: NewLifeCapInput): NewLifeCapResult {
         : "red";
 
   const sellProceedsEach = round(Math.max(0, equityAfterSaleCosts) / 2);
-  const relocateTarget = round(
-    zone.minPricePerSqm.amount * Math.max(45, input.propertySurface - 15)
+  // Aligné sur relocate-housing (évite import circulaire affordability ↔ relocate-housing).
+  const relocateSurface = Math.min(
+    90,
+    Math.max(35, Math.round(input.propertySurface * 0.55))
   );
+  const relocateTarget = round(zone.minPricePerSqm.amount * relocateSurface);
   const relocateA = computeAffordability({
     incomeMonthly: input.incomeAMonthly,
     liquidCapital: sellProceedsEach,
@@ -244,6 +302,19 @@ export function computeNewLifeCap(input: NewLifeCapInput): NewLifeCapResult {
     durationYears: rateSnapshot.durationYears,
   });
   const sellVerdict = worstVerdict(relocateA.verdict, relocateB.verdict);
+
+  const tenantRentMonthly = round(rentPerSqm(input.postalCode) * 0.9 * relocateSurface);
+  const tenantA = computeTenantRentAffordability({
+    incomeMonthly: input.incomeAMonthly,
+    rentMonthly: tenantRentMonthly,
+    liquidCapital: sellProceedsEach,
+  });
+  const tenantB = computeTenantRentAffordability({
+    incomeMonthly: input.incomeBMonthly,
+    rentMonthly: tenantRentMonthly,
+    liquidCapital: sellProceedsEach,
+  });
+  const sellRentVerdict = worstVerdict(tenantA.verdict, tenantB.verdict);
 
   const doors: LifePathDoor[] = [
     {
@@ -266,9 +337,9 @@ export function computeNewLifeCap(input: NewLifeCapInput): NewLifeCapResult {
     },
     {
       id: "sell",
-      label: "Vendre",
+      label: "Vendre pour se reloger",
       description:
-        "Liquider le bien après frais d'agence (~5 %) + diagnostics, puis se reloger dans la zone.",
+        "Liquider le bien après frais d'agence (~5 %) + diagnostics, puis racheter dans la zone.",
       verdict: sellVerdict,
       headline:
         sellVerdict === "green"
@@ -278,6 +349,21 @@ export function computeNewLifeCap(input: NewLifeCapInput): NewLifeCapResult {
             : "Relogement difficile dans la zone",
       detail: `Net vendeur indicatif ~${Math.round(equityAfterSaleCosts).toLocaleString("fr-FR")} € (après ~5 % + diagnostics) · cible relocation ~${relocateTarget.toLocaleString("fr-FR")} € · Vous ${relocateA.verdict} · Autre ${relocateB.verdict}`,
       monthlyImpact: relocateA.monthlyPayment,
+    },
+    {
+      id: "sell_rent",
+      label: "Vendre puis louer",
+      description:
+        "Liquider le bien, récupérer le capital, puis se loger en location dans la zone.",
+      verdict: sellRentVerdict,
+      headline:
+        sellRentVerdict === "green"
+          ? "Location accessible pour les deux"
+          : sellRentVerdict === "orange"
+            ? "Location serrée pour au moins une partie"
+            : "Location difficile dans la zone",
+      detail: `Net vendeur indicatif ~${Math.round(equityAfterSaleCosts).toLocaleString("fr-FR")} € · loyer zone ~${tenantRentMonthly.toLocaleString("fr-FR")} €/mois · Vous ${tenantA.verdict} · Autre ${tenantB.verdict}`,
+      monthlyImpact: eur(tenantRentMonthly),
     },
     {
       id: "rent_out",
@@ -298,10 +384,10 @@ export function computeNewLifeCap(input: NewLifeCapInput): NewLifeCapResult {
 
   const preferredOrder: DoorId[] =
     input.intent === "keep_home"
-      ? ["keep_a", "sell", "rent_out", "keep_b"]
+      ? ["keep_a", "sell", "sell_rent", "rent_out", "keep_b"]
       : input.intent === "walk_away"
-        ? ["keep_b", "sell", "rent_out", "keep_a"]
-        : ["sell", "keep_a", "keep_b", "rent_out"];
+        ? ["keep_b", "sell", "sell_rent", "rent_out", "keep_a"]
+        : ["sell", "sell_rent", "keep_a", "keep_b", "rent_out"];
 
   const recommendedDoorId =
     preferredOrder.find((id) => doors.find((d) => d.id === id)?.verdict === "green") ??

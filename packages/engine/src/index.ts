@@ -58,12 +58,20 @@ export type { ContributionMode } from "./soulte-core.js";
 export { runQuickEstimate } from "./quick-estimate.js";
 export {
   computeAffordability,
+  computeTenantRentAffordability,
   computeNewLifeCap,
   buildZoneMarketSnapshot,
   resolveZoneDepartments,
   computeMaxBorrowing,
   rentPerSqm,
 } from "./affordability.js";
+export {
+  resolveRelocateHousing,
+  defaultRelocateSurfaceSqm,
+  clampRelocateSurfaceSqm,
+  relocateTierLabel,
+} from "./relocate-housing.js";
+export type { RelocateHousingResult } from "./relocate-housing.js";
 export {
   compileDoorVerdicts,
   computeKeepDebtEffort,

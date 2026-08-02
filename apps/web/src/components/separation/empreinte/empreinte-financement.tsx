@@ -1,156 +1,204 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
-import { cn } from "@/lib/utils";
-import { duration, ease } from "@/lib/motion";
+import { useCallback, useLayoutEffect, useMemo, useState } from "react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { Home, History } from "lucide-react";
+import { duration, ease, spring } from "@/lib/motion";
 import {
-  EmpreinteContinueButton,
   EmpreinteFormRow,
-  parseCurrency,
+  EmpreinteStepNav,
 } from "./empreinte-field";
+import { FinancementModeOption } from "./empreinte-financement-card";
 import type { EmpreinteDraft } from "./empreinte-screens";
 import {
-  amortizationToDraftFields,
-  canComputeAmortization,
-  computeFinancementFromAmortization,
+  inferFinancementUiMode,
+  isFinancementValidForMode,
+  type FinancementUiMode,
+} from "./empreinte-screens";
+import {
+  getFinancementEstimateMissingFields,
+  normalizeMortgageStartDate,
   sanitizeMortgageStartDate,
 } from "./empreinte-amortization";
+import { cn } from "@/lib/utils";
+import type { FootprintState } from "@/lib/separation/separation-types";
+import { EmpreinteRecap } from "./empreinte-recap";
 
-type OverrideField = "crd" | "monthly" | "years";
+type FinancementMode = FinancementUiMode;
 
-function RateRow({
-  id,
-  label,
-  value,
-  onChange,
-  hint,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  hint?: string;
-}) {
-  return (
-    <EmpreinteFormRow
-      id={id}
-      label={label}
-      type="number"
-      value={value}
-      onChange={(v) => onChange(v.replace(/[^\d,]/g, "").replace(".", ","))}
-      placeholder="1,2"
-      suffix="%"
-      hint={hint}
-    />
-  );
+type EstimateFormState = Pick<
+  EmpreinteDraft,
+  | "initialMortgagePrincipal"
+  | "mortgageStartDate"
+  | "initialMortgageDurationYears"
+  | "initialMortgageRate"
+  | "mortgageInsuranceMonthly"
+>;
+
+function estimateFormFromDraft(draft: EmpreinteDraft): EstimateFormState {
+  return {
+    initialMortgagePrincipal: draft.initialMortgagePrincipal ?? "",
+    mortgageStartDate: draft.mortgageStartDate ?? "",
+    initialMortgageDurationYears: draft.initialMortgageDurationYears ?? "",
+    initialMortgageRate: draft.initialMortgageRate ?? "",
+    mortgageInsuranceMonthly: draft.mortgageInsuranceMonthly ?? "",
+  };
 }
+
+function draftPatchForMode(mode: FinancementMode, draft: EmpreinteDraft): Partial<EmpreinteDraft> {
+  if (mode === "no_credit") {
+    // Ne pas effacer les champs d'estimation : resolveFinancementValues les ignore,
+    // et l'utilisateur peut revenir à « Estimation » sans retaper.
+    return {
+      financementNoCredit: "1",
+      mortgageRemaining: "0",
+      monthlyMortgagePayment: "",
+      mortgageRemainingYears: "",
+    };
+  }
+  return {
+    financementNoCredit: "",
+    mortgageRemaining: draft.mortgageRemaining === "0" ? "" : draft.mortgageRemaining,
+  };
+}
+
+function buildMergedDraft(
+  draft: EmpreinteDraft,
+  mode: FinancementMode,
+  estimateForm: EstimateFormState
+): EmpreinteDraft {
+  const base = { ...draft, ...draftPatchForMode(mode, draft) };
+  if (mode === "estimate") {
+    return { ...base, ...estimateForm };
+  }
+  return base;
+}
+
+const MODES: { id: FinancementMode; icon: typeof Home; title: string }[] = [
+  { id: "no_credit", icon: Home, title: "Je n'ai plus de crédit immobilier" },
+  {
+    id: "estimate",
+    icon: History,
+    title: "Je me souviens de mon emprunt — on estime le reste à payer.",
+  },
+];
+
+const panelMotion = (reduced: boolean) =>
+  reduced
+    ? {
+        initial: { opacity: 0 },
+        animate: { opacity: 1 },
+        exit: { opacity: 0 },
+        transition: { duration: duration.fast },
+      }
+    : {
+        initial: { opacity: 0, height: 0 },
+        animate: { opacity: 1, height: "auto" },
+        exit: { opacity: 0, height: 0 },
+        transition: { duration: duration.normal, ease: ease.out },
+      };
 
 export function EmpreinteFinancementScreen({
   draft,
+  footprint,
   onDraftChange,
-  canContinue,
   onContinue,
+  onBack,
   progress,
 }: {
   draft: EmpreinteDraft;
+  footprint: FootprintState;
   onDraftChange: (patch: Partial<EmpreinteDraft>) => void;
-  canContinue: boolean;
-  onContinue: () => void;
+  onContinue: (merged: EmpreinteDraft, mode: FinancementUiMode) => boolean;
+  onBack?: () => void;
   progress?: React.ReactNode;
+  /** @deprecated Validation locale — conservé pour compatibilité shell. */
+  canContinue?: boolean;
 }) {
   const reduced = useReducedMotion();
-  const manualMode = draft.financementManual === "1";
-  const [overrides, setOverrides] = useState<Set<OverrideField>>(new Set());
-  const lastSyncedKeyRef = useRef("");
+  const [activeMode, setActiveMode] = useState<FinancementMode>(() => inferFinancementUiMode(draft));
+  const [estimateForm, setEstimateForm] = useState<EstimateFormState>(() => estimateFormFromDraft(draft));
+  const [continueError, setContinueError] = useState<string | null>(null);
 
-  const amortization = useMemo(() => {
-    if (manualMode || !canComputeAmortization(draft)) return null;
-    return computeFinancementFromAmortization(draft);
-  }, [manualMode, draft]);
-
-  const computedFields = useMemo(
-    () => (amortization ? amortizationToDraftFields(amortization) : null),
-    [amortization]
+  const mergedPreview = useMemo(
+    () => buildMergedDraft(draft, activeMode, estimateForm),
+    [draft, activeMode, estimateForm]
   );
 
-  const crdOverridden = overrides.has("crd");
-  const monthlyOverridden = overrides.has("monthly");
-  const yearsOverridden = overrides.has("years");
+  const canContinueLocal = useMemo(() => {
+    if (activeMode === "no_credit") return true;
+    return isFinancementValidForMode(mergedPreview, activeMode);
+  }, [mergedPreview, activeMode]);
 
-  const displayCrd = crdOverridden
-    ? draft.mortgageRemaining
-    : (computedFields?.mortgageRemaining ?? draft.mortgageRemaining);
-  const displayMonthly = monthlyOverridden
-    ? draft.monthlyMortgagePayment
-    : (computedFields?.monthlyMortgagePayment ?? draft.monthlyMortgagePayment);
-  const displayYears = yearsOverridden
-    ? draft.mortgageRemainingYears
-    : (computedFields?.mortgageRemainingYears ?? draft.mortgageRemainingYears);
+  useLayoutEffect(() => {
+    onDraftChange(draftPatchForMode(activeMode, draft));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Sync computed → draft une seule fois par changement d'inputs (évite boucle infinie).
-  useEffect(() => {
-    if (manualMode || !amortization || !computedFields) {
-      lastSyncedKeyRef.current = "";
+  const selectMode = (mode: FinancementMode) => {
+    setContinueError(null);
+    setActiveMode(mode);
+    if (mode === "estimate") {
+      // Réinjecte le formulaire local au draft parent (survit à Retour).
+      onDraftChange({ ...draftPatchForMode(mode, draft), ...estimateForm });
+    } else {
+      onDraftChange(draftPatchForMode(mode, draft));
+    }
+  };
+
+  const updateEstimateField = useCallback(
+    <K extends keyof EstimateFormState>(field: K, value: EstimateFormState[K]) => {
+      setContinueError(null);
+      setEstimateForm((prev) => {
+        const next = { ...prev, [field]: value };
+        // Persiste dans le draft parent pour survivre à Retour / remount.
+        onDraftChange(next);
+        return next;
+      });
+    },
+    [onDraftChange]
+  );
+
+  const handleContinue = () => {
+    setContinueError(null);
+    const normalizedDate = normalizeMortgageStartDate(estimateForm.mortgageStartDate);
+    const estimatePayload =
+      activeMode === "estimate"
+        ? { ...estimateForm, mortgageStartDate: normalizedDate }
+        : estimateForm;
+    if (activeMode === "estimate" && normalizedDate !== estimateForm.mortgageStartDate) {
+      setEstimateForm((prev) => ({ ...prev, mortgageStartDate: normalizedDate }));
+    }
+    const merged = buildMergedDraft(draft, activeMode, estimatePayload);
+
+    if (activeMode === "estimate") {
+      const missing = getFinancementEstimateMissingFields(merged);
+      if (missing.length > 0) {
+        setContinueError(`Il manque : ${missing.join(", ")}.`);
+        return;
+      }
+    }
+
+    if (!isFinancementValidForMode(merged, activeMode)) {
+      setContinueError(
+        "Impossible de calculer l'emprunt avec ces valeurs. Vérifiez la date (MM/AAAA) et le taux."
+      );
       return;
     }
 
-    const syncKey = [
-      computedFields.mortgageRemaining,
-      computedFields.monthlyMortgagePayment,
-      computedFields.mortgageRemainingYears,
-      crdOverridden,
-      monthlyOverridden,
-      yearsOverridden,
-    ].join("|");
-
-    if (syncKey === lastSyncedKeyRef.current) return;
-    lastSyncedKeyRef.current = syncKey;
-
-    const patch: Partial<EmpreinteDraft> = {};
-    if (!crdOverridden) patch.mortgageRemaining = computedFields.mortgageRemaining;
-    if (!monthlyOverridden) patch.monthlyMortgagePayment = computedFields.monthlyMortgagePayment;
-    if (!yearsOverridden) patch.mortgageRemainingYears = computedFields.mortgageRemainingYears;
-
-    if (Object.keys(patch).length > 0) onDraftChange(patch);
-  }, [
-    amortization,
-    computedFields,
-    manualMode,
-    crdOverridden,
-    monthlyOverridden,
-    yearsOverridden,
-    onDraftChange,
-  ]);
-
-  const setManualMode = (manual: boolean) => {
-    onDraftChange({ financementManual: manual ? "1" : "" });
-    if (!manual) setOverrides(new Set());
-    lastSyncedKeyRef.current = "";
-  };
-
-  const updateField = (field: keyof EmpreinteDraft, value: string) => {
-    onDraftChange({ [field]: value });
-  };
-
-  const updateComputedField = (
-    field: OverrideField,
-    draftField: keyof EmpreinteDraft,
-    value: string
-  ) => {
-    setOverrides((prev) => new Set(prev).add(field));
-    lastSyncedKeyRef.current = "";
-    onDraftChange({ [draftField]: value });
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && canContinue && !(e.target instanceof HTMLTextAreaElement)) {
-      e.preventDefault();
-      onContinue();
+    onDraftChange({ ...draftPatchForMode(activeMode, draft), ...estimatePayload });
+    const ok = onContinue(merged, activeMode);
+    if (!ok) {
+      setContinueError("Impossible de passer à l'étape suivante. Réessayez.");
     }
   };
 
-  const showEstimates = !manualMode && amortization != null && amortization.remainingBalance > 0;
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !(e.target instanceof HTMLTextAreaElement)) {
+      e.preventDefault();
+      handleContinue();
+    }
+  };
 
   return (
     <motion.div
@@ -163,198 +211,161 @@ export function EmpreinteFinancementScreen({
       onKeyDown={handleKeyDown}
     >
       {progress}
-      <h1 className="mb-6 text-xl font-medium tracking-tight text-slate-800 md:text-2xl">
+
+      <h1 className="mb-8 text-xl font-medium tracking-tight text-slate-800 md:text-2xl">
         Le financement
       </h1>
 
-      {!manualMode && (
-        <div className="mb-8 w-full text-left">
-          <p className="mb-6 text-center text-sm text-slate-500">
-            Je me souviens de mon emprunt — on estime le reste à payer.
-          </p>
-          <div className="flex flex-col gap-8">
-            <EmpreinteFormRow
-              id="initialMortgagePrincipal"
-              label="Capital emprunté au départ"
-              type="currency"
-              value={draft.initialMortgagePrincipal}
-              onChange={(v) => updateField("initialMortgagePrincipal", v)}
-              placeholder="350 000"
-              hint="Montant du prêt, pas le prix d'achat si vous aviez un apport."
-              autoFocus
-            />
-            <div>
-              <label
-                htmlFor="mortgageStartDate"
-                className="mb-2 block text-left text-sm font-medium text-slate-600"
-              >
-                Date de souscription
-              </label>
-              <input
-                id="mortgageStartDate"
-                type="text"
-                inputMode="numeric"
-                autoComplete="off"
-                value={draft.mortgageStartDate}
-                placeholder="MM/AAAA"
-                onChange={(e) =>
-                  updateField("mortgageStartDate", sanitizeMortgageStartDate(e.target.value))
-                }
-                className={cn(
-                  "w-full border-0 border-b border-slate-300/80 bg-transparent pb-2 text-left",
-                  "text-2xl font-light tracking-tight text-slate-900 placeholder:text-slate-300",
-                  "outline-none transition-colors focus:border-brand-500/60"
-                )}
-              />
-              <p className="mt-2 text-xs text-slate-400">Mois et année du 1er prélèvement.</p>
-            </div>
-            <EmpreinteFormRow
-              id="initialMortgageDurationYears"
-              label="Durée initiale du prêt"
-              type="number"
-              value={draft.initialMortgageDurationYears}
-              onChange={(v) => updateField("initialMortgageDurationYears", v)}
-              placeholder="25"
-              suffix="ans"
-            />
-            <RateRow
-              id="initialMortgageRate"
-              label="Taux d'intérêt (hors assurance)"
-              value={draft.initialMortgageRate}
-              onChange={(v) => updateField("initialMortgageRate", v)}
-              hint="Taux nominal à la signature. Crucial pour calculer vos économies face aux taux actuels."
-            />
-            <EmpreinteFormRow
-              id="mortgageInsuranceMonthly"
-              label="Coût de l'assurance (€/mois)"
-              type="currency"
-              value={draft.mortgageInsuranceMonthly}
-              onChange={(v) => updateField("mortgageInsuranceMonthly", v)}
-              placeholder="85"
-              hint="Laissez vide si inconnu, nous appliquerons une moyenne bancaire."
-            />
-          </div>
-        </div>
-      )}
-
-      {manualMode && (
-        <div className="flex w-full flex-col gap-8 text-left">
-          <p className="text-center text-sm text-slate-500">
-            Saisie manuelle — relevé bancaire ou remboursement anticipé.
-          </p>
-          <EmpreinteFormRow
-            id="mortgageRemaining"
-            label="Capital restant dû"
-            type="currency"
-            value={draft.mortgageRemaining}
-            onChange={(v) => updateField("mortgageRemaining", v)}
-            placeholder="200 000"
-            hint="Indiquez 0 s'il n'y a plus de crédit."
-            autoFocus
+      <div className="mb-6 w-full text-left">
+        {MODES.map((mode) => (
+          <FinancementModeOption
+            key={mode.id}
+            selected={activeMode === mode.id}
+            onSelect={() => selectMode(mode.id)}
+            icon={mode.icon}
+            title={mode.title}
           />
-          {parseCurrency(draft.mortgageRemaining) > 0 && (
-            <>
-              <EmpreinteFormRow
-                id="monthlyMortgagePayment"
-                label="Mensualité actuelle (assurance incluse)"
-                type="currency"
-                value={draft.monthlyMortgagePayment}
-                onChange={(v) => updateField("monthlyMortgagePayment", v)}
-                placeholder="1 200"
-              />
-              <EmpreinteFormRow
-                id="mortgageRemainingYears"
-                label="Durée restante"
-                type="number"
-                value={draft.mortgageRemainingYears}
-                onChange={(v) => updateField("mortgageRemainingYears", v)}
-                placeholder="15"
-                suffix="ans"
-              />
-            </>
+        ))}
+      </div>
+
+      <motion.div layout className="w-full overflow-hidden">
+        <AnimatePresence mode="wait" initial={false}>
+          {activeMode === "no_credit" && (
+            <motion.div
+              key="no_credit"
+              {...panelMotion(!!reduced)}
+              className="overflow-hidden"
+            >
+              <p className="mb-2 w-full py-1 text-sm text-slate-500">
+                Parfait — le bilan de votre bien s&apos;affiche ci-dessous.
+              </p>
+            </motion.div>
           )}
-        </div>
-      )}
 
-      {showEstimates && (
-        <div className="mb-4 w-full rounded-2xl border border-slate-200/80 bg-white/60 px-5 py-5 text-left shadow-sm">
-          <p className="mb-4 text-xs font-medium uppercase tracking-wide text-slate-400">
-            Estimation aujourd&apos;hui
-          </p>
-          <div className="flex flex-col gap-6">
-            <EmpreinteFormRow
-              id="est-crd"
-              label="Capital restant dû"
-              type="currency"
-              value={displayCrd}
-              onChange={(v) => updateComputedField("crd", "mortgageRemaining", v)}
-              hint={
-                crdOverridden
-                  ? "Valeur ajustée manuellement."
-                  : "Modifiable si remboursement anticipé."
-              }
-            />
-            <EmpreinteFormRow
-              id="est-monthly"
-              label="Mensualité (capital + intérêts + assurance)"
-              type="currency"
-              value={displayMonthly}
-              onChange={(v) => updateComputedField("monthly", "monthlyMortgagePayment", v)}
-            />
-            <EmpreinteFormRow
-              id="est-years"
-              label="Durée restante"
-              type="number"
-              value={displayYears}
-              onChange={(v) => updateComputedField("years", "mortgageRemainingYears", v)}
-              suffix="ans"
-            />
-          </div>
-          {amortization && (
-            <p className="mt-4 text-xs text-slate-400">
-              Hors remboursements anticipés · assurance{" "}
-              {parseCurrency(draft.mortgageInsuranceMonthly) > 0
-                ? `${parseCurrency(draft.mortgageInsuranceMonthly).toLocaleString("fr-FR")} €/mois`
-                : "moyenne bancaire appliquée"}
-            </p>
+          {activeMode === "estimate" && (
+            <motion.div
+              key="estimate"
+              {...panelMotion(!!reduced)}
+              className="overflow-hidden"
+            >
+              <div className="mb-2 flex w-full flex-col gap-6 pb-1 text-left">
+                <EmpreinteFormRow
+                  id="initialMortgagePrincipal"
+                  label="Capital emprunté au départ"
+                  type="currency"
+                  value={estimateForm.initialMortgagePrincipal}
+                  onChange={(v) => updateEstimateField("initialMortgagePrincipal", v)}
+                  placeholder="350 000"
+                  hint="Montant du prêt, pas le prix d'achat si vous aviez un apport."
+                  autoFocus
+                />
+
+                <div>
+                  <label
+                    htmlFor="mortgageStartDate"
+                    className="mb-2 block text-sm font-medium text-slate-500"
+                  >
+                    Date de souscription
+                  </label>
+                  <input
+                    id="mortgageStartDate"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={estimateForm.mortgageStartDate}
+                    placeholder="MM/AAAA"
+                    onChange={(e) =>
+                      updateEstimateField(
+                        "mortgageStartDate",
+                        sanitizeMortgageStartDate(e.target.value)
+                      )
+                    }
+                    onBlur={(e) =>
+                      updateEstimateField(
+                        "mortgageStartDate",
+                        normalizeMortgageStartDate(e.target.value)
+                      )
+                    }
+                    className={cn(
+                      "w-full border-0 border-b border-slate-300/80 bg-transparent pb-2.5 text-left",
+                      "text-2xl font-light tracking-tight text-slate-900 placeholder:text-slate-300",
+                      "outline-none transition-colors focus:border-brand-500/60 md:text-3xl"
+                    )}
+                  />
+                  <p className="mt-2 text-xs text-slate-400">
+                    Mois et année du 1er prélèvement.
+                  </p>
+                </div>
+
+                <EmpreinteFormRow
+                  id="initialMortgageDurationYears"
+                  label="Durée initiale du prêt"
+                  type="number"
+                  value={estimateForm.initialMortgageDurationYears}
+                  onChange={(v) => updateEstimateField("initialMortgageDurationYears", v)}
+                  placeholder="25"
+                  suffix="ans"
+                />
+
+                <EmpreinteFormRow
+                  id="initialMortgageRate"
+                  label="Taux d'intérêt (hors assurance)"
+                  type="rate"
+                  value={estimateForm.initialMortgageRate}
+                  onChange={(v) => updateEstimateField("initialMortgageRate", v)}
+                  placeholder="1,2"
+                  suffix="%"
+                  hint="Taux nominal à la signature. Crucial pour calculer vos économies face aux taux actuels."
+                />
+
+                <EmpreinteFormRow
+                  id="mortgageInsuranceMonthly"
+                  label="Coût de l'assurance (€/mois)"
+                  type="currency"
+                  value={estimateForm.mortgageInsuranceMonthly}
+                  onChange={(v) => updateEstimateField("mortgageInsuranceMonthly", v)}
+                  placeholder="85"
+                  hint="Laissez vide si inconnu, nous appliquerons une moyenne bancaire."
+                />
+              </div>
+            </motion.div>
           )}
-        </div>
-      )}
+        </AnimatePresence>
+      </motion.div>
 
-      {!manualMode && canComputeAmortization(draft) && amortization?.remainingBalance === 0 && (
-        <p className="mb-4 text-sm text-slate-500">
-          D&apos;après vos paramètres, le crédit semble remboursé.
-        </p>
-      )}
-
-      <button
-        type="button"
-        onClick={() => setManualMode(!manualMode)}
-        className="mb-2 text-xs text-slate-400 underline-offset-2 transition-colors hover:text-slate-600 hover:underline"
-      >
-        {manualMode
-          ? "← Revenir à l'estimation automatique"
-          : "Saisir manuellement CRD et mensualité"}
-      </button>
-
-      {!manualMode && (
-        <button
-          type="button"
-          onClick={() => {
-            lastSyncedKeyRef.current = "";
-            onDraftChange({
-              mortgageRemaining: "0",
-              monthlyMortgagePayment: "",
-              mortgageRemainingYears: "",
-            });
-          }}
-          className="mb-4 text-xs text-slate-400 underline-offset-2 transition-colors hover:text-slate-600 hover:underline"
+      {canContinueLocal && (
+        <motion.div
+          layout
+          className="mt-8 w-full"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: duration.normal, ease: ease.out }}
         >
-          Je n&apos;ai plus de crédit
-        </button>
+          <EmpreinteRecap
+            draft={draft}
+            footprint={footprint}
+            financementDraft={mergedPreview}
+          />
+        </motion.div>
       )}
 
-      <EmpreinteContinueButton onClick={onContinue} disabled={!canContinue} />
+      <motion.div layout transition={spring.soft}>
+        {!canContinueLocal && activeMode === "estimate" && !continueError && (
+          <p className="mb-3 max-w-sm text-xs leading-relaxed text-slate-400">
+            Complétez le capital, la date (MM/AAAA), la durée et le taux — ou choisissez « Je
+            n&apos;ai plus de crédit immobilier ».
+          </p>
+        )}
+        {continueError && (
+          <p className="mb-3 max-w-sm text-xs leading-relaxed text-red-500">{continueError}</p>
+        )}
+        <EmpreinteStepNav
+          onBack={onBack}
+          onContinue={() => handleContinue()}
+          continueAlwaysEnabled
+          className="mt-10 sm:mt-12"
+        />
+      </motion.div>
     </motion.div>
   );
 }

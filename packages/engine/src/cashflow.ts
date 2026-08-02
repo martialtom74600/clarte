@@ -65,8 +65,14 @@ function estimateHousing(
     };
   }
 
-  if (scenario === "sell") {
-    return { cost: rentEstimate, label: "Loyer estimé (après vente)" };
+  if (scenario === "sell" || scenario === "sell_rent") {
+    return {
+      cost: rentEstimate,
+      label:
+        scenario === "sell_rent"
+          ? "Loyer estimé (après vente, sans rachat)"
+          : "Loyer estimé (après vente)",
+    };
   }
 
   if (scenario === "keep_a") {

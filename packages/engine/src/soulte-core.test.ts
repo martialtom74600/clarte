@@ -172,6 +172,42 @@ describe("C3 — récompenses en communauté", () => {
     expect(soulte.creanceB?.amount).toBe(30000);
   });
 
+  it("mariage + acte en indivision 60/40 : créance (pas récompense 50/50)", () => {
+    const unequal = {
+      ...baseAsset,
+      ownership: { kind: "indivision" as const, shares: { A: 0.6, B: 0.4 } },
+    };
+    const liabilities = [
+      {
+        ...baseLiabilities[0],
+        responsibility: { kind: "indivision" as const, shares: { A: 0.6, B: 0.4 } },
+      },
+    ];
+    const soulte = computeSoulteCore(
+      unequal,
+      liabilities,
+      "A",
+      baseInput({
+        status: "marriage",
+        marriageRegime: "communaute_legale",
+        contributionA: 20000,
+        contributionB: 30000,
+        assets: [unequal],
+        liabilities,
+      })
+    );
+    // masse 150k × 40 % + 30k = 90k (et non 106 250 en récompense)
+    expect(soulte.contributionMode).toBe("creance");
+    expect(soulte.amount.amount).toBe(90000);
+    expect(usesRecompenseModel(unequal, baseInput({
+      status: "marriage",
+      marriageRegime: "communaute_legale",
+      contributionA: 20000,
+      contributionB: 30000,
+      assets: [unequal],
+    }))).toBe(false);
+  });
+
   it("récompense 1469 valorise le profit si prix d'acquisition connu", () => {
     const asset = {
       ...communityAsset,

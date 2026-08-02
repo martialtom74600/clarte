@@ -111,13 +111,14 @@ describe("runSimulation - concubinage", () => {
     );
   });
 
-  it("compare les 3 scénarios", () => {
+  it("compare les scénarios principaux", () => {
     const result = runSimulation(createConcubinageInput());
-    expect(result.scenarios).toHaveLength(4);
+    expect(result.scenarios).toHaveLength(5);
     expect(result.scenarios.map((s) => s.scenario)).toEqual([
       "keep_a",
       "keep_b",
       "sell",
+      "sell_rent",
       "rent_out",
     ]);
   });

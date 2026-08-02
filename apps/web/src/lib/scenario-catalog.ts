@@ -10,10 +10,13 @@ import { Compass, Home, Key, LogOut } from "lucide-react";
 import { formatEuro } from "@/lib/utils";
 
 /** Scénarios patrimoniaux calculés par le moteur (hors meta compare_all). */
-export const LIFE_SCENARIOS = ["keep_a", "keep_b", "rent_out", "sell"] as const satisfies readonly Exclude<
-  ScenarioType,
-  "compare_all"
->[];
+export const LIFE_SCENARIOS = [
+  "keep_a",
+  "keep_b",
+  "rent_out",
+  "sell",
+  "sell_rent",
+] as const satisfies readonly Exclude<ScenarioType, "compare_all">[];
 
 export type LifeScenario = (typeof LIFE_SCENARIOS)[number];
 
@@ -48,10 +51,16 @@ export const SCENARIO_CATALOG: Record<LifeScenario, ScenarioMeta> = {
   },
   sell: {
     id: "sell",
-    title: "Vendre et repartir",
-    tagline: "Liquider le bien et redémarrer ailleurs.",
+    title: "Vendre pour se reloger",
+    tagline: "Liquider le bien puis racheter dans la zone.",
     icon: Compass,
     intentDefault: "amiable_path",
+  },
+  sell_rent: {
+    id: "sell_rent",
+    title: "Vendre puis louer",
+    tagline: "Liquider le bien, puis se loger en location.",
+    icon: Home,
   },
 };
 
@@ -64,7 +73,7 @@ export const FLOW_STEPS = [
   {
     phase: "scenarios",
     label: "Scénarios",
-    description: "Lisez vos quatre trajectoires et choisissez la vôtre.",
+    description: "Lisez vos cinq trajectoires et choisissez la vôtre.",
   },
   {
     phase: "secure",

@@ -27,6 +27,8 @@ import { computeSaleProceeds } from "./sale-proceeds.js";
 import { computeRentOutCashflow } from "./rent-out-cashflow.js";
 import { computeKeepBilateralExtras } from "./keep-buyout.js";
 import { estimateCompensatoryAllowance } from "./compensatory-allowance.js";
+import { computeTenantRentAffordability } from "./affordability.js";
+import { resolveRelocateHousing } from "./relocate-housing.js";
 
 export const BANK_KEEP_LOAN_DISCLAIMER =
   "La désolidarisation de l'emprunt initial est soumise à l'accord discrétionnaire de la banque (ratio d'endettement et solvabilité du repreneur). Ce mode n'est pas garanti.";
@@ -76,9 +78,27 @@ function buildRentOutScenario(
   };
 }
 
+function buildSaleNetWorth(
+  primaryAsset: Asset,
+  input: SimulationInput,
+  baseNet: Record<PersonId, import("@separation/schemas").Money>,
+  sale: ReturnType<typeof computeSaleProceeds>
+) {
+  return {
+    A: addMoney(
+      subtractMoney(baseNet.A, getPersonShareOfAsset(primaryAsset, "A", input.liabilities)),
+      sale.netProceedsByPerson.A
+    ),
+    B: addMoney(
+      subtractMoney(baseNet.B, getPersonShareOfAsset(primaryAsset, "B", input.liabilities)),
+      sale.netProceedsByPerson.B
+    ),
+  };
+}
+
 function buildScenario(
   input: SimulationInput,
-  scenario: "keep_a" | "keep_b" | "sell" | "rent_out",
+  scenario: "keep_a" | "keep_b" | "sell" | "sell_rent" | "rent_out",
   baseNet: Record<PersonId, import("@separation/schemas").Money>,
   primaryAsset?: Asset
 ): ScenarioComparison {
@@ -89,25 +109,13 @@ function buildScenario(
     return buildRentOutScenario(input, baseNet, primaryAsset);
   }
 
-  if (scenario === "sell" && primaryAsset) {
+  if ((scenario === "sell" || scenario === "sell_rent") && primaryAsset) {
     const sale = computeSaleProceeds(primaryAsset, input.liabilities, input);
-    const netWorth = {
-      A: addMoney(
-        subtractMoney(baseNet.A, getPersonShareOfAsset(primaryAsset, "A", input.liabilities)),
-        sale.netProceedsByPerson.A
-      ),
-      B: addMoney(
-        subtractMoney(baseNet.B, getPersonShareOfAsset(primaryAsset, "B", input.liabilities)),
-        sale.netProceedsByPerson.B
-      ),
-    };
+    const netWorth = buildSaleNetWorth(primaryAsset, input, baseNet, sale);
     const agencyPct = Math.round(
       (sale.agencyFees.amount / Math.max(1, sale.grossValue.amount)) * 100
     );
-
-    return {
-      scenario: "sell",
-      label: "Vendre le logement",
+    const saleCommon = {
       netWorthByPerson: netWorth,
       agencyFeesEstimate: sale.agencyFees,
       diagnosticsEstimate: sale.diagnosticsFees,
@@ -118,14 +126,56 @@ function buildScenario(
       primaryResidenceExempt: sale.primaryResidenceExempt,
       capitalGainsEstimate: sale.capitalGainsEstimate,
       capitalGainsNote: sale.capitalGainsNote,
+    };
+
+    const housing = resolveRelocateHousing(input);
+
+    if (scenario === "sell_rent") {
+      const tenantRentMonthly = housing.tenantRentMonthly;
+      const income = (person: PersonId) =>
+        input.persons.find((p) => p.id === person)?.income?.amount ?? 0;
+      const rentA = computeTenantRentAffordability({
+        incomeMonthly: income("A"),
+        rentMonthly: tenantRentMonthly.amount,
+        liquidCapital: Math.max(0, sale.netProceedsByPerson.A.amount),
+      });
+      const rentB = computeTenantRentAffordability({
+        incomeMonthly: income("B"),
+        rentMonthly: tenantRentMonthly.amount,
+        liquidCapital: Math.max(0, sale.netProceedsByPerson.B.amount),
+      });
+
+      return {
+        scenario: "sell_rent",
+        label: "Vendre puis louer",
+        ...saleCommon,
+        tenantRentMonthly,
+        relocateSurfaceSqm: housing.surfaceSqm,
+        relocateMarketTier: housing.tier,
+        relocateHousingNote: housing.note,
+        relocateVerdictByPerson: { A: rentA.verdict, B: rentB.verdict },
+        monthlyPaymentEstimate: tenantRentMonthly,
+        description: sale.negativeEquity
+          ? `Actif net négatif après frais d'agence (~${agencyPct} %), diagnostics et remboursement du crédit — dette à partager. ${sale.capitalGainsNote}`
+          : `Vente puis location (${housing.note}, ~${Math.round(tenantRentMonthly.amount).toLocaleString("fr-FR")} €/mois). Net Vous ${Math.round(sale.netProceedsByPerson.A.amount).toLocaleString("fr-FR")} € · Autre ${Math.round(sale.netProceedsByPerson.B.amount).toLocaleString("fr-FR")} €. ${sale.capitalGainsNote}`,
+      };
+    }
+
+    return {
+      scenario: "sell",
+      label: "Vendre pour se reloger",
+      ...saleCommon,
       relocateTarget: sale.relocateTarget,
+      relocateSurfaceSqm: housing.surfaceSqm,
+      relocateMarketTier: housing.tier,
+      relocateHousingNote: housing.note,
       relocateVerdictByPerson: {
         A: sale.relocateByPerson.A.verdict,
         B: sale.relocateByPerson.B.verdict,
       },
       description: sale.negativeEquity
         ? `Actif net négatif après frais d'agence (~${agencyPct} %), diagnostics et remboursement du crédit — dette à partager. ${sale.capitalGainsNote}`
-        : `Net vendeur bilatéral après agence (~${agencyPct} %) + diagnostics, puis remboursement du crédit. Vous ${Math.round(sale.netProceedsByPerson.A.amount).toLocaleString("fr-FR")} € · Autre ${Math.round(sale.netProceedsByPerson.B.amount).toLocaleString("fr-FR")} €. ${sale.capitalGainsNote}`,
+        : `Net vendeur bilatéral après agence (~${agencyPct} %) + diagnostics, puis rachat (${housing.note}). Vous ${Math.round(sale.netProceedsByPerson.A.amount).toLocaleString("fr-FR")} € · Autre ${Math.round(sale.netProceedsByPerson.B.amount).toLocaleString("fr-FR")} €. ${sale.capitalGainsNote}`,
     };
   }
 
@@ -180,6 +230,9 @@ function buildScenario(
     occupationIndemnity: bilateral.occupationIndemnity,
     occupationNote: bilateral.occupationNote,
     relocateTarget: bilateral.relocateTarget,
+    relocateSurfaceSqm: bilateral.relocateSurfaceSqm,
+    relocateMarketTier: bilateral.relocateMarketTier,
+    relocateHousingNote: bilateral.relocateHousingNote,
     relocateVerdictByPerson: bilateral.relocateVerdictByPerson,
     departureRelocateVerdict: bilateral.departureRelocateVerdict,
   };
@@ -474,6 +527,13 @@ export function runSimulation(input: SimulationInput): SimulationResult {
     input.options.scenario === "sell"
   ) {
     scenarios.push(buildScenario(input, "sell", baseNet, primaryAsset));
+  }
+
+  if (
+    input.options.scenario === "compare_all" ||
+    input.options.scenario === "sell_rent"
+  ) {
+    scenarios.push(buildScenario(input, "sell_rent", baseNet, primaryAsset));
   }
 
   if (

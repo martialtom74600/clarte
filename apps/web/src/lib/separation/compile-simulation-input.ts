@@ -13,6 +13,21 @@ import {
 
 const DEFAULT_SURFACE = 65;
 
+function applyFootprintAssumptions(
+  footprint: FootprintState,
+  assumptions: AssumptionsState
+): AssumptionsState {
+  if (!footprint.cadreJuridiqueDeclared || !footprint.legalStatus) {
+    return assumptions;
+  }
+  return {
+    ...assumptions,
+    status: footprint.legalStatus,
+    shareA: footprint.ownershipShareA,
+    shareB: footprint.ownershipShareB,
+  };
+}
+
 function mergeAssumptionsWithLevers(
   assumptions: AssumptionsState,
   lab: LabState,
@@ -58,12 +73,54 @@ function mergeAssumptionsWithLevers(
   return merged;
 }
 
+function resolveIndivisionShares(
+  footprint: FootprintState,
+  merged: AssumptionsState
+): { A: number; B: number } {
+  if (footprint.cadreJuridiqueDeclared) {
+    return {
+      A: footprint.ownershipShareA / 100,
+      B: footprint.ownershipShareB / 100,
+    };
+  }
+  return { A: merged.shareA / 100, B: merged.shareB / 100 };
+}
+
+function resolvePropertyOwnership(
+  footprint: FootprintState,
+  merged: AssumptionsState
+): SimulationInput["assets"][number]["ownership"] {
+  // L'acte de vente (empreinte) prime sur le régime matrimonial par défaut.
+  if (footprint.cadreJuridiqueDeclared) {
+    const shares = resolveIndivisionShares(footprint, merged);
+    return { kind: "indivision", shares };
+  }
+  if (merged.status === "marriage" && merged.marriageRegime === "communaute_legale") {
+    return { kind: "community" };
+  }
+  const shares = resolveIndivisionShares(footprint, merged);
+  return { kind: "indivision", shares };
+}
+
+function resolveMortgageResponsibility(
+  footprint: FootprintState,
+  merged: AssumptionsState
+): SimulationInput["liabilities"][number]["responsibility"] {
+  if (footprint.cadreJuridiqueDeclared) {
+    const shares = resolveIndivisionShares(footprint, merged);
+    return { kind: "indivision", shares };
+  }
+  if (merged.status === "marriage" && merged.marriageRegime === "communaute_legale") {
+    return { kind: "community" };
+  }
+  const shares = resolveIndivisionShares(footprint, merged);
+  return { kind: "indivision", shares };
+}
+
 function buildAssetsAndLiabilities(
   footprint: FootprintState,
   merged: AssumptionsState
 ): Pick<SimulationInput, "assets" | "liabilities"> {
-  const shareA = merged.shareA / 100;
-  const shareB = merged.shareB / 100;
   const assets: SimulationInput["assets"] = [];
   const liabilities: SimulationInput["liabilities"] = [];
 
@@ -73,10 +130,7 @@ function buildAssetsAndLiabilities(
       type: "real_estate",
       label: "Résidence principale",
       grossValue: { amount: footprint.propertyValue, currency: "EUR" },
-      ownership:
-        merged.status === "marriage" && merged.marriageRegime === "communaute_legale"
-          ? { kind: "community" }
-          : { kind: "indivision", shares: { A: shareA, B: shareB } },
+      ownership: resolvePropertyOwnership(footprint, merged),
       isPrimaryResidence: true,
       linkedLiabilityIds: footprint.mortgageRemaining > 0 ? ["mortgage"] : undefined,
       ...(footprint.purchasePrice > 0
@@ -111,10 +165,7 @@ function buildAssetsAndLiabilities(
       type: "mortgage",
       label: "Crédit immobilier",
       remainingBalance: { amount: footprint.mortgageRemaining, currency: "EUR" },
-      responsibility:
-        merged.status === "marriage" && merged.marriageRegime === "communaute_legale"
-          ? { kind: "community" }
-          : { kind: "indivision", shares: { A: shareA, B: shareB } },
+      responsibility: resolveMortgageResponsibility(footprint, merged),
       linkedAssetId: "primary-residence",
     });
   }
@@ -157,13 +208,24 @@ export function compileSimulationInput(
   state: Pick<SeparationState, "footprint" | "assumptions" | "lab">
 ): SimulationInput {
   const { footprint, lab } = state;
-  const merged = mergeAssumptionsWithLevers(state.assumptions, lab, footprint);
+  const assumptionsFromFootprint = applyFootprintAssumptions(footprint, state.assumptions);
+  const merged = mergeAssumptionsWithLevers(assumptionsFromFootprint, lab, footprint);
   const { assets, liabilities } = buildAssetsAndLiabilities(footprint, merged);
 
   const monthlyRentOverride =
     lab.enabledLevers.includes("custom_rent") &&
     lab.overrides.custom_rent?.monthlyRentOverride != null
       ? lab.overrides.custom_rent.monthlyRentOverride
+      : undefined;
+
+  const relocateHousingActive = lab.enabledLevers.includes("relocate_housing");
+  const relocateSurfaceSqm =
+    relocateHousingActive && lab.overrides.relocate_housing?.surfaceSqm != null
+      ? lab.overrides.relocate_housing.surfaceSqm
+      : undefined;
+  const relocateMarketTier =
+    relocateHousingActive && lab.overrides.relocate_housing?.marketTier
+      ? lab.overrides.relocate_housing.marketTier
       : undefined;
 
   const contributionsActive = lab.enabledLevers.includes("initial_contributions");
@@ -212,6 +274,8 @@ export function compileSimulationInput(
       mortgageDurationYears,
       monthlyRentOverride,
       occupationMonths,
+      relocateSurfaceSqm,
+      relocateMarketTier,
     },
     hasMinorChildren: childrenActive,
     numberOfChildren: childrenActive
@@ -220,15 +284,33 @@ export function compileSimulationInput(
     custodyType: childrenActive ? lab.overrides.children_impact!.custodyType : undefined,
     postalCode: footprint.postalCode,
     propertySurface: surface,
-    contributionA: contributionsActive ? merged.contributionA : undefined,
-    contributionB: contributionsActive ? merged.contributionB : undefined,
+    contributionA: contributionsActive
+      ? merged.contributionA
+      : footprint.completedAt
+        ? footprint.contributionA
+        : undefined,
+    contributionB: contributionsActive
+      ? merged.contributionB
+      : footprint.completedAt
+        ? footprint.contributionB
+        : undefined,
     // Mensualité réelle → mode « garder mon crédit » (keep) + charge locative (rent_out).
     monthlyMortgagePayment,
   };
 }
 
 export function isFootprintComplete(footprint: FootprintState): boolean {
+  const legalOk =
+    footprint.cadreJuridiqueDeclared &&
+    (footprint.legalStatus === "marriage" ||
+      footprint.legalStatus === "pacs" ||
+      footprint.legalStatus === "concubinage") &&
+    footprint.ownershipShareA > 0 &&
+    footprint.ownershipShareB > 0 &&
+    footprint.ownershipShareA + footprint.ownershipShareB === 100;
+
   const base =
+    legalOk &&
     footprint.postalCode.length >= 5 &&
     footprint.propertyValue > 0 &&
     footprint.propertySurface > 0 &&
@@ -279,6 +361,51 @@ export function defaultLabState(): LabState {
   };
 }
 
+/**
+ * Active les leviers labo correspondant aux données déjà saisies en Empreinte,
+ * avec les mêmes valeurs préremplies.
+ */
+export function seedLabFromFootprint(
+  footprint: FootprintState,
+  currentLab: LabState = defaultLabState()
+): LabState {
+  const enabled = new Set(currentLab.enabledLevers);
+  const overrides = { ...currentLab.overrides };
+
+  const hasApports = footprint.contributionA > 0 || footprint.contributionB > 0;
+  if (hasApports) {
+    enabled.add("initial_contributions");
+    overrides.initial_contributions = {
+      contributionA: footprint.contributionA,
+      contributionB: footprint.contributionB,
+    };
+  } else {
+    enabled.delete("initial_contributions");
+    delete overrides.initial_contributions;
+  }
+
+  const hasActiveCredit =
+    footprint.mortgageRemaining > 0 && footprint.monthlyMortgagePayment > 0;
+  if (hasActiveCredit) {
+    enabled.add("historical_mortgage_rate");
+    overrides.historical_mortgage_rate = {
+      monthlyMortgagePayment: footprint.monthlyMortgagePayment,
+      ...(footprint.initialMortgageRate > 0
+        ? { mortgageRate: footprint.initialMortgageRate }
+        : {}),
+    };
+  } else {
+    enabled.delete("historical_mortgage_rate");
+    delete overrides.historical_mortgage_rate;
+  }
+
+  return {
+    ...currentLab,
+    enabledLevers: [...enabled],
+    overrides,
+  };
+}
+
 export function leverRequiresOverride(leverId: LeverId): boolean {
   return leverId !== "children_impact";
 }
@@ -301,6 +428,14 @@ export function defaultFootprint(): FootprintState {
     mortgageInsuranceMonthly: 0,
     incomeA: 0,
     incomeB: 0,
+    contributionA: 0,
+    contributionB: 0,
+    apportsDeclared: false,
+    financementDeclared: false,
+    legalStatus: "",
+    ownershipShareA: 50,
+    ownershipShareB: 50,
+    cadreJuridiqueDeclared: false,
     completedAt: null,
   };
 }

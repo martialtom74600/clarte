@@ -12,6 +12,7 @@ export {
   isFootprintComplete,
   defaultAssumptions,
   defaultLabState,
+  seedLabFromFootprint,
   leverRequiresOverride,
 } from "./compile-simulation-input";
 export { recomputeSeparationDerived } from "./recompute-derived";

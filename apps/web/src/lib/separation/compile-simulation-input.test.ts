@@ -4,6 +4,7 @@ import {
   defaultAssumptions,
   defaultLabState,
   isFootprintComplete,
+  seedLabFromFootprint,
 } from "@/lib/separation/compile-simulation-input";
 import { recomputeSeparationDerived } from "@/lib/separation/recompute-derived";
 import type { FootprintState, SeparationState } from "@/lib/separation/separation-types";
@@ -25,6 +26,14 @@ const completeFootprint: FootprintState = {
   mortgageInsuranceMonthly: 0,
   incomeA: 5000,
   incomeB: 4000,
+  contributionA: 0,
+  contributionB: 0,
+  legalStatus: "concubinage",
+  ownershipShareA: 50,
+  ownershipShareB: 50,
+  cadreJuridiqueDeclared: true,
+  apportsDeclared: false,
+  financementDeclared: false,
   completedAt: null,
 };
 
@@ -45,12 +54,46 @@ function baseState(overrides: Partial<SeparationState> = {}): SeparationState {
   };
 }
 
+describe("seedLabFromFootprint", () => {
+  it("active apports + mensualité quand renseignés", () => {
+    const lab = seedLabFromFootprint({
+      ...completeFootprint,
+      contributionA: 20000,
+      contributionB: 10000,
+    });
+    expect(lab.enabledLevers).toEqual(
+      expect.arrayContaining(["initial_contributions", "historical_mortgage_rate"])
+    );
+    expect(lab.overrides.initial_contributions).toEqual({
+      contributionA: 20000,
+      contributionB: 10000,
+    });
+    expect(lab.overrides.historical_mortgage_rate?.monthlyMortgagePayment).toBe(950);
+  });
+
+  it("n'active pas le crédit si sans crédit", () => {
+    const lab = seedLabFromFootprint({
+      ...completeFootprint,
+      mortgageRemaining: 0,
+      monthlyMortgagePayment: 0,
+      contributionA: 5000,
+      contributionB: 0,
+    });
+    expect(lab.enabledLevers).toContain("initial_contributions");
+    expect(lab.enabledLevers).not.toContain("historical_mortgage_rate");
+  });
+});
+
 describe("isFootprintComplete", () => {
-  it("exige surface, crédit (mensualité + durée) et revenus", () => {
+  it("exige surface, cadre juridique, crédit (mensualité + durée) et revenus", () => {
     expect(isFootprintComplete(completeFootprint)).toBe(true);
     expect(isFootprintComplete({ ...completeFootprint, incomeB: 0 })).toBe(false);
     expect(isFootprintComplete({ ...completeFootprint, postalCode: "750" })).toBe(false);
     expect(isFootprintComplete({ ...completeFootprint, propertySurface: 0 })).toBe(false);
+    expect(isFootprintComplete({ ...completeFootprint, cadreJuridiqueDeclared: false })).toBe(
+      false
+    );
+    expect(isFootprintComplete({ ...completeFootprint, legalStatus: "" })).toBe(false);
     expect(isFootprintComplete({ ...completeFootprint, monthlyMortgagePayment: 0 })).toBe(
       false
     );
@@ -78,11 +121,109 @@ describe("compileSimulationInput", () => {
     expect(input.options.mortgageDurationYears).toBe(15);
     expect(input.assets[0]?.purchasePrice?.amount).toBe(320000);
     expect(input.contributionA).toBeUndefined();
+    expect(input.contributionB).toBeUndefined();
     expect(input.assets[0].ownership).toEqual({
       kind: "indivision",
       shares: { A: 0.5, B: 0.5 },
     });
     expect(input.options.scenario).toBe("compare_all");
+  });
+
+  it("utilise les quotes-parts de l'empreinte pour la soulte (ex. 60/40)", () => {
+    const input = compileSimulationInput(
+      baseState({
+        footprint: {
+          ...completeFootprint,
+          legalStatus: "concubinage",
+          ownershipShareA: 60,
+          ownershipShareB: 40,
+          cadreJuridiqueDeclared: true,
+        },
+        assumptions: {
+          ...defaultAssumptions(),
+          status: "concubinage",
+          shareA: 50,
+          shareB: 50,
+        },
+      })
+    );
+    expect(input.assets[0].ownership).toEqual({
+      kind: "indivision",
+      shares: { A: 0.6, B: 0.4 },
+    });
+    const derived = recomputeSeparationDerived(
+      baseState({
+        footprint: {
+          ...completeFootprint,
+          legalStatus: "concubinage",
+          ownershipShareA: 60,
+          ownershipShareB: 40,
+          cadreJuridiqueDeclared: true,
+        },
+      })
+    );
+    const soulte = derived.lastResult?.scenarios.find((s) => s.scenario === "keep_a")?.soulte
+      ?.amount.amount;
+    // Net 200 k€ (400 k − 200 k CRD) · part B 40 % → soulte 80 k€ (vs 100 k€ en 50/50)
+    expect(soulte).toBe(80_000);
+  });
+
+  it("mariage + parts d'acte + apports : créance 90k (pas récompense communauté)", () => {
+    const derived = recomputeSeparationDerived(
+      baseState({
+        footprint: {
+          ...completeFootprint,
+          legalStatus: "marriage",
+          ownershipShareA: 60,
+          ownershipShareB: 40,
+          cadreJuridiqueDeclared: true,
+          contributionA: 20000,
+          contributionB: 30000,
+          purchasePrice: 320000,
+          completedAt: "2026-01-01T00:00:00.000Z",
+        },
+        assumptions: {
+          ...defaultAssumptions(),
+          status: "marriage",
+          marriageRegime: "communaute_legale",
+          shareA: 60,
+          shareB: 40,
+        },
+      })
+    );
+    const keepA = derived.lastResult?.scenarios.find((s) => s.scenario === "keep_a")?.soulte;
+    expect(keepA?.contributionMode).toBe("creance");
+    // Net 200k − 50k créances = 150k · part B 40 % + 30k = 90k
+    expect(keepA?.amount.amount).toBe(90_000);
+  });
+
+  it("utilise les parts de l'acte même pour un couple marié (60/40)", () => {
+    const input = compileSimulationInput(
+      baseState({
+        footprint: {
+          ...completeFootprint,
+          legalStatus: "marriage",
+          ownershipShareA: 60,
+          ownershipShareB: 40,
+          cadreJuridiqueDeclared: true,
+        },
+        assumptions: {
+          ...defaultAssumptions(),
+          status: "marriage",
+          marriageRegime: "communaute_legale",
+          shareA: 50,
+          shareB: 50,
+        },
+      })
+    );
+    expect(input.assets[0].ownership).toEqual({
+      kind: "indivision",
+      shares: { A: 0.6, B: 0.4 },
+    });
+    expect(input.liabilities[0]?.responsibility).toEqual({
+      kind: "indivision",
+      shares: { A: 0.6, B: 0.4 },
+    });
   });
 
   it("laisse le levier mensualité écraser l'empreinte", () => {
@@ -99,6 +240,21 @@ describe("compileSimulationInput", () => {
     );
     expect(input.monthlyMortgagePayment).toBe(1100);
     expect(input.options.mortgageDurationYears).toBe(15);
+  });
+
+  it("injecte les apports depuis l'empreinte une fois le wizard terminé", () => {
+    const input = compileSimulationInput(
+      baseState({
+        footprint: {
+          ...completeFootprint,
+          contributionA: 20000,
+          contributionB: 30000,
+          completedAt: "2026-01-01T00:00:00.000Z",
+        },
+      })
+    );
+    expect(input.contributionA).toBe(20000);
+    expect(input.contributionB).toBe(30000);
   });
 
   it("injecte les apports uniquement quand le levier est activé", () => {
@@ -195,7 +351,7 @@ describe("recomputeSeparationDerived", () => {
   it("produit result + 4 verdicts quand empreinte complète", () => {
     const derived = recomputeSeparationDerived(baseState());
     expect(derived.lastInput).not.toBeNull();
-    expect(derived.lastResult?.scenarios).toHaveLength(4);
+    expect(derived.lastResult?.scenarios).toHaveLength(5);
     expect(derived.doorVerdicts?.keep_a.verdict).toBeDefined();
     expect(derived.doorVerdicts?.rent_out.verdict).toBeDefined();
     expect(derived.computedAt).not.toBeNull();

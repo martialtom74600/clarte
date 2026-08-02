@@ -8,6 +8,7 @@ import {
 import {
   compileSimulationInput,
   isFootprintComplete,
+  seedLabFromFootprint,
 } from "@/lib/separation/compile-simulation-input";
 import { recomputeSeparationDerived } from "@/lib/separation/recompute-derived";
 import type { SeparationState } from "@/lib/separation/separation-types";
@@ -33,16 +34,74 @@ function createTestSeparationStore() {
     },
 
     completeFootprint: () => {
-      const { footprint } = get();
+      const { footprint, lab } = get();
       if (!isFootprintComplete(footprint)) return false;
       set((state) => {
         const nextFootprint = { ...state.footprint, completedAt: new Date().toISOString() };
+        const nextLab = seedLabFromFootprint(nextFootprint, lab);
         return withRecompute(
-          { stratum: "portes", footprint: nextFootprint },
-          { ...state, stratum: "portes", footprint: nextFootprint }
+          { stratum: "portes", footprint: nextFootprint, lab: nextLab },
+          { ...state, stratum: "portes", footprint: nextFootprint, lab: nextLab }
         );
       });
       return true;
+    },
+
+    completeFootprintWithIncomes: (incomeA, incomeB) => {
+      const { footprint, lab } = get();
+      const nextBase = { ...footprint, incomeA, incomeB };
+      if (!isFootprintComplete(nextBase)) return false;
+      set((state) => {
+        const nextFootprint = {
+          ...state.footprint,
+          incomeA,
+          incomeB,
+          completedAt: new Date().toISOString(),
+        };
+        const nextLab = seedLabFromFootprint(nextFootprint, lab);
+        return withRecompute(
+          { stratum: "portes", footprint: nextFootprint, lab: nextLab },
+          { ...state, stratum: "portes", footprint: nextFootprint, lab: nextLab }
+        );
+      });
+      return true;
+    },
+
+    reopenEmpreinte: () => {
+      set((state) => {
+        const footprint = { ...state.footprint, completedAt: null };
+        const lab = { ...state.lab, activeDoor: null };
+        return withRecompute(
+          { stratum: "empreinte", footprint, lab },
+          { ...state, stratum: "empreinte", footprint, lab }
+        );
+      });
+    },
+
+    setFinancementFootprint: (values) => {
+      set((state) => {
+        const footprint = { ...state.footprint, ...values };
+        return withRecompute({ footprint }, { ...state, footprint });
+      });
+    },
+
+    setCadreJuridique: (legalStatus, ownershipShareA, ownershipShareB) => {
+      set((state) => {
+        const footprint = {
+          ...state.footprint,
+          legalStatus,
+          ownershipShareA,
+          ownershipShareB,
+          cadreJuridiqueDeclared: true,
+        };
+        const assumptions = {
+          ...state.assumptions,
+          status: legalStatus,
+          shareA: ownershipShareA,
+          shareB: ownershipShareB,
+        };
+        return withRecompute({ footprint, assumptions }, { ...state, footprint, assumptions });
+      });
     },
 
     openDoor: (doorId) => {
@@ -129,6 +188,10 @@ describe("SeparationStore (in-memory)", () => {
     s.setFootprintField("mortgageRemainingYears", 15);
     s.setFootprintField("incomeA", 5000);
     s.setFootprintField("incomeB", 4000);
+    s.setFootprintField("legalStatus", "concubinage");
+    s.setFootprintField("ownershipShareA", 50);
+    s.setFootprintField("ownershipShareB", 50);
+    s.setFootprintField("cadreJuridiqueDeclared", true);
   };
 
   it("progresse footprint → portes avec recompute", () => {
@@ -141,6 +204,23 @@ describe("SeparationStore (in-memory)", () => {
     expect(ok).toBe(true);
     expect(store.getState().stratum).toBe("portes");
     expect(store.getState().footprint.completedAt).not.toBeNull();
+  });
+
+  it("pré-active les leviers labo depuis l'Empreinte (apports + mensualité)", () => {
+    fillCompleteFootprint();
+    store.getState().setFootprintField("contributionA", 20000);
+    store.getState().setFootprintField("contributionB", 15000);
+
+    store.getState().completeFootprint();
+
+    const { lab } = store.getState();
+    expect(lab.enabledLevers).toContain("initial_contributions");
+    expect(lab.enabledLevers).toContain("historical_mortgage_rate");
+    expect(lab.overrides.initial_contributions).toEqual({
+      contributionA: 20000,
+      contributionB: 15000,
+    });
+    expect(lab.overrides.historical_mortgage_rate?.monthlyMortgagePayment).toBe(950);
   });
 
   it("injecte un levier apports et met à jour les verdicts", () => {
@@ -194,6 +274,22 @@ describe("SeparationStore (in-memory)", () => {
     expect(store.getState().stratum).toBe("laboratoire");
     expect(store.getState().lab.activeDoor).toBe("rent_out");
     expect(store.getState().derived.doorVerdicts).toEqual(verdictsBefore);
+  });
+
+  it("reopenEmpreinte conserve les données et efface completedAt", () => {
+    fillCompleteFootprint();
+    store.getState().completeFootprint();
+    expect(store.getState().footprint.completedAt).not.toBeNull();
+
+    store.getState().reopenEmpreinte();
+
+    const state = store.getState();
+    expect(state.stratum).toBe("empreinte");
+    expect(state.footprint.completedAt).toBeNull();
+    expect(state.footprint.postalCode).toBe("75011");
+    expect(state.footprint.propertyValue).toBe(400000);
+    expect(state.footprint.ownershipShareA).toBe(50);
+    expect(state.lab.activeDoor).toBeNull();
   });
 
   it("reset remet le funnel à zéro pour une nouvelle saisie", () => {

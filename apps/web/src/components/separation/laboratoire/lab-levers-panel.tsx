@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import type { DoorId } from "@separation/schemas";
+import type { DoorId, RelocateMarketTier } from "@separation/schemas";
+import { defaultRelocateSurfaceSqm } from "@separation/engine";
 import { useSeparationStore } from "@/store/separation-store";
 import { defaultMortgagePayment } from "@/lib/separation/lab-ledger-model";
 import { LabField, LabLever } from "./lab-lever";
@@ -14,7 +15,14 @@ type LabLeverId =
   | "initial_contributions"
   | "historical_mortgage_rate"
   | "children_impact"
-  | "occupation_indemnity";
+  | "occupation_indemnity"
+  | "relocate_housing";
+
+const MARKET_TIER_OPTIONS: { value: RelocateMarketTier; label: string }[] = [
+  { value: "entry", label: "Entrée de zone" },
+  { value: "median", label: "Médian" },
+  { value: "high", label: "Haut de zone" },
+];
 
 function parseAmount(raw: string): number {
   const digits = raw.replace(/\D/g, "");
@@ -46,6 +54,11 @@ const LEVER_COPY: Record<
       description: "En cas de vente, on repartage surtout selon vos parts. Les apports aident surtout le rachat.",
       impact: "Peu d'effet sur ce scénario de vente.",
     },
+    sell_rent: {
+      title: "Apports initiaux",
+      description: "En cas de vente, on repartage surtout selon vos parts. Les apports n'ont pas d'effet sur le loyer.",
+      impact: "Peu d'effet sur ce scénario de vente.",
+    },
     rent_out: {
       title: "Apports initiaux",
       description: "Les apports changent surtout le prix d'un rachat, pas le loyer mensuel.",
@@ -66,6 +79,11 @@ const LEVER_COPY: Record<
       impact: "Affine la mensualité et le verdict — sous réserve d'accord banque.",
     },
     sell: {
+      title: "Ajuster la mensualité du crédit",
+      description: "Sans bien à garder, ce levier ne s'applique pas — le crédit est remboursé à la vente.",
+      impact: "Sans effet sur ce scénario.",
+    },
+    sell_rent: {
       title: "Ajuster la mensualité du crédit",
       description: "Sans bien à garder, ce levier ne s'applique pas — le crédit est remboursé à la vente.",
       impact: "Sans effet sur ce scénario.",
@@ -91,7 +109,12 @@ const LEVER_COPY: Record<
     sell: {
       title: "Budget pour les enfants",
       description: "Estime la contribution mensuelle selon le barème indicatif du ministère de la Justice.",
-      impact: "Réduit la capacité de relogement de celui qui paie.",
+      impact: "Réduit la capacité de rachat après vente de celui qui paie.",
+    },
+    sell_rent: {
+      title: "Budget pour les enfants",
+      description: "Estime la contribution mensuelle selon le barème indicatif du ministère de la Justice.",
+      impact: "Réduit la capacité locative de celui qui paie.",
     },
     rent_out: {
       title: "Budget pour les enfants",
@@ -117,9 +140,45 @@ const LEVER_COPY: Record<
       description: "Sur une vente, l'indemnité d'occupation se discute à part — non modélisée ici.",
       impact: "Sans effet sur ce scénario.",
     },
+    sell_rent: {
+      title: "Temps passé seul dans le logement avant signature",
+      description: "Sur une vente, l'indemnité d'occupation se discute à part — non modélisée ici.",
+      impact: "Sans effet sur ce scénario.",
+    },
     rent_out: {
       title: "Temps passé seul dans le logement avant signature",
       description: "Ce levier concerne le rachat, pas la location.",
+      impact: "Sans effet sur ce scénario.",
+    },
+  },
+  relocate_housing: {
+    keep_a: {
+      title: "Relogement solo",
+      description:
+        "Hypothèse de logement après séparation pour la personne qui part — pas le même bien. Surface et gamme de prix de la zone.",
+      impact: "Recalcule la capacité de relogement du partant.",
+    },
+    keep_b: {
+      title: "Relogement solo",
+      description:
+        "Hypothèse de logement après séparation pour vous si vous partez — pas le même bien. Surface et gamme de prix de la zone.",
+      impact: "Recalcule votre capacité de relogement.",
+    },
+    sell: {
+      title: "Relogement solo",
+      description:
+        "Hypothèse de rachat après vente — pas le même bien. Surface cible et gamme (entrée / médian / haut de zone).",
+      impact: "Recalcule le prix cible et le verdict de rachat pour chacun.",
+    },
+    sell_rent: {
+      title: "Relogement solo",
+      description:
+        "Hypothèse de location après vente — pas le même bien. Surface cible et gamme de loyer de la zone.",
+      impact: "Recalcule le loyer cible et le verdict locatif pour chacun.",
+    },
+    rent_out: {
+      title: "Relogement solo",
+      description: "Ce levier concerne la vente ou le départ, pas la location du bien actuel.",
       impact: "Sans effet sur ce scénario.",
     },
   },
@@ -142,12 +201,28 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
   const historicalEnabled = lab.enabledLevers.includes("historical_mortgage_rate");
   const childrenEnabled = lab.enabledLevers.includes("children_impact");
   const occupationEnabled = lab.enabledLevers.includes("occupation_indemnity");
+  const relocateEnabled = lab.enabledLevers.includes("relocate_housing");
+
+  const childrenForDefault =
+    childrenEnabled &&
+    lab.overrides.children_impact?.hasMinorChildren &&
+    (lab.overrides.children_impact.numberOfChildren ?? 0) > 0
+      ? lab.overrides.children_impact.numberOfChildren
+      : 0;
+  const defaultRelocateSurface = defaultRelocateSurfaceSqm(
+    footprint.propertySurface > 0 ? footprint.propertySurface : 65,
+    childrenForDefault
+  );
 
   const [contribA, setContribA] = useState(
-    formatAmount(lab.overrides.initial_contributions?.contributionA ?? 0)
+    formatAmount(
+      lab.overrides.initial_contributions?.contributionA ?? footprint.contributionA
+    )
   );
   const [contribB, setContribB] = useState(
-    formatAmount(lab.overrides.initial_contributions?.contributionB ?? 0)
+    formatAmount(
+      lab.overrides.initial_contributions?.contributionB ?? footprint.contributionB
+    )
   );
   const [historicalPay, setHistoricalPay] = useState(
     formatAmount(
@@ -159,6 +234,12 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
   );
   const [occupationMonths, setOccupationMonths] = useState(
     String(lab.overrides.occupation_indemnity?.occupationMonths ?? 8)
+  );
+  const [relocateSurface, setRelocateSurface] = useState(
+    String(lab.overrides.relocate_housing?.surfaceSqm ?? defaultRelocateSurface)
+  );
+  const [relocateTier, setRelocateTier] = useState<RelocateMarketTier>(
+    lab.overrides.relocate_housing?.marketTier ?? "entry"
   );
 
   const childrenCfg = lab.overrides.children_impact ?? {
@@ -193,6 +274,16 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
     });
   }, 200);
 
+  const commitRelocate = useDebouncedCallback(
+    (surfaceSqm: number, marketTier: RelocateMarketTier) => {
+      setLeverOverride("relocate_housing", {
+        surfaceSqm: Math.min(150, Math.max(25, surfaceSqm)),
+        marketTier,
+      });
+    },
+    200
+  );
+
   const pushContributions = (a: string, b: string) => {
     if (!contributionsEnabled) return;
     commitContributions(parseAmount(a), parseAmount(b));
@@ -208,6 +299,11 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
     commitOccupation(parseAmount(raw) || 1);
   };
 
+  const pushRelocateSurface = (raw: string, tier: RelocateMarketTier) => {
+    if (!relocateEnabled) return;
+    commitRelocate(parseAmount(raw) || defaultRelocateSurface, tier);
+  };
+
   const toggleLever = useCallback(
     (leverId: LabLeverId, on: boolean) => {
       if (!on) {
@@ -216,9 +312,13 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
       }
       // setLeverOverride active aussi le levier — un seul recompute.
       if (leverId === "initial_contributions") {
+        const a = parseAmount(contribA) || footprint.contributionA;
+        const b = parseAmount(contribB) || footprint.contributionB;
+        setContribA(formatAmount(a));
+        setContribB(formatAmount(b));
         setLeverOverride("initial_contributions", {
-          contributionA: parseAmount(contribA),
-          contributionB: parseAmount(contribB),
+          contributionA: a,
+          contributionB: b,
         });
       }
       if (leverId === "historical_mortgage_rate") {
@@ -243,6 +343,15 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
         setOccupationMonths(String(months));
         setLeverOverride("occupation_indemnity", { occupationMonths: months });
       }
+      if (leverId === "relocate_housing") {
+        const surface = parseAmount(relocateSurface) || defaultRelocateSurface;
+        setRelocateSurface(String(surface));
+        setRelocateTier(relocateTier);
+        setLeverOverride("relocate_housing", {
+          surfaceSqm: surface,
+          marketTier: relocateTier,
+        });
+      }
     },
     [
       disableLever,
@@ -252,7 +361,12 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
       historicalPay,
       marketMonthly,
       occupationMonths,
+      relocateSurface,
+      relocateTier,
+      defaultRelocateSurface,
       footprint.initialMortgageRate,
+      footprint.contributionA,
+      footprint.contributionB,
     ]
   );
 
@@ -260,9 +374,16 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
   const histCopy = LEVER_COPY.historical_mortgage_rate[doorId];
   const childrenCopy = LEVER_COPY.children_impact[doorId];
   const occupationCopy = LEVER_COPY.occupation_indemnity[doorId];
-  const historicalRelevant = doorId !== "sell";
+  const relocateCopy = LEVER_COPY.relocate_housing[doorId];
+  const noCredit =
+    footprint.financementDeclared && footprint.mortgageRemaining === 0;
+  const historicalRelevant = doorId !== "sell" && doorId !== "sell_rent" && !noCredit;
   const contributionsRelevant = doorId === "keep_a" || doorId === "keep_b";
   const occupationRelevant = doorId === "keep_a" || doorId === "keep_b";
+  const relocateRelevant =
+    doorId === "keep_a" || doorId === "keep_b" || doorId === "sell" || doorId === "sell_rent";
+  const hasEmpreinteApports =
+    footprint.contributionA > 0 || footprint.contributionB > 0;
 
   return (
     <div className="space-y-4">
@@ -276,7 +397,11 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
 
       <LabLever
         title={contribCopy.title}
-        description={`${contribCopy.description} ${contribCopy.impact}`}
+        description={`${contribCopy.description} ${contribCopy.impact}${
+          hasEmpreinteApports
+            ? " Prérempli depuis votre Empreinte — vous pouvez ajuster."
+            : ""
+        }`}
         enabled={contributionsEnabled}
         onToggle={(on) => toggleLever("initial_contributions", on)}
       >
@@ -309,6 +434,7 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
         </div>
       </LabLever>
 
+      {!noCredit && (
       <LabLever
         title={histCopy.title}
         description={`${histCopy.description}`}
@@ -355,6 +481,7 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
           </>
         )}
       </LabLever>
+      )}
 
       <LabLever
         title={childrenCopy.title}
@@ -386,6 +513,57 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
             suffix="mois"
             hint="Exemple : 8 mois → indemnité = (loyer estimé ÷ 2) × 8"
           />
+        </LabLever>
+      )}
+
+      {relocateRelevant && (
+        <LabLever
+          title={relocateCopy.title}
+          description={`${relocateCopy.description} ${relocateCopy.impact}`}
+          enabled={relocateEnabled}
+          onToggle={(on) => toggleLever("relocate_housing", on)}
+        >
+          <div className="space-y-4">
+            <LabField
+              label="Surface cible"
+              value={relocateSurface}
+              onChange={(v) => {
+                const digits = v.replace(/\D/g, "");
+                setRelocateSurface(digits);
+                pushRelocateSurface(digits, relocateTier);
+              }}
+              suffix="m²"
+              hint={`Défaut solo ~${defaultRelocateSurface} m² (≈ 55 % de votre bien${
+                childrenForDefault > 0 ? ` + enfants` : ""
+              }).`}
+            />
+            <div>
+              <p className="mb-2 text-sm font-medium text-slate-700">Gamme de marché</p>
+              <div className="flex flex-wrap gap-2">
+                {MARKET_TIER_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      setRelocateTier(opt.value);
+                      pushRelocateSurface(relocateSurface, opt.value);
+                    }}
+                    className={cn(
+                      "rounded-full border px-4 py-2 text-sm transition-colors",
+                      relocateTier === opt.value
+                        ? "border-brand-600 bg-brand-600 text-white"
+                        : "border-slate-200 text-slate-600 hover:border-slate-300"
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                Entrée = prix/loyer bas de zone · Médian = milieu · Haut = haut de fourchette.
+              </p>
+            </div>
+          </div>
         </LabLever>
       )}
     </div>

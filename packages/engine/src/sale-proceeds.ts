@@ -7,9 +7,10 @@ import type {
   PersonId,
   SimulationInput,
 } from "@separation/schemas";
-import { buildZoneMarketSnapshot, computeAffordability } from "./affordability.js";
+import { computeAffordability } from "./affordability.js";
 import { estimateCapitalGains } from "./capital-gains.js";
 import { getMortgageRateSnapshot } from "./mortgage-rates.js";
+import { resolveRelocateHousing } from "./relocate-housing.js";
 import { eur, getNetAssetValue, getShareForPerson, round } from "./utils.js";
 
 /** Commission d'agence / mise en vente — ordre de grandeur ~5 % du prix brut. */
@@ -100,11 +101,8 @@ export function computeSaleProceeds(
     B: eur(afterTaxNet.amount * shareB),
   };
 
-  const postalCode = input.postalCode ?? "75000";
-  const surface = input.propertySurface ?? 65;
-  const relocateSurface = Math.max(45, surface - 15);
-  const zone = buildZoneMarketSnapshot(postalCode, surface);
-  const relocateTarget = eur(round(zone.minPricePerSqm.amount * relocateSurface));
+  const housing = resolveRelocateHousing(input);
+  const relocateTarget = housing.targetPrice;
   const rateSnapshot = getMortgageRateSnapshot(input.options.mortgageDurationYears ?? 20);
 
   const buildRelocate = (person: PersonId): RelocateSnapshot => {
@@ -116,7 +114,7 @@ export function computeSaleProceeds(
     });
     return {
       targetPrice: relocateTarget,
-      surfaceSqm: relocateSurface,
+      surfaceSqm: housing.surfaceSqm,
       affordability,
       verdict: affordability.verdict,
     };
@@ -137,7 +135,7 @@ export function computeSaleProceeds(
     capitalGainsEstimate: cg.totalTax,
     capitalGainsNote: cg.note,
     relocateTarget,
-    relocateSurfaceSqm: relocateSurface,
+    relocateSurfaceSqm: housing.surfaceSqm,
     relocateByPerson: {
       A: buildRelocate("A"),
       B: buildRelocate("B"),

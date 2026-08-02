@@ -7,6 +7,7 @@ import { clarte } from "@/lib/clarte-design";
 import { cn } from "@/lib/utils";
 import { useSeparationStore } from "@/store/separation-store";
 import { buildLabLedger } from "@/lib/separation/lab-ledger-model";
+import { buildEmpreinteContextLine } from "@/lib/separation/empreinte-context";
 import { LabLedgerDetails, LabLedgerSummary } from "./lab-ledger";
 import { LabLeversPanel } from "./lab-levers-panel";
 
@@ -38,6 +39,7 @@ export function LabShell({ doorId }: LabShellProps) {
       }),
     [doorId, footprint, assumptions, lab, lastResult, doorVerdicts]
   );
+  const contextLine = buildEmpreinteContextLine(footprint);
 
   return (
     <div className={`${clarte.mesh} flex h-[100dvh] flex-col overflow-hidden`}>
@@ -54,7 +56,9 @@ export function LabShell({ doorId }: LabShellProps) {
             ← Portes
           </button>
 
-          <p className="hidden text-sm text-slate-400 sm:block">Affinez votre scénario</p>
+          <p className="hidden max-w-md truncate text-center text-sm text-slate-400 sm:block">
+            {contextLine || "Affinez votre scénario"}
+          </p>
 
           <button
             type="button"

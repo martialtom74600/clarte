@@ -3,6 +3,7 @@ import type {
   DoorVerdictMap,
   LeverId,
   MarriageRegime,
+  RelocateMarketTier,
   RelationshipStatus,
   SeparationStratum,
   SimulationInput,
@@ -38,6 +39,21 @@ export interface FootprintState {
   mortgageInsuranceMonthly: number;
   incomeA: number;
   incomeB: number;
+  /** Apport personnel à l'achat (€, 0 = aucun ou inconnu). */
+  contributionA: number;
+  contributionB: number;
+  /** Apports enregistrés (étape 4 validée). */
+  apportsDeclared: boolean;
+  /** Financement enregistré (étape 5 validée, y compris sans crédit). */
+  financementDeclared: boolean;
+  /** Statut du couple — renseigné à l'étape Cadre juridique. */
+  legalStatus: RelationshipStatus | "";
+  /** Quote-part personne A (0–100). */
+  ownershipShareA: number;
+  /** Quote-part personne B (0–100). */
+  ownershipShareB: number;
+  /** Cadre juridique enregistré (étape 3 validée). */
+  cadreJuridiqueDeclared: boolean;
   completedAt: string | null;
 }
 
@@ -73,6 +89,8 @@ export interface LeverOverrides {
   savings?: { savingsA: number; savingsB: number };
   /** Mois d'occupation exclusive avant signature (indemnité = loyer/2 × mois). */
   occupation_indemnity?: { occupationMonths: number };
+  /** Surface + gamme marché pour le relogement solo. */
+  relocate_housing?: { surfaceSqm: number; marketTier: RelocateMarketTier };
 }
 
 export interface LabState {

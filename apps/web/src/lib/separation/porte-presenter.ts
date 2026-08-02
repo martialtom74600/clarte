@@ -5,13 +5,16 @@ import type {
   SimulationResult,
 } from "@separation/schemas";
 import { formatEuro } from "@/lib/utils";
+import type { FootprintState } from "./separation-types";
+import { ownershipCaption, resolveOwnershipPercents } from "./empreinte-context";
 
-export const DOOR_ORDER: DoorId[] = ["keep_a", "keep_b", "sell", "rent_out"];
+export const DOOR_ORDER: DoorId[] = ["keep_a", "keep_b", "sell", "sell_rent", "rent_out"];
 
 const DOOR_TITLES: Record<DoorId, string> = {
   keep_a: "Vous rachetez",
   keep_b: "L'autre rachète",
-  sell: "Vendre",
+  sell: "Vendre pour se reloger",
+  sell_rent: "Vendre puis louer",
   rent_out: "Garder et louer",
 };
 
@@ -32,7 +35,7 @@ export interface PortePresentation {
   consequence: string;
   verdict: DoorVerdictMap[DoorId]["verdict"];
   verdictLabel: string;
-  /** Affichage côte à côte (porte sell). */
+  /** Affichage côte à côte (portes sell / sell_rent). */
   bilateral?: PorteBilateralShare[];
 }
 
@@ -42,7 +45,8 @@ function scenarioFor(result: SimulationResult, doorId: DoorId) {
 
 function buildKeepPresentation(
   doorId: "keep_a" | "keep_b",
-  result: SimulationResult
+  result: SimulationResult,
+  footprint?: FootprintState | null
 ): Pick<PortePresentation, "heroValue" | "heroCaption" | "consequence" | "bilateral"> {
   const scenario = scenarioFor(result, doorId);
   const keepExisting = scenario?.keepFinancingMode === "keep_existing_loan";
@@ -53,6 +57,11 @@ function buildKeepPresentation(
     scenario?.departureCapital?.amount ?? scenario?.soulte?.amount.amount ?? 0;
   const departureRelocate =
     scenario?.departureRelocateVerdict ?? scenario?.relocateVerdictByPerson?.[departing];
+  const { shareA, shareB } = resolveOwnershipPercents(
+    footprint ??
+      ({ ownershipShareA: 50, ownershipShareB: 50, cadreJuridiqueDeclared: false } as FootprintState)
+  );
+  const boughtPct = doorId === "keep_a" ? shareB : shareA;
 
   const bilateral: PorteBilateralShare[] = [
     {
@@ -66,13 +75,17 @@ function buildKeepPresentation(
             scenario?.soulte?.amount.amount ??
             0)
       ),
-      caption: keepExisting ? "à emprunter (rachat)" : "financement rachat",
+      caption: keepExisting
+        ? `à emprunter (rachat ${boughtPct} %)`
+        : `financement rachat (${boughtPct} %)`,
     },
     {
       personKey: departing,
       personLabel: doorId === "keep_a" ? "L'autre (part)" : "Vous (partez)",
       amount: formatEuro(departureCapital),
-      caption: "capital net récupéré",
+      caption: footprint
+        ? `capital net · ${ownershipCaption(departing, footprint)}`
+        : "capital net récupéré",
       relocateLabel: relocateLabel(departureRelocate),
       relocateVerdict: departureRelocate,
     },
@@ -121,38 +134,52 @@ function buildKeepPresentation(
 }
 
 function relocateLabel(verdict?: AffordabilityVerdict): string {
-  if (verdict === "green") return "Relogement zone tenable";
-  if (verdict === "orange") return "Relogement zone serré";
-  if (verdict === "red") return "Relogement zone difficile";
-  return "Relogement zone à évaluer";
+  if (verdict === "green") return "Relogement solo tenable";
+  if (verdict === "orange") return "Relogement solo serré";
+  if (verdict === "red") return "Relogement solo difficile";
+  return "Relogement solo à évaluer";
+}
+
+function rentLabel(verdict?: AffordabilityVerdict): string {
+  if (verdict === "green") return "Loyer solo tenable";
+  if (verdict === "orange") return "Loyer solo serré";
+  if (verdict === "red") return "Loyer solo difficile";
+  return "Loyer solo à évaluer";
 }
 
 function buildSellPresentation(
+  doorId: "sell" | "sell_rent",
   result: SimulationResult,
-  verdict: DoorVerdictMap[DoorId]
+  verdict: DoorVerdictMap[DoorId],
+  footprint?: FootprintState | null
 ): Pick<PortePresentation, "heroValue" | "heroCaption" | "consequence" | "bilateral"> {
-  const scenario = scenarioFor(result, "sell");
+  const scenario = scenarioFor(result, doorId);
   const you = scenario?.saleProceedsByPerson?.A.amount ?? scenario?.netWorthByPerson.A.amount ?? 0;
   const other = scenario?.saleProceedsByPerson?.B.amount ?? scenario?.netWorthByPerson.B.amount ?? 0;
   const negativeEquity = scenario?.negativeEquity === true;
   const relocateA = scenario?.relocateVerdictByPerson?.A;
   const relocateB = scenario?.relocateVerdictByPerson?.B;
+  const { shareA, shareB } = resolveOwnershipPercents(
+    footprint ??
+      ({ ownershipShareA: 50, ownershipShareB: 50, cadreJuridiqueDeclared: false } as FootprintState)
+  );
+  const outcomeLabel = doorId === "sell_rent" ? rentLabel : relocateLabel;
 
   const bilateral: PorteBilateralShare[] = [
     {
       personKey: "A",
       personLabel: "Vous",
       amount: formatEuro(Math.abs(you)),
-      caption: negativeEquity ? "quote-part de dette" : "net après frais",
-      relocateLabel: relocateLabel(relocateA),
+      caption: negativeEquity ? `dette · ${shareA} %` : `net après frais · ${shareA} %`,
+      relocateLabel: outcomeLabel(relocateA),
       relocateVerdict: relocateA,
     },
     {
       personKey: "B",
       personLabel: "L'autre",
       amount: formatEuro(Math.abs(other)),
-      caption: negativeEquity ? "quote-part de dette" : "net après frais",
-      relocateLabel: relocateLabel(relocateB),
+      caption: negativeEquity ? `dette · ${shareB} %` : `net après frais · ${shareB} %`,
+      relocateLabel: outcomeLabel(relocateB),
       relocateVerdict: relocateB,
     },
   ];
@@ -160,15 +187,28 @@ function buildSellPresentation(
   if (negativeEquity) {
     return {
       heroValue: formatEuro(Math.abs(you)),
-      heroCaption: "votre quote-part de dette",
+      heroCaption: `votre quote-part de dette (${shareA} %)`,
       consequence: "Actif net négatif — dette à partager",
+      bilateral,
+    };
+  }
+
+  if (doorId === "sell_rent") {
+    const rent = scenario?.tenantRentMonthly?.amount ?? scenario?.monthlyPaymentEstimate?.amount ?? 0;
+    return {
+      heroValue: formatEuro(you),
+      heroCaption: `votre part nette (${shareA} %)`,
+      consequence:
+        rent > 0
+          ? `Puis location zone ~${formatEuro(rent)}/mois`
+          : verdict.headline,
       bilateral,
     };
   }
 
   return {
     heroValue: formatEuro(you),
-    heroCaption: "votre part nette",
+    heroCaption: `votre part nette (${shareA} %)`,
     consequence: verdict.headline,
     bilateral,
   };
@@ -176,7 +216,8 @@ function buildSellPresentation(
 
 function buildRentPresentation(
   result: SimulationResult,
-  verdict: DoorVerdictMap[DoorId]
+  verdict: DoorVerdictMap[DoorId],
+  footprint?: FootprintState | null
 ): Pick<PortePresentation, "heroValue" | "heroCaption" | "consequence" | "bilateral"> {
   const scenario = scenarioFor(result, "rent_out");
   const net =
@@ -184,23 +225,27 @@ function buildRentPresentation(
     scenario?.monthlyPaymentEstimate?.amount ??
     0;
   const prefix = net > 0 ? "+" : net < 0 ? "−" : "";
-  const shareA = scenario?.monthlyNetCashflow?.A.amount;
-  const shareB = scenario?.monthlyNetCashflow?.B.amount;
+  const cashA = scenario?.monthlyNetCashflow?.A.amount;
+  const cashB = scenario?.monthlyNetCashflow?.B.amount;
+  const { shareA, shareB } = resolveOwnershipPercents(
+    footprint ??
+      ({ ownershipShareA: 50, ownershipShareB: 50, cadreJuridiqueDeclared: false } as FootprintState)
+  );
 
   const bilateral: PorteBilateralShare[] | undefined =
-    shareA != null && shareB != null
+    cashA != null && cashB != null
       ? [
           {
             personKey: "A",
             personLabel: "Vous",
-            amount: `${shareA >= 0 ? "+" : "−"}${formatEuro(Math.abs(shareA))}`,
-            caption: "quote-part / mois",
+            amount: `${cashA >= 0 ? "+" : "−"}${formatEuro(Math.abs(cashA))}`,
+            caption: `quote-part / mois · ${shareA} %`,
           },
           {
             personKey: "B",
             personLabel: "L'autre",
-            amount: `${shareB >= 0 ? "+" : "−"}${formatEuro(Math.abs(shareB))}`,
-            caption: "quote-part / mois",
+            amount: `${cashB >= 0 ? "+" : "−"}${formatEuro(Math.abs(cashB))}`,
+            caption: `quote-part / mois · ${shareB} %`,
           },
         ]
       : undefined;
@@ -222,7 +267,8 @@ const VERDICT_LABELS = {
 export function buildPortePresentation(
   doorId: DoorId,
   result: SimulationResult | null,
-  doorVerdicts: DoorVerdictMap | null
+  doorVerdicts: DoorVerdictMap | null,
+  footprint?: FootprintState | null
 ): PortePresentation | null {
   if (!result || !doorVerdicts) return null;
 
@@ -235,13 +281,14 @@ export function buildPortePresentation(
   switch (doorId) {
     case "keep_a":
     case "keep_b":
-      content = buildKeepPresentation(doorId, result);
+      content = buildKeepPresentation(doorId, result, footprint);
       break;
     case "sell":
-      content = buildSellPresentation(result, verdict);
+    case "sell_rent":
+      content = buildSellPresentation(doorId, result, verdict, footprint);
       break;
     case "rent_out":
-      content = buildRentPresentation(result, verdict);
+      content = buildRentPresentation(result, verdict, footprint);
       break;
     default:
       return null;
@@ -258,11 +305,12 @@ export function buildPortePresentation(
 
 export function buildAllPortes(
   result: SimulationResult | null,
-  doorVerdicts: DoorVerdictMap | null
+  doorVerdicts: DoorVerdictMap | null,
+  footprint?: FootprintState | null
 ): PortePresentation[] {
-  return DOOR_ORDER.map((id) => buildPortePresentation(id, result, doorVerdicts)).filter(
-    (p): p is PortePresentation => p != null
-  );
+  return DOOR_ORDER.map((id) =>
+    buildPortePresentation(id, result, doorVerdicts, footprint)
+  ).filter((p): p is PortePresentation => p != null);
 }
 
 export function isValidDoorId(value: string): value is DoorId {

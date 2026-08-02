@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
+import { ArrowLeft } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
 
-export type EmpreinteFieldType = "postal" | "currency" | "number";
+export type EmpreinteFieldType = "postal" | "currency" | "number" | "rate";
 
 interface EmpreinteFieldProps {
   stepKey: string;
@@ -21,8 +22,9 @@ interface EmpreinteFieldProps {
   autoFocus?: boolean;
   /** Si false, le bouton Continuer est désactivé. */
   canContinue?: boolean;
-  /** Indicateur d'étape (ex. barre 1/5) rendu au-dessus du label. */
+  /** Indicateur d'étape (ex. barre 1/6) rendu au-dessus du label. */
   progress?: ReactNode;
+  onBack?: () => void;
 }
 
 function formatCurrencyDisplay(raw: string): string {
@@ -37,19 +39,27 @@ function formatNumberDisplay(raw: string): string {
   return String(Number(digits));
 }
 
-function parseCurrency(raw: string): number {
-  const digits = raw.replace(/\D/g, "");
+function parseCurrency(raw: string | undefined): number {
+  const digits = (raw ?? "").replace(/\D/g, "");
   return digits ? Number(digits) : 0;
 }
 
-function parseNumber(raw: string): number {
-  const digits = raw.replace(/\D/g, "");
+function parseNumber(raw: string | undefined): number {
+  const digits = (raw ?? "").replace(/\D/g, "");
   return digits ? Number(digits) : 0;
+}
+
+function sanitizeRateInput(raw: string): string {
+  const cleaned = raw.replace(/[^\d,]/g, "").replace(".", ",");
+  const comma = cleaned.indexOf(",");
+  if (comma === -1) return cleaned;
+  return cleaned.slice(0, comma + 1) + cleaned.slice(comma + 1).replace(/,/g, "");
 }
 
 function sanitizeInput(type: EmpreinteFieldType, next: string): string {
   if (type === "postal") return next.replace(/\D/g, "").slice(0, 5);
   if (type === "number") return formatNumberDisplay(next);
+  if (type === "rate") return sanitizeRateInput(next);
   return formatCurrencyDisplay(next);
 }
 
@@ -130,35 +140,79 @@ export function EmpreinteFormRow({
   );
 }
 
+export function EmpreinteStepNav({
+  onBack,
+  onContinue,
+  canContinue = true,
+  continueAlwaysEnabled = false,
+  className,
+}: {
+  onBack?: () => void;
+  onContinue: () => void;
+  canContinue?: boolean;
+  /** Financement : le bouton reste cliquable, la validation s'exécute au clic. */
+  continueAlwaysEnabled?: boolean;
+  className?: string;
+}) {
+  const continueDisabled = continueAlwaysEnabled ? false : !canContinue;
+
+  return (
+    <div className={cn("mt-20 flex w-full flex-col items-center gap-5 sm:mt-24", className)}>
+      <button
+        type="button"
+        onClick={onContinue}
+        disabled={continueDisabled}
+        className={cn(
+          "group text-sm font-medium transition-colors",
+          continueDisabled
+            ? "cursor-not-allowed text-slate-300"
+            : "text-slate-500 hover:text-brand-600"
+        )}
+      >
+        Continuer
+        <span
+          className={cn(
+            "ml-1 inline-block transition-transform",
+            !continueDisabled && "group-hover:translate-x-0.5"
+          )}
+        >
+          →
+        </span>
+      </button>
+
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          className="group inline-flex items-center gap-1.5 text-sm font-medium text-slate-400 transition-colors hover:text-slate-600"
+        >
+          <ArrowLeft
+            className="h-4 w-4 transition-transform group-hover:-translate-x-0.5"
+            aria-hidden
+          />
+          Retour
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** @deprecated Préférez EmpreinteStepNav pour la navigation Retour / Continuer. */
 export function EmpreinteContinueButton({
   onClick,
   disabled,
+  className,
 }: {
   onClick: () => void;
   disabled?: boolean;
+  className?: string;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "group mt-20 text-sm font-medium transition-colors sm:mt-24",
-        disabled
-          ? "cursor-not-allowed text-slate-300"
-          : "text-slate-500 hover:text-brand-600"
-      )}
-    >
-      Continuer
-      <span
-        className={cn(
-          "ml-1 inline-block transition-transform",
-          !disabled && "group-hover:translate-x-0.5"
-        )}
-      >
-        →
-      </span>
-    </button>
+    <EmpreinteStepNav
+      onContinue={onClick}
+      canContinue={!disabled}
+      className={className}
+    />
   );
 }
 
@@ -177,6 +231,7 @@ export function EmpreinteField({
   autoFocus = true,
   canContinue = true,
   progress,
+  onBack,
 }: EmpreinteFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const reduced = useReducedMotion();
@@ -249,7 +304,7 @@ export function EmpreinteField({
 
       {hint && <p className="mt-4 text-xs text-slate-400">{hint}</p>}
 
-      <EmpreinteContinueButton onClick={onSubmit} disabled={!canContinue} />
+      <EmpreinteStepNav onBack={onBack} onContinue={() => onSubmit()} canContinue={canContinue} />
     </motion.div>
   );
 }

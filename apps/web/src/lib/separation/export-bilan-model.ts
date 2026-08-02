@@ -38,7 +38,8 @@ export interface ExportBilanModel {
 export const EXPORT_SCENARIO_TITLES: Record<DoorId, string> = {
   keep_a: "Projet : garder le bien",
   keep_b: "Projet : l'autre garde le bien",
-  sell: "Projet : vendre le bien",
+  sell: "Projet : vendre pour se reloger",
+  sell_rent: "Projet : vendre puis louer",
   rent_out: "Projet : garder et louer",
 };
 
@@ -104,6 +105,25 @@ export function buildActiveLeverLines(
     });
   }
 
+  if (lab.enabledLevers.includes("relocate_housing")) {
+    const cfg = lab.overrides.relocate_housing;
+    const tierLabel =
+      cfg?.marketTier === "median"
+        ? "médian"
+        : cfg?.marketTier === "high"
+          ? "haut de zone"
+          : "entrée de zone";
+    const sqm = cfg?.surfaceSqm;
+    lines.push({
+      id: "relocate_housing",
+      label: "Relogement solo",
+      value:
+        sqm != null && sqm > 0
+          ? `${Math.round(sqm)} m² · gamme ${tierLabel}`
+          : `Gamme ${tierLabel}`,
+    });
+  }
+
   return lines;
 }
 
@@ -141,11 +161,13 @@ export function buildExportInsights(
         title: "Capital du partant & relogement",
         body: `Capital net récupéré : ${formatEuro(departure)}${
           indemnity > 0 ? ` (dont indemnité d'occupation ${formatEuro(indemnity)})` : ""
-        }. Relogement zone : ${
+        }. Relogement solo : ${
           relocate ? formatAffordabilityVerdictLabel(relocate) : "à évaluer"
         }${
+          scenario?.relocateHousingNote ? ` — ${scenario.relocateHousingNote}` : ""
+        }${
           scenario?.relocateTarget
-            ? ` — cible ~${formatEuro(scenario.relocateTarget.amount)}`
+            ? ` (~${formatEuro(scenario.relocateTarget.amount)})`
             : ""
         }.`,
       });
@@ -178,7 +200,7 @@ export function buildExportInsights(
     }
   }
 
-  if (doorId === "sell") {
+  if (doorId === "sell" || doorId === "sell_rent") {
     if (scenario?.capitalGainsNote) {
       insights.push({ title: "Plus-value (CGI 150 U / 150 VC)", body: scenario.capitalGainsNote });
     }
@@ -192,6 +214,21 @@ export function buildExportInsights(
       insights.push({
         title: "Répartition bilatérale après vente",
         body: `Vous ${formatEuro(scenario.saleProceedsByPerson.A.amount)} · Autre ${formatEuro(scenario.saleProceedsByPerson.B.amount)} (après agence + diagnostics + CRD ± PV).`,
+      });
+    }
+    if (doorId === "sell_rent" && (scenario?.tenantRentMonthly?.amount ?? 0) > 0) {
+      insights.push({
+        title: "Loyer cible après vente",
+        body: `${scenario?.relocateHousingNote ?? "Cible solo"} — ~${formatEuro(scenario!.tenantRentMonthly!.amount)}/mois.`,
+      });
+    } else if (doorId === "sell" && scenario?.relocateHousingNote) {
+      insights.push({
+        title: "Hypothèse de relogement solo",
+        body: `${scenario.relocateHousingNote}${
+          scenario.relocateTarget
+            ? ` — prix cible ~${formatEuro(scenario.relocateTarget.amount)}`
+            : ""
+        }.`,
       });
     }
   }
@@ -248,12 +285,41 @@ export function buildExportBilan(params: {
     footprint: [
       { label: "Code postal", value: footprint.postalCode },
       { label: "Valeur du bien", value: formatEuro(footprint.propertyValue) },
-      { label: "Crédit restant", value: formatEuro(footprint.mortgageRemaining) },
+      {
+        label: "Crédit restant",
+        value:
+          footprint.financementDeclared && footprint.mortgageRemaining === 0
+            ? "Sans crédit"
+            : formatEuro(footprint.mortgageRemaining),
+      },
+      {
+        label: "Statut du couple",
+        value:
+          footprint.legalStatus === "marriage"
+            ? "Mariés"
+            : footprint.legalStatus === "pacs"
+              ? "PACS"
+              : footprint.legalStatus === "concubinage"
+                ? "Union libre"
+                : "—",
+      },
+      {
+        label: "Répartition de la propriété",
+        value: `Vous ${footprint.ownershipShareA || 50} % · Autre ${footprint.ownershipShareB || 50} %`,
+      },
+      ...(footprint.contributionA > 0 || footprint.contributionB > 0
+        ? [
+            {
+              label: "Apports à l'achat",
+              value: `Vous ${formatEuro(footprint.contributionA)} · Autre ${formatEuro(footprint.contributionB)}`,
+            },
+          ]
+        : []),
       { label: "Vos revenus nets", value: `${formatEuro(footprint.incomeA)}/mois` },
       { label: "Revenus de l'autre partie", value: `${formatEuro(footprint.incomeB)}/mois` },
       {
         label: "Surface retenue",
-        value: `${assumptions.propertySurface || 65} m²`,
+        value: `${footprint.propertySurface || assumptions.propertySurface || 65} m²`,
       },
     ],
     activeLevers: buildActiveLeverLines(lab, footprint, assumptions),

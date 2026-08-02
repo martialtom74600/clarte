@@ -1,10 +1,16 @@
 import type { AffordabilityVerdict, DoorId, DoorVerdictMap, SimulationResult } from "@separation/schemas";
-import { estimateChildSupport, estimateMonthlyPayment, RENT_GREEN_THRESHOLD } from "@separation/engine";
+import {
+  estimateChildSupport,
+  estimateMonthlyPayment,
+  resolveRelocateHousing,
+  RENT_GREEN_THRESHOLD,
+} from "@separation/engine";
 import type { AssumptionsState, FootprintState, LabState } from "./separation-types";
-import { compileSimulationInput } from "./compile-simulation-input";
+import { compileSimulationInput, defaultAssumptions } from "./compile-simulation-input";
 import type { LedgerSectionId } from "./lab-ledger-sections";
 import { normalizeKeepFooterDetail } from "./lab-ledger-insights";
 import { estimateRelocateTarget, relocateMonthlyLine } from "./lab-ledger-parity";
+import { resolveOwnershipPercents } from "./empreinte-context";
 
 export interface LedgerLine {
   id: string;
@@ -76,12 +82,12 @@ function buildSellContextNote(
     (a, b) => ({ red: 0, orange: 1, green: 2 }[a] - { red: 0, orange: 1, green: 2 }[b])
   )[0];
   if (worst === "red") {
-    return "Le produit de la vente ne suffit pas, pour au moins l'un de vous, à financer un logement équivalent dans le quartier.";
+    return "Le produit de la vente ne suffit pas, pour au moins l'un de vous, à financer un logement solo dans la zone.";
   }
   if (worst === "orange") {
-    return "Le relogement dans le quartier sera serré pour au moins l'un de vous.";
+    return "Le relogement solo dans la zone sera serré pour au moins l'un de vous.";
   }
-  return "Vos parts nettes permettent, en principe, de vous reloger dans le quartier.";
+  return "Vos parts nettes permettent, en principe, un relogement solo dans la zone.";
 }
 
 const RELOCATE_VERDICT_LABELS: Record<AffordabilityVerdict, string> = {
@@ -131,7 +137,8 @@ function buildKeepFooter(params: {
 const DOOR_TITLES: Record<DoorId, string> = {
   keep_a: "Vous rachetez",
   keep_b: "L'autre rachète",
-  sell: "Vendre",
+  sell: "Vendre pour se reloger",
+  sell_rent: "Vendre puis louer",
   rent_out: "Garder et louer",
 };
 
@@ -236,34 +243,45 @@ function buildKeepLedger(
     },
   ];
 
-  if (lab.enabledLevers.includes("initial_contributions") && lab.overrides.initial_contributions) {
-    const { contributionA, contributionB } = lab.overrides.initial_contributions;
-    if (contributionA + contributionB > 0) {
-      const isCommunity =
-        assumptions.status === "marriage" &&
-        (assumptions.marriageRegime === "communaute_legale" ||
-          assumptions.marriageRegime === "communaute_universelle");
-      const mode = scenario?.soulte?.contributionMode;
-      lines.push({
-        id: "contributions",
-        label: isCommunity || mode === "recompense"
-          ? "Apports remboursés avant le partage"
-          : mode === "creance"
-            ? "Apports déduits avant le partage"
-            : `Apports initiaux (vous ${Math.round((contributionA / (contributionA + contributionB)) * 100)} % · autre ${Math.round((contributionB / (contributionA + contributionB)) * 100)} %)`,
-        amount: contributionA + contributionB,
-        tone: "neutral",
-        sectionId: "bien",
-        hint: "Argent investi au départ — pris en compte avant de partager",
-      });
-    }
+  const contribA =
+    lab.enabledLevers.includes("initial_contributions") && lab.overrides.initial_contributions
+      ? lab.overrides.initial_contributions.contributionA
+      : footprint.contributionA;
+  const contribB =
+    lab.enabledLevers.includes("initial_contributions") && lab.overrides.initial_contributions
+      ? lab.overrides.initial_contributions.contributionB
+      : footprint.contributionB;
+  if (contribA + contribB > 0) {
+    const mode = scenario?.soulte?.contributionMode;
+    const label =
+      mode === "recompense"
+        ? "Apports (récompenses) avant le partage"
+        : mode === "creance"
+          ? "Apports (créances) avant le partage"
+          : `Apports initiaux (vous ${Math.round(contribA).toLocaleString("fr-FR")} € · autre ${Math.round(contribB).toLocaleString("fr-FR")} €)`;
+    const hint =
+      mode === "recompense"
+        ? "Récompenses de communauté (art. 1469) — remboursées avant le partage 50/50"
+        : mode === "creance"
+          ? "Créances d'apport (art. 815-13) — prélevées avant le partage selon vos parts"
+          : "Argent investi au départ — pris en compte avant de partager";
+    lines.push({
+      id: "contributions",
+      label,
+      amount: contribA + contribB,
+      tone: "neutral",
+      sectionId: "bien",
+      hint,
+    });
   }
 
+  const { shareA: pctA, shareB: pctB } = resolveOwnershipPercents(footprint);
+  const otherPct = doorId === "keep_a" ? pctB : pctA;
   const soulteLabel = negativeEquity
     ? "Rachat de parts (impossible — dette nette)"
     : doorId === "keep_a"
-      ? "Vous payez à l'autre"
-      : "Vous recevez de l'autre";
+      ? `Vous payez à l'autre (sa part ${otherPct} %)`
+      : `Vous recevez de l'autre (votre part ${otherPct} %)`;
   const totalCashLabel =
     doorId === "keep_a"
       ? "Total à sortir (rachat + notaire)"
@@ -285,7 +303,7 @@ function buildKeepLedger(
     amount: soulte,
     tone: "highlight",
     sectionId: "echange",
-    hint: "Montant pour racheter la part de l'autre",
+    hint: `Montant pour racheter la part de l'autre (${otherPct} %)`,
   });
 
   if (indemnity > 0 && (scenario?.occupationMonths ?? 0) > 0) {
@@ -348,13 +366,16 @@ function buildKeepLedger(
   );
 
   if (relocateTarget > 0) {
+    const housingNote = scenario?.relocateHousingNote;
     lines.push({
       id: "relocate-target",
-      label: "Prix d'un logement équivalent dans votre quartier",
+      label: housingNote
+        ? `Prix cible solo (${housingNote.replace(/^Cible solo ~/, "")})`
+        : "Prix cible d'un logement solo dans votre zone",
       amount: relocateTarget,
       tone: "neutral",
       sectionId: "relogement",
-      hint: "Repère local pour évaluer le relogement",
+      hint: "Hypothèse de relogement après séparation — pas le même bien",
     });
 
     const departingIncome = doorId === "keep_a" ? footprint.incomeB : footprint.incomeA;
@@ -474,23 +495,34 @@ function buildKeepLedger(
 }
 
 function buildSellLedger(
+  doorId: "sell" | "sell_rent",
   footprint: FootprintState,
   lab: LabState,
   result: SimulationResult,
   verdict: DoorVerdictMap[DoorId] | null
 ): LabLedgerModel {
-  const sell = scenarioFor(result, "sell");
+  const sell = scenarioFor(result, doorId);
+  const asRent = doorId === "sell_rent";
+  const { shareA: pctA, shareB: pctB } = resolveOwnershipPercents(footprint);
   const agency = sell?.agencyFeesEstimate?.amount ?? footprint.propertyValue * 0.05;
   const diagnostics = sell?.diagnosticsEstimate?.amount ?? 1800;
   const sellingCosts = sell?.sellingCostsEstimate?.amount ?? agency + diagnostics;
   const saleNet =
     sell?.saleNetProceeds?.amount ??
     footprint.propertyValue - sellingCosts - footprint.mortgageRemaining;
-  const you = sell?.saleProceedsByPerson?.A.amount ?? saleNet / 2;
-  const other = sell?.saleProceedsByPerson?.B.amount ?? saleNet / 2;
+  const you = sell?.saleProceedsByPerson?.A.amount ?? saleNet * (pctA / 100);
+  const other = sell?.saleProceedsByPerson?.B.amount ?? saleNet * (pctB / 100);
   const negativeEquity = saleNet < 0 || sell?.negativeEquity === true;
+  const housingFallback = resolveRelocateHousing(
+    compileSimulationInput({ footprint, assumptions: defaultAssumptions(), lab })
+  );
   const relocateTargetAmount =
-    sell?.relocateTarget?.amount ?? estimateRelocateTarget(footprint);
+    sell?.relocateTarget?.amount ?? housingFallback.targetPrice.amount;
+  const tenantRent =
+    sell?.tenantRentMonthly?.amount ??
+    sell?.monthlyPaymentEstimate?.amount ??
+    (asRent ? housingFallback.tenantRentMonthly.amount : 0);
+  const housingNote = sell?.relocateHousingNote ?? housingFallback.note;
   const capitalGainsTax = sell?.capitalGainsEstimate?.amount ?? 0;
 
   const lines: LedgerLine[] = [
@@ -551,39 +583,68 @@ function buildSellLedger(
     },
     {
       id: "you",
-      label: negativeEquity ? "Votre part de la dette" : "Votre part nette",
+      label: negativeEquity
+        ? `Votre part de la dette (${pctA} %)`
+        : `Votre part nette (${pctA} %)`,
       amount: you,
       tone: "total",
       sectionId: "echange",
       hint: negativeEquity
-        ? "Quote-part de la dette restante"
-        : "Capital disponible pour vous reloger",
+        ? `Quote-part de la dette restante (${pctA} %)`
+        : asRent
+          ? `Capital disponible après vente (${pctA} %)`
+          : `Capital disponible pour vous reloger (${pctA} %)`,
     },
     {
       id: "other",
-      label: negativeEquity ? "Part de dette de l'autre" : "Part nette de l'autre",
+      label: negativeEquity
+        ? `Part de dette de l'autre (${pctB} %)`
+        : `Part nette de l'autre (${pctB} %)`,
       amount: other,
       tone: "total",
       sectionId: "echange",
       hint: negativeEquity
-        ? "Quote-part de la dette restante"
-        : "Capital disponible pour l'autre",
+        ? `Quote-part de la dette restante (${pctB} %)`
+        : `Capital disponible pour l'autre (${pctB} %)`,
     }
   );
 
-  if (relocateTargetAmount > 0) {
+  if (asRent) {
+    if (tenantRent > 0) {
+      lines.push(
+        {
+          id: "tenant-rent",
+          label: `Loyer cible solo (${housingNote.replace(/^Cible solo ~/, "")})`,
+          amount: tenantRent,
+          tone: "neutral",
+          suffix: "/mois",
+          sectionId: "relogement",
+          hint: "Hypothèse de location après séparation — pas le même bien",
+        },
+        {
+          id: "monthly-balance",
+          label: "Loyer estimé pour vous",
+          amount: tenantRent,
+          tone: "neutral",
+          suffix: "/mois",
+          sectionId: "mensuel",
+          hint: "Charge locative de référence après vente — sans nouveau crédit immobilier",
+        }
+      );
+    }
+  } else if (relocateTargetAmount > 0) {
     lines.push({
       id: "relocate-target",
-      label: "Prix d'un logement équivalent dans votre quartier",
+      label: `Prix cible solo (${housingNote.replace(/^Cible solo ~/, "")})`,
       amount: relocateTargetAmount,
       tone: "neutral",
       sectionId: "relogement",
-      hint: "Repère local pour évaluer le relogement",
+      hint: "Hypothèse de rachat après vente — pas le même bien",
     });
 
     const relocatePaymentYou = relocateMonthlyLine({
       id: "relocate-payment-you",
-      label: "Mensualité estimée pour vous reloger (zone)",
+      label: "Mensualité estimée pour vous reloger (solo)",
       incomeMonthly: footprint.incomeA,
       liquidCapital: you,
       targetPrice: relocateTargetAmount,
@@ -591,7 +652,7 @@ function buildSellLedger(
     });
     const relocatePaymentOther = relocateMonthlyLine({
       id: "relocate-payment-other",
-      label: "Mensualité estimée pour l'autre (zone)",
+      label: "Mensualité estimée pour l'autre (solo)",
       incomeMonthly: footprint.incomeB,
       liquidCapital: other,
       targetPrice: relocateTargetAmount,
@@ -609,7 +670,7 @@ function buildSellLedger(
         tone: "neutral",
         suffix: "/mois",
         sectionId: "mensuel",
-        hint: "Simulation de prêt sur un logement équivalent dans votre quartier",
+        hint: "Simulation de prêt pour un logement solo dans votre zone",
       });
     }
   }
@@ -620,22 +681,33 @@ function buildSellLedger(
   const relocateVerdict = sell?.relocateVerdictByPerson;
   const footerParts = [
     sell?.capitalGainsNote,
+    housingNote,
     relocateVerdict
-      ? `Relogement dans le quartier — Vous : ${formatAffordabilityVerdictLabel(relocateVerdict.A)} · Autre : ${formatAffordabilityVerdictLabel(relocateVerdict.B)}.`
+      ? asRent
+        ? `Location solo — Vous : ${formatAffordabilityVerdictLabel(relocateVerdict.A)} · Autre : ${formatAffordabilityVerdictLabel(relocateVerdict.B)}.`
+        : `Relogement solo (rachat) — Vous : ${formatAffordabilityVerdictLabel(relocateVerdict.A)} · Autre : ${formatAffordabilityVerdictLabel(relocateVerdict.B)}.`
       : null,
-    relocateTargetAmount > 0
-      ? `Cible relogement ~${Math.round(relocateTargetAmount).toLocaleString("fr-FR")} € (prix × surface dans votre zone).`
-      : null,
+    asRent && tenantRent > 0
+      ? `Loyer cible ~${Math.round(tenantRent).toLocaleString("fr-FR")} €/mois.`
+      : !asRent && relocateTargetAmount > 0
+        ? `Cible rachat ~${Math.round(relocateTargetAmount).toLocaleString("fr-FR")} €.`
+        : null,
     negativeEquity
       ? `Dette résiduelle ~${Math.round(Math.abs(saleNet)).toLocaleString("fr-FR")} € à partager.`
       : `Produit net partagé — Vous : ${Math.round(you).toLocaleString("fr-FR")} € · Autre : ${Math.round(other).toLocaleString("fr-FR")} €.`,
   ].filter(Boolean);
 
-  const contextNote = buildSellContextNote(relocateVerdict, negativeEquity);
+  const contextNote = asRent
+    ? negativeEquity
+      ? "Actif net négatif — dette à partager avant toute location."
+      : relocateVerdict
+        ? `Après vente, location zone — Vous : ${formatAffordabilityVerdictLabel(relocateVerdict.A)} · Autre : ${formatAffordabilityVerdictLabel(relocateVerdict.B)}.`
+        : "Vente puis location dans la zone — capital et effort locatif."
+    : buildSellContextNote(relocateVerdict, negativeEquity);
 
   return {
-    doorId: "sell",
-    doorTitle: DOOR_TITLES.sell,
+    doorId,
+    doorTitle: DOOR_TITLES[doorId],
     verdict,
     lines,
     footer: footerParts.join("\n") || undefined,
@@ -657,9 +729,12 @@ function buildRentLedger(
   const mortgagePay =
     bd?.mortgagePayment.amount ?? effectiveMortgagePayment(footprint, assumptions, lab);
   const netEquity = footprint.propertyValue - footprint.mortgageRemaining;
-  const relocateTargetAmount = estimateRelocateTarget(footprint);
+  const relocateTargetAmount = estimateRelocateTarget(footprint, lab);
   const netRounded = Math.round(net);
-  const sharedCapital = Math.max(0, netEquity / 2);
+  const { shareA: pctA, shareB: pctB } = resolveOwnershipPercents(footprint);
+  const capitalA = Math.max(0, netEquity * (pctA / 100));
+  const capitalB = Math.max(0, netEquity * (pctB / 100));
+  const hasEmpreinteMortgage = footprint.monthlyMortgagePayment > 0;
 
   const lines: LedgerLine[] = [
     {
@@ -713,13 +788,16 @@ function buildRentLedger(
     },
     {
       id: "mortgage-pay",
-      label: lab.enabledLevers.includes("historical_mortgage_rate")
-        ? "Mensualité de votre crédit"
-        : "Mensualité crédit (taux du marché)",
+      label:
+        lab.enabledLevers.includes("historical_mortgage_rate") || hasEmpreinteMortgage
+          ? "Mensualité de votre crédit"
+          : "Mensualité crédit (taux du marché)",
       amount: Math.round(mortgagePay),
       tone: "subtract",
       sectionId: "charges",
-      hint: "Remboursement mensuel du prêt sur le bien loué",
+      hint: hasEmpreinteMortgage
+        ? "Mensualité issue de votre Empreinte"
+        : "Remboursement mensuel du prêt sur le bien loué",
     },
     {
       id: "property-tax",
@@ -773,34 +851,39 @@ function buildRentLedger(
     },
     {
       id: "relocate-target",
-      label: "Prix d'un logement équivalent dans votre quartier",
+      label: "Prix cible d'un logement solo dans votre zone",
       amount: relocateTargetAmount,
       tone: "neutral",
       sectionId: "relogement",
-      hint: "Repère local si vous devez vous reloger ailleurs",
+      hint: "Hypothèse si vous devez vous reloger ailleurs — pas le même bien",
     },
   ];
 
   const relocatePaymentYou = relocateMonthlyLine({
     id: "relocate-payment-you",
-    label: "Mensualité estimée pour vous reloger (zone)",
+    label: `Mensualité estimée pour vous reloger (zone · ${pctA} %)`,
     incomeMonthly: footprint.incomeA,
-    liquidCapital: sharedCapital,
+    liquidCapital: capitalA,
     targetPrice: relocateTargetAmount,
     sectionId: "relogement",
   });
   const relocatePaymentOther = relocateMonthlyLine({
     id: "relocate-payment-other",
-    label: "Mensualité estimée pour l'autre (zone)",
+    label: `Mensualité estimée pour l'autre (zone · ${pctB} %)`,
     incomeMonthly: footprint.incomeB,
-    liquidCapital: sharedCapital,
+    liquidCapital: capitalB,
     targetPrice: relocateTargetAmount,
     sectionId: "relogement",
   });
   if (relocatePaymentYou) lines.push(relocatePaymentYou);
   if (relocatePaymentOther) lines.push(relocatePaymentOther);
 
-  if (!lab.enabledLevers.includes("historical_mortgage_rate") && footprint.mortgageRemaining > 0) {
+  // Référence marché uniquement si on n'a pas déjà la mensualité Empreinte / levier.
+  if (
+    !lab.enabledLevers.includes("historical_mortgage_rate") &&
+    !hasEmpreinteMortgage &&
+    footprint.mortgageRemaining > 0
+  ) {
     lines.splice(4, 0, {
       id: "market-ref",
       label: "Référence mensualité marché",
@@ -848,7 +931,8 @@ export function buildLabLedger(params: {
     case "keep_b":
       return buildKeepLedger(doorId, footprint, assumptions, lab, result, verdict);
     case "sell":
-      return buildSellLedger(footprint, lab, result, verdict);
+    case "sell_rent":
+      return buildSellLedger(doorId, footprint, lab, result, verdict);
     case "rent_out":
       return buildRentLedger(footprint, assumptions, lab, result, verdict);
     default:

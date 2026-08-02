@@ -20,6 +20,14 @@ const footprint: FootprintState = {
   mortgageInsuranceMonthly: 0,
   incomeA: 5000,
   incomeB: 4000,
+  contributionA: 0,
+  contributionB: 0,
+  legalStatus: "concubinage",
+  ownershipShareA: 50,
+  ownershipShareB: 50,
+  cadreJuridiqueDeclared: true,
+  apportsDeclared: true,
+  financementDeclared: true,
   completedAt: "2026-01-01T00:00:00.000Z",
 };
 

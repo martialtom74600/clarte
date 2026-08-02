@@ -16,7 +16,13 @@ export type AssetType =
 
 export type LiabilityType = "mortgage" | "consumer_loan" | "other";
 
-export type ScenarioType = "keep_a" | "keep_b" | "sell" | "rent_out" | "compare_all";
+export type ScenarioType =
+  | "keep_a"
+  | "keep_b"
+  | "sell"
+  | "sell_rent"
+  | "rent_out"
+  | "compare_all";
 
 export type UserIntent = "keep_home" | "walk_away" | "amiable_path";
 
@@ -127,6 +133,9 @@ export interface Liability {
   linkedAssetId?: string;
 }
 
+/** Gamme de marché zone pour le relogement solo. */
+export type RelocateMarketTier = "entry" | "median" | "high";
+
 export interface SimulationOptions {
   primaryResidenceId?: string;
   scenario: ScenarioType;
@@ -162,6 +171,10 @@ export interface SimulationOptions {
    * Défaut false — on utilise le mode créance (parts légales + prélèvement).
    */
   legacyShareRewrite?: boolean;
+  /** Surface cible de relogement solo (m²) — levier labo relocate_housing. */
+  relocateSurfaceSqm?: number;
+  /** Gamme de marché pour le prix/loyer de relogement. */
+  relocateMarketTier?: RelocateMarketTier;
 }
 
 /** Décomposition cashflow locatif (porte rent_out) — année 2026. */
@@ -212,8 +225,8 @@ export interface SimulationInput {
   monthlyMortgagePayment?: number;
 }
 
-/** Identifiant des 4 portes du tableau de bord (Strate 2). */
-export type DoorId = "keep_a" | "keep_b" | "sell" | "rent_out";
+/** Identifiant des portes du tableau de bord (Strate 2). */
+export type DoorId = "keep_a" | "keep_b" | "sell" | "sell_rent" | "rent_out";
 
 export interface DoorVerdict {
   doorId: DoorId;
@@ -236,7 +249,8 @@ export type LeverId =
   | "ownership_shares"
   | "custom_rent"
   | "savings"
-  | "occupation_indemnity";
+  | "occupation_indemnity"
+  | "relocate_housing";
 
 export interface SoulteResult {
   payer: PersonId;
@@ -312,8 +326,16 @@ export interface ScenarioComparison {
   capitalGainsNote?: string;
   /** Prix cible de relogement dans la zone. */
   relocateTarget?: Money;
+  /** Surface cible de relogement solo (m²). */
+  relocateSurfaceSqm?: number;
+  /** Gamme marché utilisée pour la cible. */
+  relocateMarketTier?: RelocateMarketTier;
+  /** Note lisible : surface + gamme. */
+  relocateHousingNote?: string;
   /** Verdict de relogement par personne (même zone). */
   relocateVerdictByPerson?: Record<PersonId, AffordabilityVerdict>;
+  /** Loyer mensuel cible zone (scénario sell_rent — vendre puis louer). */
+  tenantRentMonthly?: Money;
   /** Décomposition cashflow locatif (porte rent_out). */
   rentOutBreakdown?: RentOutBreakdown;
   /** Formule lisible : Loyer − crédit − TF/charges − impôts = net. */

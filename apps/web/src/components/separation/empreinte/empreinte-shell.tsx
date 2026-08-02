@@ -9,17 +9,16 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { clarte } from "@/lib/clarte-design";
 import { duration, ease } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { useSeparationStore } from "@/store/separation-store";
 import { useSeparationHydrated } from "@/lib/separation/use-separation-hydrated";
-import type { FootprintField } from "@/lib/separation/separation-types";
 import {
-  EmpreinteContinueButton,
   EmpreinteField,
   EmpreinteFormRow,
+  EmpreinteStepNav,
   parseCurrency,
   parseNumber,
 } from "./empreinte-field";
@@ -29,16 +28,21 @@ import {
   EMPREINTE_SCREEN_LABELS,
   EMPREINTE_STEP_KEY,
   footprintToDraft,
+  getScreenValidationHint,
   inferEmpreinteScreen,
+  isFinancementValidForMode,
   isScreenValid,
+  parseSharePercent,
   type EmpreinteDraft,
+  type EmpreinteDraftField,
   type EmpreinteScreenId,
+  type FinancementUiMode,
 } from "./empreinte-screens";
+import { EmpreinteApportsScreen } from "./empreinte-apports";
+import { EmpreinteCadreJuridiqueScreen } from "./empreinte-cadre-juridique";
 import { EmpreinteFinancementScreen } from "./empreinte-financement";
-import {
-  parseMortgageStartDate,
-  parseRatePercent,
-} from "./empreinte-amortization";
+import { EmpreinteRevenusScreen } from "./empreinte-revenus";
+import { resolveFinancementValues } from "./empreinte-amortization";
 import { DEFAULT_MORTGAGE_INSURANCE_ANNUAL_RATE } from "@separation/engine";
 
 function EmpreinteProgress({ screenId }: { screenId: EmpreinteScreenId }) {
@@ -99,7 +103,9 @@ function ScreenChrome({
   canContinue,
   onContinue,
   whisper,
+  validationHint,
   progress,
+  onBack,
 }: {
   screenKey: string;
   title: string;
@@ -107,7 +113,9 @@ function ScreenChrome({
   canContinue: boolean;
   onContinue: () => void;
   whisper?: string;
+  validationHint?: string;
   progress?: ReactNode;
+  onBack?: () => void;
 }) {
   const reduced = useReducedMotion();
 
@@ -145,26 +153,87 @@ function ScreenChrome({
         </motion.p>
       )}
 
-      <EmpreinteContinueButton onClick={onContinue} disabled={!canContinue} />
+      {!canContinue && validationHint && (
+        <p className="mt-6 max-w-sm text-xs leading-relaxed text-slate-400">{validationHint}</p>
+      )}
+
+      <EmpreinteStepNav
+        onBack={onBack}
+        onContinue={() => onContinue()}
+        canContinue={canContinue}
+      />
     </motion.div>
   );
+}
+
+function mergeDraftOverride(
+  base: EmpreinteDraft,
+  draftOverride?: EmpreinteDraft
+): EmpreinteDraft | undefined {
+  if (!draftOverride || typeof draftOverride !== "object" || "nativeEvent" in draftOverride) {
+    return undefined;
+  }
+  return { ...base, ...draftOverride };
 }
 
 function EmpreinteFlow() {
   const router = useRouter();
   const footprint = useSeparationStore((s) => s.footprint);
   const setFootprintField = useSeparationStore((s) => s.setFootprintField);
-  const completeFootprint = useSeparationStore((s) => s.completeFootprint);
+  const setFinancementFootprint = useSeparationStore((s) => s.setFinancementFootprint);
+  const setCadreJuridique = useSeparationStore((s) => s.setCadreJuridique);
+  const completeFootprintWithIncomes = useSeparationStore(
+    (s) => s.completeFootprintWithIncomes
+  );
 
   const [screen, setScreen] = useState(() => inferEmpreinteScreen(footprint));
   const [draft, setDraft] = useState<EmpreinteDraft>(() => footprintToDraft(footprint));
   const [dvfHint, setDvfHint] = useState<string | null>(null);
   const [dvfLoading, setDvfLoading] = useState(false);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    sessionStorage.removeItem("clarte-empreinte-screen");
+    sessionStorage.removeItem("clarte-empreinte-step");
+  }, []);
+
   const screenId = EMPREINTE_SCREENS[screen] ?? "location";
   const canContinue = useMemo(() => isScreenValid(screenId, draft), [screenId, draft]);
+  const validationHint = useMemo(
+    () => getScreenValidationHint(screenId, draft),
+    [screenId, draft]
+  );
 
-  const updateField = useCallback((field: FootprintField, value: string) => {
+  useEffect(() => {
+    if (screenId !== "patrimoine") {
+      setDvfLoading(false);
+      return;
+    }
+    const postal = (
+      draft.postalCode || footprint.postalCode || ""
+    ).replace(/\D/g, "");
+    const surface = parseNumber(draft.propertySurface) || footprint.propertySurface;
+    if (postal.length !== 5 || surface <= 0) {
+      setDvfHint(null);
+      setDvfLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setDvfLoading(true);
+    void fetchDvfHint(postal, surface).then((hint) => {
+      if (cancelled) {
+        return;
+      }
+      setDvfHint(hint);
+      setDvfLoading(false);
+    });
+    return () => {
+      cancelled = true;
+      setDvfLoading(false);
+    };
+  }, [screenId, draft.postalCode, draft.propertySurface, footprint.postalCode, footprint.propertySurface]);
+
+  const updateField = useCallback((field: EmpreinteDraftField, value: string) => {
     setDraft((prev) => ({ ...prev, [field]: value }));
   }, []);
 
@@ -177,76 +246,114 @@ function EmpreinteFlow() {
     });
   }, []);
 
-  const goNext = () => {
-    if (!canContinue) return;
-
-    if (screenId === "location") {
-      const postalCode = draft.postalCode.replace(/\D/g, "");
-      setFootprintField("postalCode", postalCode);
-    }
-
-    if (screenId === "patrimoine") {
-      setFootprintField("propertySurface", parseNumber(draft.propertySurface));
-      setFootprintField("propertyValue", parseCurrency(draft.propertyValue));
-      setFootprintField("purchasePrice", parseCurrency(draft.purchasePrice));
-      const postal = (
-        footprint.postalCode || draft.postalCode.replace(/\D/g, "")
-      ).replace(/\D/g, "");
-      if (postal.length === 5) {
-        setDvfLoading(true);
-        void fetchDvfHint(postal, parseNumber(draft.propertySurface)).then((hint) => {
-          setDvfHint(hint);
-          setDvfLoading(false);
-        });
+  const advanceScreen = useCallback(() => {
+    setScreen((prev) => {
+      const next = Math.min(prev + 1, EMPREINTE_SCREEN_COUNT - 1);
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem(EMPREINTE_STEP_KEY, String(next));
       }
-    }
+      return next;
+    });
+  }, []);
 
-    if (screenId === "financement") {
-      const crd = parseCurrency(draft.mortgageRemaining);
-      setFootprintField("mortgageRemaining", crd);
+  const goBack = useCallback(() => {
+    setScreen((prev) => {
+      if (prev <= 0) return prev;
+      const next = prev - 1;
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem(EMPREINTE_STEP_KEY, String(next));
+      }
+      return next;
+    });
+  }, []);
 
-      const start = parseMortgageStartDate(draft.mortgageStartDate);
-      setFootprintField("initialMortgagePrincipal", parseCurrency(draft.initialMortgagePrincipal));
-      setFootprintField(
-        "initialMortgageDurationYears",
-        parseNumber(draft.initialMortgageDurationYears)
-      );
-      setFootprintField("mortgageStartMonth", start?.month ?? 0);
-      setFootprintField("mortgageStartYear", start?.year ?? 0);
-      setFootprintField("initialMortgageRate", parseRatePercent(draft.initialMortgageRate));
+  const showBack = screen > 0;
+  const handleBack = showBack ? goBack : undefined;
+
+  const advanceFromFinancement = useCallback(
+    (merged: EmpreinteDraft, mode: FinancementUiMode) => {
+      if (mode !== "no_credit" && !isFinancementValidForMode(merged, mode)) {
+        return false;
+      }
+
+      // Avancer tout de suite : évite un remount sur financement si le store se met à jour avant.
+      advanceScreen();
+      setDraft(merged);
+
+      const resolved = resolveFinancementValues(merged);
+      setFinancementFootprint(resolved);
       setFootprintField("mortgageInsuranceRate", DEFAULT_MORTGAGE_INSURANCE_ANNUAL_RATE);
-      setFootprintField(
-        "mortgageInsuranceMonthly",
-        parseCurrency(draft.mortgageInsuranceMonthly)
-      );
+      setFootprintField("financementDeclared", true);
 
-      if (crd > 0) {
-        setFootprintField(
-          "monthlyMortgagePayment",
-          parseCurrency(draft.monthlyMortgagePayment)
-        );
-        setFootprintField(
-          "mortgageRemainingYears",
-          parseNumber(draft.mortgageRemainingYears)
-        );
-      } else {
-        setFootprintField("monthlyMortgagePayment", 0);
-        setFootprintField("mortgageRemainingYears", 0);
+      const contribA = parseCurrency(merged.contributionA ?? "") || footprint.contributionA;
+      const contribB = parseCurrency(merged.contributionB ?? "") || footprint.contributionB;
+      const purchasePrice =
+        resolved.initialMortgagePrincipal > 0
+          ? resolved.initialMortgagePrincipal + contribA + contribB
+          : contribA + contribB;
+      // Toujours écrire (y compris 0) pour ne pas laisser un prix d'achat stale.
+      setFootprintField("purchasePrice", purchasePrice);
+
+      if (resolved.mortgageRemaining === 0) {
         setDraft((prev) => ({
           ...prev,
           monthlyMortgagePayment: "",
           mortgageRemainingYears: "",
         }));
       }
+
+      return true;
+    },
+    [advanceScreen, footprint.contributionA, footprint.contributionB, setFinancementFootprint, setFootprintField]
+  );
+
+  const goNext = (draftOverride?: EmpreinteDraft) => {
+    const mergedOverride = mergeDraftOverride(draft, draftOverride);
+    const activeDraft = mergedOverride ?? draft;
+
+    let canProceed: boolean;
+    if (mergedOverride) {
+      canProceed = isScreenValid(screenId, activeDraft);
+    } else {
+      canProceed = canContinue;
+    }
+    if (!canProceed) return;
+
+    if (mergedOverride) {
+      setDraft(activeDraft);
     }
 
-    if (screenId === "income_a") {
-      setFootprintField("incomeA", parseCurrency(draft.incomeA));
+    if (screenId === "location") {
+      const postalCode = (activeDraft.postalCode ?? "").replace(/\D/g, "");
+      setFootprintField("postalCode", postalCode);
     }
 
-    if (screenId === "income_b") {
-      setFootprintField("incomeB", parseCurrency(draft.incomeB));
-      const ok = completeFootprint();
+    if (screenId === "patrimoine") {
+      setFootprintField("propertySurface", parseNumber(activeDraft.propertySurface));
+      setFootprintField("propertyValue", parseCurrency(activeDraft.propertyValue));
+    }
+
+    if (screenId === "cadre_juridique") {
+      const status = activeDraft.legalStatus;
+      if (status !== "marriage" && status !== "pacs" && status !== "concubinage") return;
+      setCadreJuridique(
+        status,
+        parseSharePercent(activeDraft.ownershipShareA),
+        parseSharePercent(activeDraft.ownershipShareB)
+      );
+    }
+
+    if (screenId === "apports") {
+      setFootprintField("contributionA", parseCurrency(activeDraft.contributionA ?? ""));
+      setFootprintField("contributionB", parseCurrency(activeDraft.contributionB ?? ""));
+      setFootprintField("apportsDeclared", true);
+    }
+
+    if (screenId === "revenus") {
+      const ok = completeFootprintWithIncomes(
+        parseCurrency(activeDraft.incomeA),
+        parseCurrency(activeDraft.incomeB)
+      );
       if (ok) {
         sessionStorage.removeItem(EMPREINTE_STEP_KEY);
         router.push("/simulation/portes");
@@ -254,9 +361,7 @@ function EmpreinteFlow() {
       return;
     }
 
-    const next = Math.min(screen + 1, EMPREINTE_SCREEN_COUNT - 1);
-    sessionStorage.setItem(EMPREINTE_STEP_KEY, String(next));
-    setScreen(next);
+    advanceScreen();
   };
 
   const progress = <EmpreinteProgress screenId={screenId} />;
@@ -270,39 +375,34 @@ function EmpreinteFlow() {
         type="postal"
         value={draft.postalCode}
         onChange={(v) => updateField("postalCode", v)}
-        onSubmit={goNext}
+        onSubmit={() => goNext()}
         placeholder="75011"
         canContinue={canContinue}
+        hint={validationHint ?? undefined}
+        progress={progress}
+        onBack={handleBack}
+      />
+    );
+  } else if (screenId === "apports") {
+    body = (
+      <EmpreinteApportsScreen
+        draft={draft}
+        onDraftChange={patchDraft}
+        onContinue={() => goNext()}
+        canContinue={canContinue}
+        onBack={handleBack}
         progress={progress}
       />
     );
-  } else if (screenId === "income_a") {
+  } else if (screenId === "revenus") {
     body = (
-      <EmpreinteField
-        stepKey="income_a"
-        label="Vos revenus nets, par mois ?"
-        type="currency"
-        value={draft.incomeA}
-        onChange={(v) => updateField("incomeA", v)}
-        onSubmit={goNext}
-        placeholder="3 500"
-        hint="Net avant impôt (prélèvement à la source)."
+      <EmpreinteRevenusScreen
+        draft={draft}
+        onDraftChange={patchDraft}
+        onContinue={() => goNext()}
         canContinue={canContinue}
-        progress={progress}
-      />
-    );
-  } else if (screenId === "income_b") {
-    body = (
-      <EmpreinteField
-        stepKey="income_b"
-        label="Et l'autre partie ?"
-        type="currency"
-        value={draft.incomeB}
-        onChange={(v) => updateField("incomeB", v)}
-        onSubmit={goNext}
-        placeholder="2 800"
-        hint="Net avant impôt (prélèvement à la source)."
-        canContinue={canContinue}
+        validationHint={validationHint ?? undefined}
+        onBack={handleBack}
         progress={progress}
       />
     );
@@ -312,8 +412,10 @@ function EmpreinteFlow() {
         screenKey="patrimoine"
         title="Le patrimoine"
         canContinue={canContinue}
-        onContinue={goNext}
+        onContinue={() => goNext()}
         whisper={dvfLoading ? "Estimation locale en cours…" : (dvfHint ?? undefined)}
+        validationHint={validationHint ?? undefined}
+        onBack={handleBack}
         progress={progress}
       >
         <EmpreinteFormRow
@@ -334,35 +436,37 @@ function EmpreinteFlow() {
           onChange={(v) => updateField("propertyValue", v)}
           placeholder="400 000"
         />
-        <EmpreinteFormRow
-          id="purchasePrice"
-          label="Prix d'achat initial"
-          type="currency"
-          value={draft.purchasePrice}
-          onChange={(v) => updateField("purchasePrice", v)}
-          placeholder="320 000"
-          hint="Saisissez 0 si inconnu (utile pour estimer votre plus-value immobilière)."
-        />
       </ScreenChrome>
+    );
+  } else if (screenId === "cadre_juridique") {
+    body = (
+      <EmpreinteCadreJuridiqueScreen
+        draft={draft}
+        onDraftChange={patchDraft}
+        onContinue={() => goNext()}
+        canContinue={canContinue}
+        validationHint={validationHint ?? undefined}
+        onBack={handleBack}
+        progress={progress}
+      />
     );
   } else if (screenId === "financement") {
     body = (
       <EmpreinteFinancementScreen
         draft={draft}
+        footprint={footprint}
         onDraftChange={patchDraft}
-        canContinue={canContinue}
-        onContinue={goNext}
+        onContinue={advanceFromFinancement}
+        onBack={handleBack}
         progress={progress}
       />
     );
   }
 
   return (
-    <AnimatePresence mode="wait">
-      <div key={screenId} className="mx-auto w-full max-w-xl">
-        {body}
-      </div>
-    </AnimatePresence>
+    <div key={screenId} className="mx-auto w-full max-w-xl">
+      {body}
+    </div>
   );
 }
 

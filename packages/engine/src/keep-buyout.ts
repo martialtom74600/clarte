@@ -2,15 +2,14 @@ import type {
   AffordabilityVerdict,
   Money,
   PersonId,
+  RelocateMarketTier,
   SimulationInput,
   SoulteResult,
 } from "@separation/schemas";
-import {
-  buildZoneMarketSnapshot,
-  computeAffordability,
-} from "./affordability.js";
+import { computeAffordability } from "./affordability.js";
 import { rentPerSqm } from "./market-rents.js";
 import { getMortgageRateSnapshot } from "./mortgage-rates.js";
+import { resolveRelocateHousing } from "./relocate-housing.js";
 import { eur, round } from "./utils.js";
 
 export interface KeepBilateralExtras {
@@ -22,6 +21,9 @@ export interface KeepBilateralExtras {
   occupationMonthlyHalfRent: Money;
   occupationIndemnity: Money;
   relocateTarget: Money;
+  relocateSurfaceSqm: number;
+  relocateMarketTier: RelocateMarketTier;
+  relocateHousingNote: string;
   relocateVerdictByPerson: Record<PersonId, AffordabilityVerdict>;
   departureRelocateVerdict: AffordabilityVerdict;
   occupationNote?: string;
@@ -69,11 +71,8 @@ export function computeKeepBilateralExtras(
   const departureCapital = eur(soulteAmt + indemnityAmt);
   const buyoutTransferTotal = eur(soulteAmt + indemnityAmt);
 
-  const postalCode = input.postalCode ?? "75000";
-  const surface = input.propertySurface ?? 65;
-  const relocateSurface = Math.max(45, surface - 15);
-  const zone = buildZoneMarketSnapshot(postalCode, surface);
-  const relocateTarget = eur(round(zone.minPricePerSqm.amount * relocateSurface));
+  const housing = resolveRelocateHousing(input);
+  const relocateTarget = housing.targetPrice;
   const rateSnapshot = getMortgageRateSnapshot(input.options.mortgageDurationYears ?? 20);
 
   const departureAff = computeAffordability({
@@ -104,6 +103,9 @@ export function computeKeepBilateralExtras(
     occupationMonthlyHalfRent: monthlyHalf,
     occupationIndemnity: indemnity,
     relocateTarget,
+    relocateSurfaceSqm: housing.surfaceSqm,
+    relocateMarketTier: housing.tier,
+    relocateHousingNote: housing.note,
     relocateVerdictByPerson,
     departureRelocateVerdict: departureAff.verdict,
     occupationNote,
