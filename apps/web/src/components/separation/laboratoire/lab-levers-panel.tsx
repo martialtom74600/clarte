@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { DoorId, RelocateMarketTier } from "@separation/schemas";
 import { defaultRelocateSurfaceSqm } from "@separation/engine";
 import { useSeparationStore } from "@/store/separation-store";
@@ -9,6 +9,9 @@ import { LabField, LabLever } from "./lab-lever";
 import { useDebouncedCallback } from "@/lib/separation/use-debounced-callback";
 import type { LeverOverrides } from "@/lib/separation/separation-types";
 import { cn, formatEuro } from "@/lib/utils";
+
+/** Portes où le relogement solo a un effet sur le bilan. */
+const RELOCATE_DOORS: DoorId[] = ["keep_a", "keep_b", "sell", "sell_rent"];
 
 type ChildrenImpactConfig = NonNullable<LeverOverrides["children_impact"]>;
 type LabLeverId =
@@ -153,32 +156,32 @@ const LEVER_COPY: Record<
   },
   relocate_housing: {
     keep_a: {
-      title: "Relogement solo",
+      title: "Relogement de l'autre (qui part)",
       description:
-        "Hypothèse de logement après séparation pour la personne qui part — pas le même bien. Surface et gamme de prix de la zone.",
-      impact: "Recalcule la capacité de relogement du partant.",
+        "Vous restez dans le bien. Ce levier estime où l'autre peut se loger avec la soulte — pas le même appartement.",
+      impact: "Recalcule uniquement la capacité de relogement du partant.",
     },
     keep_b: {
-      title: "Relogement solo",
+      title: "Votre relogement (si vous partez)",
       description:
-        "Hypothèse de logement après séparation pour vous si vous partez — pas le même bien. Surface et gamme de prix de la zone.",
-      impact: "Recalcule votre capacité de relogement.",
+        "L'autre garde le bien. Ce levier estime où vous pouvez vous loger avec ce que vous récupérez — pas le même appartement.",
+      impact: "Recalcule uniquement votre capacité de relogement.",
     },
     sell: {
-      title: "Relogement solo",
+      title: "Relogement après vente",
       description:
-        "Hypothèse de rachat après vente — pas le même bien. Surface cible et gamme (entrée / médian / haut de zone).",
-      impact: "Recalcule le prix cible et le verdict de rachat pour chacun.",
+        "Plus personne ne garde le bien : chaque côté rachète ailleurs. Surface cible et gamme (entrée / médian / haut de zone).",
+      impact: "Recalcule le prix cible et le verdict pour chacun.",
     },
     sell_rent: {
-      title: "Relogement solo",
+      title: "Location après vente",
       description:
-        "Hypothèse de location après vente — pas le même bien. Surface cible et gamme de loyer de la zone.",
-      impact: "Recalcule le loyer cible et le verdict locatif pour chacun.",
+        "Plus personne ne garde le bien : chaque côté loue ailleurs. Surface cible et gamme de loyer de la zone.",
+      impact: "Recalcule le loyer cible et le verdict pour chacun.",
     },
     rent_out: {
-      title: "Relogement solo",
-      description: "Ce levier concerne la vente ou le départ, pas la location du bien actuel.",
+      title: "Relogement",
+      description: "Sans effet ici — le bien est conservé en location.",
       impact: "Sans effet sur ce scénario.",
     },
   },
@@ -304,12 +307,16 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
     commitRelocate(parseAmount(raw) || defaultRelocateSurface, tier);
   };
 
+  const relocateDismissedRef = useRef(false);
+
   const toggleLever = useCallback(
     (leverId: LabLeverId, on: boolean) => {
       if (!on) {
+        if (leverId === "relocate_housing") relocateDismissedRef.current = true;
         disableLever(leverId);
         return;
       }
+      if (leverId === "relocate_housing") relocateDismissedRef.current = false;
       // setLeverOverride active aussi le levier — un seul recompute.
       if (leverId === "initial_contributions") {
         const a = parseAmount(contribA) || footprint.contributionA;
@@ -380,10 +387,27 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
   const historicalRelevant = doorId !== "sell" && doorId !== "sell_rent" && !noCredit;
   const contributionsRelevant = doorId === "keep_a" || doorId === "keep_b";
   const occupationRelevant = doorId === "keep_a" || doorId === "keep_b";
-  const relocateRelevant =
-    doorId === "keep_a" || doorId === "keep_b" || doorId === "sell" || doorId === "sell_rent";
+  const relocateRelevant = RELOCATE_DOORS.includes(doorId);
   const hasEmpreinteApports =
     footprint.contributionA > 0 || footprint.contributionB > 0;
+
+  // Sessions Empreinte déjà validées avant le seed relocate : pré-active à l'ouverture.
+  useEffect(() => {
+    if (!relocateRelevant || footprint.propertySurface <= 0) return;
+    if (lab.enabledLevers.includes("relocate_housing")) return;
+    if (relocateDismissedRef.current) return;
+    setLeverOverride("relocate_housing", {
+      surfaceSqm: defaultRelocateSurface,
+      marketTier: "entry",
+    });
+  }, [
+    doorId,
+    relocateRelevant,
+    footprint.propertySurface,
+    lab.enabledLevers,
+    defaultRelocateSurface,
+    setLeverOverride,
+  ]);
 
   return (
     <div className="space-y-4">
@@ -395,92 +419,83 @@ export function LabLeversPanel({ doorId }: LabLeversPanelProps) {
         </p>
       </div>
 
-      <LabLever
-        title={contribCopy.title}
-        description={`${contribCopy.description} ${contribCopy.impact}${
-          hasEmpreinteApports
-            ? " Prérempli depuis votre Empreinte — vous pouvez ajuster."
-            : ""
-        }`}
-        enabled={contributionsEnabled}
-        onToggle={(on) => toggleLever("initial_contributions", on)}
-      >
-        {!contributionsRelevant && (
-          <p className="mb-4 text-sm text-amber-700/90">
-            Sur ce scénario, l&apos;effet est limité — ce levier compte surtout pour un rachat.
-          </p>
-        )}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <LabField
-            label="Vos apports"
-            value={contribA}
-            onChange={(v) => {
-              const next = formatAmount(parseAmount(v));
-              setContribA(next);
-              pushContributions(next, contribB);
-            }}
-            suffix="€"
-          />
-          <LabField
-            label="Apports de l'autre"
-            value={contribB}
-            onChange={(v) => {
-              const next = formatAmount(parseAmount(v));
-              setContribB(next);
-              pushContributions(contribA, next);
-            }}
-            suffix="€"
-          />
-        </div>
-      </LabLever>
-
-      {!noCredit && (
-      <LabLever
-        title={histCopy.title}
-        description={`${histCopy.description}`}
-        enabled={historicalEnabled}
-        onToggle={(on) => toggleLever("historical_mortgage_rate", on)}
-      >
-        {!historicalRelevant ? (
-          <p className="text-sm text-amber-700/90">{histCopy.impact}</p>
-        ) : (
-          <>
-            <div className="mb-4 rounded-xl bg-slate-50 px-4 py-3 text-sm leading-relaxed text-slate-600">
-              <p>
-                <span className="font-medium text-slate-800">Sans ce levier :</span> on suppose un
-                refinancement complet au taux marché (
-                <span className="tabular-nums">{formatEuro(marketMonthly)}/mois</span> sur le seul
-                CRD, davantage si rachat).
-              </p>
-              <p className="mt-2">
-                <span className="font-medium text-slate-800">Avec ce levier :</span>{" "}
-                {doorId === "rent_out"
-                  ? "on part de votre vraie mensualité pour le cashflow locatif."
-                  : "vous gardez cette mensualité sur le crédit restant, et n'empruntez que pour le rachat — uniquement si la banque accepte la désolidarisation."}
-              </p>
-              {(doorId === "keep_a" || doorId === "keep_b") && (
-                <p className="mt-2 rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs leading-relaxed text-amber-900">
-                  La désolidarisation de l&apos;emprunt initial est soumise à l&apos;accord
-                  discrétionnaire de la banque (ratio d&apos;endettement et étude de solvabilité du
-                  repreneur). Ce n&apos;est pas une option garantie.
-                </p>
-              )}
-              <p className="mt-2 text-xs text-slate-500">{histCopy.impact}</p>
-            </div>
+      {contributionsRelevant && (
+        <LabLever
+          title={contribCopy.title}
+          description={`${contribCopy.description} ${contribCopy.impact}${
+            hasEmpreinteApports
+              ? " Prérempli depuis votre Empreinte — vous pouvez ajuster."
+              : ""
+          }`}
+          enabled={contributionsEnabled}
+          onToggle={(on) => toggleLever("initial_contributions", on)}
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
             <LabField
-              label="Votre mensualité actuelle"
-              value={historicalPay}
+              label="Vos apports"
+              value={contribA}
               onChange={(v) => {
                 const next = formatAmount(parseAmount(v));
-                setHistoricalPay(next);
-                pushHistorical(next);
+                setContribA(next);
+                pushContributions(next, contribB);
               }}
-              suffix="€/mois"
-              hint={`Référence marché estimée : ${formatEuro(marketMonthly)}/mois`}
+              suffix="€"
             />
-          </>
-        )}
-      </LabLever>
+            <LabField
+              label="Apports de l'autre"
+              value={contribB}
+              onChange={(v) => {
+                const next = formatAmount(parseAmount(v));
+                setContribB(next);
+                pushContributions(contribA, next);
+              }}
+              suffix="€"
+            />
+          </div>
+        </LabLever>
+      )}
+
+      {historicalRelevant && (
+        <LabLever
+          title={histCopy.title}
+          description={`${histCopy.description}`}
+          enabled={historicalEnabled}
+          onToggle={(on) => toggleLever("historical_mortgage_rate", on)}
+        >
+          <div className="mb-4 rounded-xl bg-slate-50 px-4 py-3 text-sm leading-relaxed text-slate-600">
+            <p>
+              <span className="font-medium text-slate-800">Sans ce levier :</span> on suppose un
+              refinancement complet au taux marché (
+              <span className="tabular-nums">{formatEuro(marketMonthly)}/mois</span> sur le seul
+              CRD, davantage si rachat).
+            </p>
+            <p className="mt-2">
+              <span className="font-medium text-slate-800">Avec ce levier :</span>{" "}
+              {doorId === "rent_out"
+                ? "on part de votre vraie mensualité pour le cashflow locatif."
+                : "vous gardez cette mensualité sur le crédit restant, et n'empruntez que pour le rachat — uniquement si la banque accepte la désolidarisation."}
+            </p>
+            {(doorId === "keep_a" || doorId === "keep_b") && (
+              <p className="mt-2 rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs leading-relaxed text-amber-900">
+                La désolidarisation de l&apos;emprunt initial est soumise à l&apos;accord
+                discrétionnaire de la banque (ratio d&apos;endettement et étude de solvabilité du
+                repreneur). Ce n&apos;est pas une option garantie.
+              </p>
+            )}
+            <p className="mt-2 text-xs text-slate-500">{histCopy.impact}</p>
+          </div>
+          <LabField
+            label="Votre mensualité actuelle"
+            value={historicalPay}
+            onChange={(v) => {
+              const next = formatAmount(parseAmount(v));
+              setHistoricalPay(next);
+              pushHistorical(next);
+            }}
+            suffix="€/mois"
+            hint={`Référence marché estimée : ${formatEuro(marketMonthly)}/mois`}
+          />
+        </LabLever>
       )}
 
       <LabLever

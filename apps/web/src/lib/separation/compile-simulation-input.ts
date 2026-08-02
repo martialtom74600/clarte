@@ -8,6 +8,7 @@ import type { LeverId, SimulationInput } from "@separation/schemas";
 import {
   DEFAULT_MORTGAGE_DURATION_YEARS,
   DEFAULT_MORTGAGE_INSURANCE_ANNUAL_RATE,
+  defaultRelocateSurfaceSqm,
   getMortgageRateSnapshot,
 } from "@separation/engine";
 
@@ -397,6 +398,22 @@ export function seedLabFromFootprint(
   } else {
     enabled.delete("historical_mortgage_rate");
     delete overrides.historical_mortgage_rate;
+  }
+
+  // Relogement solo : pré-activé dès qu'une surface Empreinte existe (portes keep/sell/sell_rent).
+  if (footprint.propertySurface > 0) {
+    enabled.add("relocate_housing");
+    const existing = overrides.relocate_housing;
+    overrides.relocate_housing = {
+      surfaceSqm:
+        existing?.surfaceSqm && existing.surfaceSqm > 0
+          ? existing.surfaceSqm
+          : defaultRelocateSurfaceSqm(footprint.propertySurface),
+      marketTier: existing?.marketTier ?? "entry",
+    };
+  } else {
+    enabled.delete("relocate_housing");
+    delete overrides.relocate_housing;
   }
 
   return {

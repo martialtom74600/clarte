@@ -149,12 +149,9 @@ export function EmpreinteFinancementScreen({
   const updateEstimateField = useCallback(
     <K extends keyof EstimateFormState>(field: K, value: EstimateFormState[K]) => {
       setContinueError(null);
-      setEstimateForm((prev) => {
-        const next = { ...prev, [field]: value };
-        // Persiste dans le draft parent pour survivre à Retour / remount.
-        onDraftChange(next);
-        return next;
-      });
+      // Ne pas appeler onDraftChange dans l'updater setState (Strict Mode / render).
+      setEstimateForm((prev) => ({ ...prev, [field]: value }));
+      onDraftChange({ [field]: value });
     },
     [onDraftChange]
   );

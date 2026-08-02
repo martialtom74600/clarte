@@ -55,20 +55,26 @@ function baseState(overrides: Partial<SeparationState> = {}): SeparationState {
 }
 
 describe("seedLabFromFootprint", () => {
-  it("active apports + mensualité quand renseignés", () => {
+  it("active apports + mensualité + relogement quand renseignés", () => {
     const lab = seedLabFromFootprint({
       ...completeFootprint,
       contributionA: 20000,
       contributionB: 10000,
     });
     expect(lab.enabledLevers).toEqual(
-      expect.arrayContaining(["initial_contributions", "historical_mortgage_rate"])
+      expect.arrayContaining([
+        "initial_contributions",
+        "historical_mortgage_rate",
+        "relocate_housing",
+      ])
     );
     expect(lab.overrides.initial_contributions).toEqual({
       contributionA: 20000,
       contributionB: 10000,
     });
     expect(lab.overrides.historical_mortgage_rate?.monthlyMortgagePayment).toBe(950);
+    expect(lab.overrides.relocate_housing?.marketTier).toBe("entry");
+    expect(lab.overrides.relocate_housing?.surfaceSqm).toBeGreaterThan(0);
   });
 
   it("n'active pas le crédit si sans crédit", () => {
@@ -80,6 +86,7 @@ describe("seedLabFromFootprint", () => {
       contributionB: 0,
     });
     expect(lab.enabledLevers).toContain("initial_contributions");
+    expect(lab.enabledLevers).toContain("relocate_housing");
     expect(lab.enabledLevers).not.toContain("historical_mortgage_rate");
   });
 });
