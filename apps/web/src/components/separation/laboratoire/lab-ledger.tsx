@@ -8,9 +8,10 @@ import { ledgerFingerprint } from "@/lib/separation/lab-ledger-model";
 import { pickHeadlineLines } from "@/lib/separation/lab-ledger-parity";
 import {
   groupLedgerLines,
-  LEDGER_SECTION_META,
+  resolveLedgerSectionMeta,
   type LedgerSectionId,
 } from "@/lib/separation/lab-ledger-sections";
+import type { DoorId } from "@separation/schemas";
 import { VerdictDot } from "@/components/separation/portes/verdict-dot";
 import { LedgerFooterInsights } from "./ledger-footer-insights";
 
@@ -116,11 +117,13 @@ function HeadlineChip({ line }: { line: LedgerLine }) {
 function LedgerSectionBlock({
   sectionId,
   lines,
+  doorId,
 }: {
   sectionId: LedgerSectionId;
   lines: LedgerLine[];
+  doorId: DoorId;
 }) {
-  const meta = LEDGER_SECTION_META[sectionId];
+  const meta = resolveLedgerSectionMeta(sectionId, doorId);
 
   return (
     <section
@@ -166,14 +169,19 @@ export function LabLedgerSummary({ model, className }: LabLedgerPanelProps) {
         />
       )}
       {headlines.length > 0 && (
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <div
+          className={cn(
+            "mt-3 grid gap-2",
+            headlines.length <= 2 ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3"
+          )}
+        >
           {headlines.map((line) => (
             <HeadlineChip key={line.id} line={line} />
           ))}
         </div>
       )}
       <p className="mt-3 hidden text-[11px] text-slate-400 lg:block">
-        Défilez ci-dessous pour le détail · les leviers restent visibles à droite
+        Détail ci-dessous · leviers à droite
       </p>
     </div>
   );
@@ -199,7 +207,12 @@ export function LabLedgerDetails({ model, className }: LabLedgerPanelProps) {
         className="space-y-2.5 rounded-xl"
       >
         {groups.map((group) => (
-          <LedgerSectionBlock key={group.sectionId} sectionId={group.sectionId} lines={group.lines} />
+          <LedgerSectionBlock
+            key={group.sectionId}
+            sectionId={group.sectionId}
+            lines={group.lines}
+            doorId={model.doorId}
+          />
         ))}
       </motion.div>
 

@@ -7,6 +7,8 @@ import type {
   FootprintField,
   LabState,
   LeverOverrides,
+  MarketBuyState,
+  MarketRentState,
   SeparationState,
 } from "@/lib/separation/separation-types";
 import {
@@ -32,6 +34,8 @@ export function createInitialSeparationState(): SeparationState {
     footprint: defaultFootprint(),
     assumptions: defaultAssumptions(),
     lab: defaultLabState(),
+    marketBuy: null,
+    marketRent: null,
     derived: {
       lastInput: null,
       lastResult: null,
@@ -73,6 +77,10 @@ export interface SeparationStore extends SeparationState {
   ) => void;
   setStratum: (stratum: SeparationState["stratum"]) => void;
   setDiscreteMode: (value: boolean) => void;
+  /** Injecte le marché achat DVF (async) — déclenche un recompute sync. */
+  setMarketBuy: (marketBuy: MarketBuyState | null) => void;
+  /** Injecte le marché locatif Carte des loyers (async). */
+  setMarketRent: (marketRent: MarketRentState | null) => void;
   recompute: () => void;
   getInput: () => ReturnType<typeof compileSimulationInput> | null;
   reset: () => void;
@@ -96,14 +104,19 @@ export const createSeparationStore = () =>
         ...initialSeparationState,
 
         setFootprintField: (field, value) => {
-          set((state) =>
-            withRecompute(
-              {
-                footprint: { ...state.footprint, [field]: value },
-              },
-              { ...state, footprint: { ...state.footprint, [field]: value } }
-            )
-          );
+          set((state) => {
+            const footprint = { ...state.footprint, [field]: value };
+            const marketBuy =
+              field === "postalCode" && String(value) !== (state.marketBuy?.postalCode ?? "")
+                ? null
+                : state.marketBuy;
+            const marketRent =
+              field === "postalCode" && String(value) !== (state.marketRent?.postalCode ?? "")
+                ? null
+                : state.marketRent;
+            const next = { ...state, footprint, marketBuy, marketRent };
+            return withRecompute({ footprint, marketBuy, marketRent }, next);
+          });
         },
 
         setFinancementFootprint: (values) => {
@@ -252,6 +265,40 @@ export const createSeparationStore = () =>
 
         setDiscreteMode: (discreteMode) => set({ discreteMode }),
 
+        setMarketBuy: (marketBuy) => {
+          set((state) => {
+            if (
+              state.marketBuy &&
+              marketBuy &&
+              state.marketBuy.postalCode === marketBuy.postalCode &&
+              state.marketBuy.medianPricePerSqm === marketBuy.medianPricePerSqm &&
+              state.marketBuy.minPricePerSqm === marketBuy.minPricePerSqm &&
+              state.marketBuy.maxPricePerSqm === marketBuy.maxPricePerSqm &&
+              state.marketBuy.source === marketBuy.source
+            ) {
+              return state;
+            }
+            return withRecompute({ marketBuy }, { ...state, marketBuy });
+          });
+        },
+
+        setMarketRent: (marketRent) => {
+          set((state) => {
+            if (
+              state.marketRent &&
+              marketRent &&
+              state.marketRent.postalCode === marketRent.postalCode &&
+              state.marketRent.medianRentPerSqm === marketRent.medianRentPerSqm &&
+              state.marketRent.minRentPerSqm === marketRent.minRentPerSqm &&
+              state.marketRent.maxRentPerSqm === marketRent.maxRentPerSqm &&
+              state.marketRent.source === marketRent.source
+            ) {
+              return state;
+            }
+            return withRecompute({ marketRent }, { ...state, marketRent });
+          });
+        },
+
         recompute: () => {
           set((state) => withRecompute({}, state));
         },
@@ -275,6 +322,8 @@ export const createSeparationStore = () =>
           footprint: state.footprint,
           assumptions: state.assumptions,
           lab: state.lab,
+          // Marché non persisté : évite un €/m² figé (ex. ancien default 2800)
+          // alors que le barème / DVF a bougé. Rechargement via useMarketSync.
           discreteMode: state.discreteMode,
         }),
         merge: (persisted, current) => {
@@ -285,6 +334,8 @@ export const createSeparationStore = () =>
             footprint: { ...current.footprint, ...p?.footprint },
             assumptions: { ...current.assumptions, ...p?.assumptions },
             lab: { ...current.lab, ...p?.lab },
+            marketBuy: null,
+            marketRent: null,
             discreteMode: p?.discreteMode ?? current.discreteMode,
             derived: current.derived,
           };

@@ -74,6 +74,109 @@ describe("resolveRelocateHousing", () => {
     expect(h.note).toMatch(/médiane/);
   });
 
+  it("Paris : la gamme change le €/m² (fourchette multi-départements)", () => {
+    const entry = resolveRelocateHousing(
+      baseInput({
+        options: { scenario: "compare_all", relocateSurfaceSqm: 56, relocateMarketTier: "entry" },
+      })
+    );
+    const median = resolveRelocateHousing(
+      baseInput({
+        options: { scenario: "compare_all", relocateSurfaceSqm: 56, relocateMarketTier: "median" },
+      })
+    );
+    const high = resolveRelocateHousing(
+      baseInput({
+        options: { scenario: "compare_all", relocateSurfaceSqm: 56, relocateMarketTier: "high" },
+      })
+    );
+    expect(entry.targetPrice.amount).toBeLessThan(median.targetPrice.amount);
+    expect(median.targetPrice.amount).toBeLessThan(high.targetPrice.amount);
+  });
+
+  it("département hors zone élargie : la gamme applique des coefficients achat", () => {
+    const entry = resolveRelocateHousing(
+      baseInput({
+        postalCode: "44000",
+        options: { scenario: "compare_all", relocateSurfaceSqm: 56, relocateMarketTier: "entry" },
+      })
+    );
+    const median = resolveRelocateHousing(
+      baseInput({
+        postalCode: "44000",
+        options: { scenario: "compare_all", relocateSurfaceSqm: 56, relocateMarketTier: "median" },
+      })
+    );
+    const high = resolveRelocateHousing(
+      baseInput({
+        postalCode: "44000",
+        options: { scenario: "compare_all", relocateSurfaceSqm: 56, relocateMarketTier: "high" },
+      })
+    );
+    // 44 (Loire-Atlantique) — barème départemental nationwide
+    expect(entry.pricePerSqm).toBe(Math.round(3600 * 0.85));
+    expect(median.pricePerSqm).toBe(3600);
+    expect(high.pricePerSqm).toBe(Math.round(3600 * 1.25));
+    expect(entry.targetPrice.amount).toBeLessThan(median.targetPrice.amount);
+    expect(median.targetPrice.amount).toBeLessThan(high.targetPrice.amount);
+  });
+
+  it("utilise les prix zone injectés (DVF) de façon synchrone", () => {
+    const h = resolveRelocateHousing(
+      baseInput({
+        postalCode: "75011",
+        zoneMedianPricePerSqm: 10000,
+        zoneMinPricePerSqm: 8500,
+        zoneMaxPricePerSqm: 12500,
+        zonePriceSource: "dvf",
+        options: { scenario: "compare_all", relocateSurfaceSqm: 50, relocateMarketTier: "median" },
+      })
+    );
+    expect(h.pricePerSqm).toBe(10000);
+    expect(h.targetPrice.amount).toBe(500_000);
+    expect(h.note).toMatch(/DVF/);
+
+    const entry = resolveRelocateHousing(
+      baseInput({
+        postalCode: "75011",
+        zoneMedianPricePerSqm: 10000,
+        zoneMinPricePerSqm: 8500,
+        zoneMaxPricePerSqm: 12500,
+        zonePriceSource: "dvf",
+        options: { scenario: "compare_all", relocateSurfaceSqm: 50, relocateMarketTier: "entry" },
+      })
+    );
+    expect(entry.pricePerSqm).toBe(8500);
+  });
+
+  it("utilise les loyers zone injectés (Carte des loyers) de façon synchrone", () => {
+    const median = resolveRelocateHousing(
+      baseInput({
+        postalCode: "75011",
+        zoneRentMedianPerSqm: 31.72,
+        zoneRentMinPerSqm: 25.17,
+        zoneRentMaxPerSqm: 39.98,
+        zoneRentSource: "carte_loyers",
+        options: { scenario: "compare_all", relocateSurfaceSqm: 50, relocateMarketTier: "median" },
+      })
+    );
+    expect(median.tenantRentMonthly.amount).toBeCloseTo(31.72 * 50, 1);
+    expect(median.note).toMatch(/Carte des loyers/);
+
+    const entry = resolveRelocateHousing(
+      baseInput({
+        postalCode: "75011",
+        zoneRentMedianPerSqm: 31.72,
+        zoneRentMinPerSqm: 25.17,
+        zoneRentMaxPerSqm: 39.98,
+        zoneRentSource: "carte_loyers",
+        options: { scenario: "compare_all", relocateSurfaceSqm: 50, relocateMarketTier: "entry" },
+      })
+    );
+    expect(entry.tenantRentMonthly.amount).toBeCloseTo(25.17 * 50, 1);
+    expect(entry.tenantRentMonthly.amount).toBeLessThan(median.tenantRentMonthly.amount);
+  });
+
   it("clamp surface override", () => {
     expect(clampRelocateSurfaceSqm(10)).toBe(25);
     expect(clampRelocateSurfaceSqm(200)).toBe(150);

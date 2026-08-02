@@ -8,6 +8,7 @@ import { VerdictDot } from "./verdict-dot";
 interface PorteCardProps {
   porte: PortePresentation;
   onOpen: (doorId: DoorId) => void;
+  featured?: boolean;
   className?: string;
 }
 
@@ -17,7 +18,7 @@ const RELOCATE_DOT: Record<string, string> = {
   red: "bg-rose-500",
 };
 
-export function PorteCard({ porte, onOpen, className }: PorteCardProps) {
+export function PorteCard({ porte, onOpen, featured = false, className }: PorteCardProps) {
   const bilateral = porte.bilateral;
 
   return (
@@ -25,40 +26,62 @@ export function PorteCard({ porte, onOpen, className }: PorteCardProps) {
       type="button"
       onClick={() => onOpen(porte.doorId)}
       className={cn(
-        "group flex min-h-[280px] w-full flex-col rounded-2xl border border-slate-200/90 bg-white/40 p-6 text-left",
-        "transition-all duration-300 ease-out",
-        "hover:scale-[1.01] hover:border-slate-300 hover:bg-white/70",
+        "group relative flex w-full flex-col text-left",
+        "rounded-2xl border bg-white/50 transition-all duration-300 ease-out",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 focus-visible:ring-offset-2",
+        featured
+          ? "min-h-[220px] border-brand-300/80 bg-white/80 p-6 shadow-[0_8px_32px_rgba(0,111,199,0.08)] md:min-h-[260px] md:p-8"
+          : "min-h-[180px] border-slate-200/80 p-5 hover:border-slate-300 hover:bg-white/75 md:min-h-[220px] md:p-6",
+        "hover:scale-[1.01]",
         className
       )}
     >
+      {featured && (
+        <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-brand-600">
+          Piste à explorer en premier
+        </p>
+      )}
+
       <div className="flex items-start justify-between gap-3">
-        <h2 className="text-lg font-medium tracking-tight text-slate-900 md:text-xl">
+        <h3
+          className={cn(
+            "font-medium tracking-tight text-slate-900",
+            featured ? "text-xl md:text-2xl" : "text-base md:text-lg"
+          )}
+        >
           {porte.title}
-        </h2>
+        </h3>
         <VerdictDot verdict={porte.verdict} label={porte.verdictLabel} />
       </div>
 
-      {bilateral && bilateral.length === 2 ? (
-        <div className="flex flex-1 flex-col justify-center py-6">
-          <div className="grid grid-cols-2 gap-3">
+      {/* Mobile compact : montant principal + légende */}
+      <div className="mt-4 flex items-baseline justify-between gap-3 md:hidden">
+        <div>
+          <p className="text-3xl font-light tracking-tight text-slate-900">{porte.heroValue}</p>
+          <p className="mt-1 text-[11px] uppercase tracking-wider text-slate-400">
+            {porte.heroCaption}
+          </p>
+        </div>
+      </div>
+
+      {/* Desktop : bilatéral ou hero */}
+      <div className="mt-5 hidden flex-1 flex-col justify-center md:flex">
+        {bilateral && bilateral.length === 2 ? (
+          <div className="grid grid-cols-2 gap-0 divide-x divide-slate-200/80">
             {bilateral.map((side) => (
-              <div
-                key={side.personKey}
-                className="rounded-xl border border-slate-200/70 bg-white/50 px-3 py-4 text-center"
-              >
+              <div key={side.personKey} className="px-3 first:pl-0 last:pr-0">
                 <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
                   {side.personLabel}
                 </p>
-                <p className="mt-2 text-2xl font-light tracking-tight text-slate-900 md:text-3xl">
+                <p className="mt-1.5 text-2xl font-light tracking-tight text-slate-900">
                   {side.amount}
                 </p>
-                <p className="mt-1 text-[11px] text-slate-500">{side.caption}</p>
+                <p className="mt-1 text-[11px] leading-snug text-slate-500">{side.caption}</p>
                 {side.relocateLabel && (
-                  <p className="mt-3 flex items-center justify-center gap-1.5 text-[10px] text-slate-600">
+                  <p className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-600">
                     <span
                       className={cn(
-                        "inline-block h-1.5 w-1.5 rounded-full",
+                        "inline-block h-1.5 w-1.5 shrink-0 rounded-full",
                         RELOCATE_DOT[side.relocateVerdict ?? "orange"] ?? "bg-slate-400"
                       )}
                     />
@@ -68,19 +91,28 @@ export function PorteCard({ porte, onOpen, className }: PorteCardProps) {
               </div>
             ))}
           </div>
-        </div>
-      ) : (
-        <div className="flex flex-1 flex-col items-center justify-center py-8 text-center">
-          <p className="text-4xl font-light tracking-tight text-slate-900 md:text-5xl">
-            {porte.heroValue}
-          </p>
-          <p className="mt-2 text-xs font-medium uppercase tracking-wider text-slate-400">
-            {porte.heroCaption}
-          </p>
-        </div>
-      )}
+        ) : (
+          <div>
+            <p className="text-4xl font-light tracking-tight text-slate-900">{porte.heroValue}</p>
+            <p className="mt-1.5 text-xs font-medium uppercase tracking-wider text-slate-400">
+              {porte.heroCaption}
+            </p>
+          </div>
+        )}
+      </div>
 
-      <p className="text-sm leading-relaxed text-slate-600">{porte.consequence}</p>
+      <p
+        className={cn(
+          "mt-4 text-sm leading-relaxed text-slate-600",
+          !featured && "line-clamp-2 md:line-clamp-none"
+        )}
+      >
+        {porte.consequence}
+      </p>
+
+      <p className="mt-4 text-xs font-medium text-brand-700 opacity-0 transition-opacity duration-200 group-hover:opacity-100 md:mt-auto md:pt-4">
+        Affiner ce chemin →
+      </p>
     </button>
   );
 }

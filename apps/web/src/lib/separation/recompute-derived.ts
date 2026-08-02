@@ -3,7 +3,10 @@ import type { DerivedState, SeparationState } from "./separation-types";
 import { compileSimulationInput, isFootprintComplete } from "./compile-simulation-input";
 
 export function recomputeSeparationDerived(
-  state: Pick<SeparationState, "footprint" | "assumptions" | "lab">
+  state: Pick<SeparationState, "footprint" | "assumptions" | "lab"> & {
+    marketBuy?: SeparationState["marketBuy"];
+    marketRent?: SeparationState["marketRent"];
+  }
 ): DerivedState {
   if (!isFootprintComplete(state.footprint)) {
     return {

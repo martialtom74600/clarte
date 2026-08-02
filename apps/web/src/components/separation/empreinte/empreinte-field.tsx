@@ -17,11 +17,14 @@ interface EmpreinteFieldProps {
   onSubmit: () => void;
   hint?: string;
   whisper?: string;
+  /** Intention sous le titre (pourquoi on demande). */
+  description?: string;
   placeholder?: string;
   suffix?: string;
   autoFocus?: boolean;
   /** Si false, le bouton Continuer est désactivé. */
   canContinue?: boolean;
+  continueLabel?: string;
   /** Indicateur d'étape (ex. barre 1/6) rendu au-dessus du label. */
   progress?: ReactNode;
   onBack?: () => void;
@@ -145,6 +148,7 @@ export function EmpreinteStepNav({
   onContinue,
   canContinue = true,
   continueAlwaysEnabled = false,
+  continueLabel,
   className,
 }: {
   onBack?: () => void;
@@ -152,6 +156,8 @@ export function EmpreinteStepNav({
   canContinue?: boolean;
   /** Financement : le bouton reste cliquable, la validation s'exécute au clic. */
   continueAlwaysEnabled?: boolean;
+  /** Libellé du CTA (ex. « Voir les portes » à la dernière étape). */
+  continueLabel?: string;
   className?: string;
 }) {
   const continueDisabled = continueAlwaysEnabled ? false : !canContinue;
@@ -169,7 +175,7 @@ export function EmpreinteStepNav({
             : "text-slate-500 hover:text-brand-600"
         )}
       >
-        Continuer
+        {continueLabel ?? "Continuer"}
         <span
           className={cn(
             "ml-1 inline-block transition-transform",
@@ -226,10 +232,12 @@ export function EmpreinteField({
   onSubmit,
   hint,
   whisper,
+  description,
   placeholder,
   suffix,
   autoFocus = true,
   canContinue = true,
+  continueLabel,
   progress,
   onBack,
 }: EmpreinteFieldProps) {
@@ -262,7 +270,13 @@ export function EmpreinteField({
       className="mx-auto flex w-full max-w-xl flex-col items-center text-center"
     >
       {progress}
-      <p className="mb-10 text-sm font-medium tracking-wide text-slate-400">{label}</p>
+      <h1 className="mb-3 text-xl font-medium tracking-tight text-slate-800 md:text-2xl">
+        {label}
+      </h1>
+      {description && (
+        <p className="mb-10 max-w-sm text-sm text-slate-500">{description}</p>
+      )}
+      {!description && <div className="mb-10" />}
 
       <div className="relative w-full">
         <input
@@ -304,7 +318,12 @@ export function EmpreinteField({
 
       {hint && <p className="mt-4 text-xs text-slate-400">{hint}</p>}
 
-      <EmpreinteStepNav onBack={onBack} onContinue={() => onSubmit()} canContinue={canContinue} />
+      <EmpreinteStepNav
+        onBack={onBack}
+        onContinue={() => onSubmit()}
+        canContinue={canContinue}
+        continueLabel={continueLabel}
+      />
     </motion.div>
   );
 }

@@ -20,6 +20,8 @@ import {
   isPatrimoineValid,
   isRevenusValid,
   isScreenValid,
+  suggestedInitialMortgagePrincipal,
+  withSuggestedInitialPrincipal,
 } from "./empreinte-screens";
 import type { FootprintState } from "@/lib/separation/separation-types";
 import { parseCurrency } from "./empreinte-field";
@@ -35,8 +37,14 @@ describe("empreinte screens — pagination thématique", () => {
       "financement",
       "revenus",
     ]);
-    expect(EMPREINTE_SCREEN_LABELS.cadre_juridique).toBe("Cadre juridique");
-    expect(EMPREINTE_SCREEN_LABELS.revenus).toBe("Revenus");
+    expect(EMPREINTE_SCREEN_LABELS).toMatchObject({
+      location: "Lieu",
+      patrimoine: "Le bien",
+      cadre_juridique: "Propriété",
+      apports: "L'achat",
+      financement: "Le crédit",
+      revenus: "Revenus",
+    });
   });
 
   it("valide la localisation (CP à 5 chiffres)", () => {
@@ -103,15 +111,48 @@ describe("empreinte screens — pagination thématique", () => {
     ).toBe(false);
   });
 
-  it("accepte les apports vides ou ≥ 0", () => {
-    expect(isApportsValid(emptyEmpreinteDraft())).toBe(true);
+  it("exige le prix d'achat ; apports optionnels ≤ prix", () => {
+    expect(isApportsValid(emptyEmpreinteDraft())).toBe(false);
     expect(
-      isApportsValid(emptyEmpreinteDraft({ contributionA: "40 000", contributionB: "20 000" }))
+      isApportsValid(
+        emptyEmpreinteDraft({
+          purchasePrice: "380 000",
+          contributionA: "40 000",
+          contributionB: "20 000",
+        })
+      )
     ).toBe(true);
     expect(
-      isApportsValid(emptyEmpreinteDraft({ contributionA: undefined, contributionB: undefined }))
+      isApportsValid(emptyEmpreinteDraft({ purchasePrice: "380 000" }))
     ).toBe(true);
-    expect(isScreenValid("apports", emptyEmpreinteDraft())).toBe(true);
+    expect(
+      isApportsValid(
+        emptyEmpreinteDraft({
+          purchasePrice: "100 000",
+          contributionA: "80 000",
+          contributionB: "40 000",
+        })
+      )
+    ).toBe(false);
+  });
+
+  it("suggère le capital emprunté = prix d'achat − apports", () => {
+    const draft = emptyEmpreinteDraft({
+      purchasePrice: "380 000",
+      contributionA: "40 000",
+      contributionB: "20 000",
+    });
+    expect(suggestedInitialMortgagePrincipal(draft)).toBe(320_000);
+    expect(
+      parseCurrency(withSuggestedInitialPrincipal(draft).initialMortgagePrincipal)
+    ).toBe(320_000);
+    expect(
+      withSuggestedInitialPrincipal({
+        ...draft,
+        initialMortgagePrincipal: "300 000",
+      }).initialMortgagePrincipal
+    ).toBe("300 000");
+    expect(suggestedInitialMortgagePrincipal(emptyEmpreinteDraft())).toBe(0);
   });
 
   it("exige les deux revenus sur l'écran revenus", () => {
@@ -144,8 +185,17 @@ describe("empreinte screens — pagination thématique", () => {
     expect(isFinancementValidForMode(emptyEmpreinteDraft(), "no_credit")).toBe(true);
   });
 
-  it("présélectionne sans crédit sauf si l'estimation est déjà calculable", () => {
+  it("présélectionne estimation si prix d'achat connu, sinon sans crédit", () => {
     expect(inferFinancementUiMode(emptyEmpreinteDraft())).toBe("no_credit");
+    expect(
+      inferFinancementUiMode(
+        emptyEmpreinteDraft({
+          purchasePrice: "380 000",
+          contributionA: "40 000",
+          contributionB: "20 000",
+        })
+      )
+    ).toBe("estimate");
     expect(
       inferFinancementUiMode(emptyEmpreinteDraft({ financementNoCredit: "1" }))
     ).toBe("no_credit");
@@ -264,7 +314,9 @@ describe("empreinte screens — pagination thématique", () => {
     expect(
       getScreenValidationHint("revenus", emptyEmpreinteDraft({ incomeA: "3500", incomeB: "" }))
     ).toContain("autre");
-    expect(getScreenValidationHint("apports", emptyEmpreinteDraft())).toBeNull();
+    expect(getScreenValidationHint("apports", emptyEmpreinteDraft())).toContain(
+      "prix d'achat"
+    );
   });
 
   it("reprend à l'écran revenus si tout est rempli sauf validation finale", () => {

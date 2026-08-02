@@ -46,6 +46,8 @@ function state(overrides: Partial<SeparationState> = {}): SeparationState {
     footprint: baseFootprint,
     assumptions: defaultAssumptions(),
     lab: defaultLabState(),
+    marketBuy: null,
+    marketRent: null,
     derived: {
       lastInput: null,
       lastResult: null,

@@ -1,23 +1,34 @@
-/** Loyers indicatifs €/m²/mois par département (barème interne 2026). */
-const RENT_PER_SQM_BY_DEPT: Record<string, number> = {
-  "75": 22,
-  "92": 18,
-  "93": 16,
-  "94": 17,
-  "69": 14,
-  "13": 16,
-  "33": 13,
-  "06": 18,
+import { deptFromPostal } from "./market-prices.js";
+
+/**
+ * Loyers indicatifs €/m²/mois appartements par département.
+ * Fallback si Carte des loyers ANIL indisponible — ordres de grandeur 2025/2026.
+ */
+export const RENT_PER_SQM_BY_DEPT: Record<string, number> = {
+  "01": 12.5, "02": 11, "03": 10.5, "04": 11.5, "05": 12.5, "06": 19,
+  "07": 11, "08": 10.5, "09": 10.5, "10": 11.5, "11": 11.5, "12": 11,
+  "13": 16.5, "14": 13.5, "15": 10.5, "16": 11, "17": 13.5, "18": 11,
+  "19": 11, "2A": 15, "2B": 14, "21": 12.5, "22": 12, "23": 10,
+  "24": 11, "25": 12, "26": 12, "27": 12, "28": 12, "29": 12,
+  "30": 12.5, "31": 13.5, "32": 11, "33": 14, "34": 14, "35": 13.5,
+  "36": 10.5, "37": 12.5, "38": 13, "39": 11.5, "40": 13, "41": 12,
+  "42": 11.5, "43": 10.5, "44": 13.5, "45": 12.5, "46": 11, "47": 11,
+  "48": 10.5, "49": 12, "50": 12, "51": 12, "52": 10.5, "53": 11,
+  "54": 11.5, "55": 10.5, "56": 12, "57": 12, "58": 10.5, "59": 13,
+  "60": 13, "61": 11, "62": 12, "63": 11.5, "64": 13.5, "65": 11,
+  "66": 12, "67": 13.5, "68": 12.5, "69": 14.5, "70": 10.5, "71": 11,
+  "72": 11.5, "73": 14, "74": 16, "75": 28, "76": 13, "77": 15,
+  "78": 18, "79": 11, "80": 12, "81": 11, "82": 11, "83": 15,
+  "84": 13, "85": 12.5, "86": 11.5, "87": 11, "88": 11, "89": 11,
+  "90": 12, "91": 16, "92": 22, "93": 18, "94": 19, "95": 16,
+  "971": 14, "972": 14.5, "973": 13, "974": 13.5, "976": 12,
   default: 11,
 };
 
-function deptFromPostal(postalCode: string): string {
-  if (!postalCode || postalCode.length < 2) return "default";
-  if (postalCode.startsWith("20")) return "2A";
-  return postalCode.slice(0, 2);
+export function rentPerSqmForDept(dept: string): number {
+  return RENT_PER_SQM_BY_DEPT[dept] ?? RENT_PER_SQM_BY_DEPT.default;
 }
 
 export function rentPerSqm(postalCode: string): number {
-  const dept = deptFromPostal(postalCode);
-  return RENT_PER_SQM_BY_DEPT[dept] ?? RENT_PER_SQM_BY_DEPT.default;
+  return rentPerSqmForDept(deptFromPostal(postalCode));
 }

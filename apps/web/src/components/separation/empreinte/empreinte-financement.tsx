@@ -11,16 +11,20 @@ import {
 import { FinancementModeOption } from "./empreinte-financement-card";
 import type { EmpreinteDraft } from "./empreinte-screens";
 import {
+  EMPREINTE_SCREEN_INTENTS,
   inferFinancementUiMode,
   isFinancementValidForMode,
+  suggestedInitialMortgagePrincipal,
+  withSuggestedInitialPrincipal,
   type FinancementUiMode,
 } from "./empreinte-screens";
+import { parseCurrency } from "./empreinte-field";
 import {
   getFinancementEstimateMissingFields,
   normalizeMortgageStartDate,
   sanitizeMortgageStartDate,
 } from "./empreinte-amortization";
-import { cn } from "@/lib/utils";
+import { cn, formatEuro } from "@/lib/utils";
 import type { FootprintState } from "@/lib/separation/separation-types";
 import { EmpreinteRecap } from "./empreinte-recap";
 
@@ -36,8 +40,9 @@ type EstimateFormState = Pick<
 >;
 
 function estimateFormFromDraft(draft: EmpreinteDraft): EstimateFormState {
+  const seeded = withSuggestedInitialPrincipal(draft);
   return {
-    initialMortgagePrincipal: draft.initialMortgagePrincipal ?? "",
+    initialMortgagePrincipal: seeded.initialMortgagePrincipal ?? "",
     mortgageStartDate: draft.mortgageStartDate ?? "",
     initialMortgageDurationYears: draft.initialMortgageDurationYears ?? "",
     initialMortgageRate: draft.initialMortgageRate ?? "",
@@ -75,11 +80,11 @@ function buildMergedDraft(
 }
 
 const MODES: { id: FinancementMode; icon: typeof Home; title: string }[] = [
-  { id: "no_credit", icon: Home, title: "Je n'ai plus de crédit immobilier" },
+  { id: "no_credit", icon: Home, title: "Plus de crédit immobilier" },
   {
     id: "estimate",
     icon: History,
-    title: "Je me souviens de mon emprunt — on estime le reste à payer.",
+    title: "Encore un crédit — on estime le reste à payer",
   },
 ];
 
@@ -120,6 +125,11 @@ export function EmpreinteFinancementScreen({
   const [estimateForm, setEstimateForm] = useState<EstimateFormState>(() => estimateFormFromDraft(draft));
   const [continueError, setContinueError] = useState<string | null>(null);
 
+  const suggestedPrincipal = suggestedInitialMortgagePrincipal(draft);
+  const principalIsSuggested =
+    suggestedPrincipal > 0 &&
+    parseCurrency(estimateForm.initialMortgagePrincipal) === suggestedPrincipal;
+
   const mergedPreview = useMemo(
     () => buildMergedDraft(draft, activeMode, estimateForm),
     [draft, activeMode, estimateForm]
@@ -131,7 +141,12 @@ export function EmpreinteFinancementScreen({
   }, [mergedPreview, activeMode]);
 
   useLayoutEffect(() => {
-    onDraftChange(draftPatchForMode(activeMode, draft));
+    const seeded = estimateFormFromDraft(draft);
+    setEstimateForm(seeded);
+    onDraftChange({
+      ...draftPatchForMode(activeMode, draft),
+      ...(activeMode === "estimate" ? seeded : {}),
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -139,8 +154,19 @@ export function EmpreinteFinancementScreen({
     setContinueError(null);
     setActiveMode(mode);
     if (mode === "estimate") {
-      // Réinjecte le formulaire local au draft parent (survit à Retour).
-      onDraftChange({ ...draftPatchForMode(mode, draft), ...estimateForm });
+      // Réinjecte le formulaire local ; préremplit le capital si encore vide.
+      const seeded = {
+        ...estimateForm,
+        initialMortgagePrincipal:
+          estimateForm.initialMortgagePrincipal.trim() !== ""
+            ? estimateForm.initialMortgagePrincipal
+            : withSuggestedInitialPrincipal({
+                ...draft,
+                initialMortgagePrincipal: "",
+              }).initialMortgagePrincipal,
+      };
+      setEstimateForm(seeded);
+      onDraftChange({ ...draftPatchForMode(mode, draft), ...seeded });
     } else {
       onDraftChange(draftPatchForMode(mode, draft));
     }
@@ -209,9 +235,10 @@ export function EmpreinteFinancementScreen({
     >
       {progress}
 
-      <h1 className="mb-8 text-xl font-medium tracking-tight text-slate-800 md:text-2xl">
-        Le financement
+      <h1 className="mb-3 text-xl font-medium tracking-tight text-slate-800 md:text-2xl">
+        Le crédit
       </h1>
+      <p className="mb-8 max-w-sm text-sm text-slate-500">{EMPREINTE_SCREEN_INTENTS.financement}</p>
 
       <div className="mb-6 w-full text-left">
         {MODES.map((mode) => (
@@ -234,7 +261,7 @@ export function EmpreinteFinancementScreen({
               className="overflow-hidden"
             >
               <p className="mb-2 w-full py-1 text-sm text-slate-500">
-                Parfait — le bilan de votre bien s&apos;affiche ci-dessous.
+                Bien — on part sur un logement sans mensualité de crédit.
               </p>
             </motion.div>
           )}
@@ -253,7 +280,13 @@ export function EmpreinteFinancementScreen({
                   value={estimateForm.initialMortgagePrincipal}
                   onChange={(v) => updateEstimateField("initialMortgagePrincipal", v)}
                   placeholder="350 000"
-                  hint="Montant du prêt, pas le prix d'achat si vous aviez un apport."
+                  hint={
+                    principalIsSuggested
+                      ? `Prérempli : prix d'achat − apports (${formatEuro(suggestedPrincipal)}). Ajustez si le prêt incluait les frais de notaire.`
+                      : suggestedPrincipal > 0
+                        ? `Suggestion disponible : ${formatEuro(suggestedPrincipal)} (prix d'achat − apports).`
+                        : "Montant du prêt, pas le prix d'achat si vous aviez un apport."
+                  }
                   autoFocus
                 />
 
@@ -349,8 +382,7 @@ export function EmpreinteFinancementScreen({
       <motion.div layout transition={spring.soft}>
         {!canContinueLocal && activeMode === "estimate" && !continueError && (
           <p className="mb-3 max-w-sm text-xs leading-relaxed text-slate-400">
-            Complétez le capital, la date (MM/AAAA), la durée et le taux — ou choisissez « Je
-            n&apos;ai plus de crédit immobilier ».
+            Il reste la date (MM/AAAA), la durée et le taux — ou choisissez « Plus de crédit ».
           </p>
         )}
         {continueError && (

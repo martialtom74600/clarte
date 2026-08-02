@@ -15,6 +15,7 @@ import { duration, ease } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { useSeparationStore } from "@/store/separation-store";
 import { useSeparationHydrated } from "@/lib/separation/use-separation-hydrated";
+import { useMarketBuySync } from "@/lib/market/use-market-buy-sync";
 import {
   EmpreinteField,
   EmpreinteFormRow,
@@ -25,6 +26,7 @@ import {
 import {
   EMPREINTE_SCREENS,
   EMPREINTE_SCREEN_COUNT,
+  EMPREINTE_SCREEN_INTENTS,
   EMPREINTE_SCREEN_LABELS,
   EMPREINTE_STEP_KEY,
   footprintToDraft,
@@ -83,14 +85,25 @@ function EmpreinteProgress({ screenId }: { screenId: EmpreinteScreenId }) {
   );
 }
 
-async function fetchDvfHint(postalCode: string, surface: number): Promise<string | null> {
+async function fetchDvfEstimate(
+  postalCode: string,
+  surface: number
+): Promise<{ estimatedValue: number; label: string } | null> {
   try {
     const sqm = surface > 0 ? surface : 65;
     const res = await fetch(`/api/dvf?postalCode=${postalCode}&surface=${sqm}`);
     if (!res.ok) return null;
-    const data = (await res.json()) as { estimate?: number };
-    if (!data.estimate) return null;
-    return `~${Math.round(data.estimate).toLocaleString("fr-FR")} € dans votre zone (${sqm} m²)`;
+    const data = (await res.json()) as {
+      estimatedValue?: number;
+      source?: string;
+    };
+    if (!data.estimatedValue) return null;
+    const rounded = Math.round(data.estimatedValue);
+    const tag = data.source === "fallback" ? "indicatif" : "DVF";
+    return {
+      estimatedValue: rounded,
+      label: `~${rounded.toLocaleString("fr-FR")} € dans votre zone (${sqm} m² · ${tag})`,
+    };
   } catch {
     return null;
   }
@@ -99,20 +112,24 @@ async function fetchDvfHint(postalCode: string, surface: number): Promise<string
 function ScreenChrome({
   screenKey,
   title,
+  subtitle,
   children,
   canContinue,
   onContinue,
   whisper,
+  whisperAction,
   validationHint,
   progress,
   onBack,
 }: {
   screenKey: string;
   title: string;
+  subtitle?: string;
   children: ReactNode;
   canContinue: boolean;
   onContinue: () => void;
   whisper?: string;
+  whisperAction?: { label: string; onClick: () => void };
   validationHint?: string;
   progress?: ReactNode;
   onBack?: () => void;
@@ -137,20 +154,31 @@ function ScreenChrome({
       onKeyDown={handleKeyDown}
     >
       {progress}
-      <h1 className="mb-10 text-xl font-medium tracking-tight text-slate-800 md:text-2xl">
+      <h1 className="mb-3 text-xl font-medium tracking-tight text-slate-800 md:text-2xl">
         {title}
       </h1>
+      {subtitle && <p className="mb-10 max-w-sm text-sm text-slate-500">{subtitle}</p>}
+      {!subtitle && <div className="mb-10" />}
 
-      <div className="flex w-full flex-col gap-8">{children}</div>
+      <div className="flex w-full flex-col gap-8 text-left">{children}</div>
 
       {whisper && (
-        <motion.p
+        <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="mt-8 text-sm text-slate-500"
+          className="mt-8 flex w-full flex-col items-center gap-2"
         >
-          {whisper}
-        </motion.p>
+          <p className="text-sm text-slate-500">{whisper}</p>
+          {whisperAction && (
+            <button
+              type="button"
+              onClick={whisperAction.onClick}
+              className="text-sm font-medium text-brand-600 transition-colors hover:text-brand-700"
+            >
+              {whisperAction.label}
+            </button>
+          )}
+        </motion.div>
       )}
 
       {!canContinue && validationHint && (
@@ -178,6 +206,7 @@ function mergeDraftOverride(
 
 function EmpreinteFlow() {
   const router = useRouter();
+  useMarketBuySync();
   const footprint = useSeparationStore((s) => s.footprint);
   const setFootprintField = useSeparationStore((s) => s.setFootprintField);
   const setFinancementFootprint = useSeparationStore((s) => s.setFinancementFootprint);
@@ -188,7 +217,10 @@ function EmpreinteFlow() {
 
   const [screen, setScreen] = useState(() => inferEmpreinteScreen(footprint));
   const [draft, setDraft] = useState<EmpreinteDraft>(() => footprintToDraft(footprint));
-  const [dvfHint, setDvfHint] = useState<string | null>(null);
+  const [dvfEstimate, setDvfEstimate] = useState<{
+    estimatedValue: number;
+    label: string;
+  } | null>(null);
   const [dvfLoading, setDvfLoading] = useState(false);
 
   useEffect(() => {
@@ -214,17 +246,15 @@ function EmpreinteFlow() {
     ).replace(/\D/g, "");
     const surface = parseNumber(draft.propertySurface) || footprint.propertySurface;
     if (postal.length !== 5 || surface <= 0) {
-      setDvfHint(null);
+      setDvfEstimate(null);
       setDvfLoading(false);
       return;
     }
     let cancelled = false;
     setDvfLoading(true);
-    void fetchDvfHint(postal, surface).then((hint) => {
-      if (cancelled) {
-        return;
-      }
-      setDvfHint(hint);
+    void fetchDvfEstimate(postal, surface).then((estimate) => {
+      if (cancelled) return;
+      setDvfEstimate(estimate);
       setDvfLoading(false);
     });
     return () => {
@@ -287,11 +317,14 @@ function EmpreinteFlow() {
 
       const contribA = parseCurrency(merged.contributionA ?? "") || footprint.contributionA;
       const contribB = parseCurrency(merged.contributionB ?? "") || footprint.contributionB;
+      const explicitPurchase = parseCurrency(merged.purchasePrice ?? "");
+      // Prix saisi aux apports prioritaire ; sinon reconstitution prêt + apports.
       const purchasePrice =
-        resolved.initialMortgagePrincipal > 0
-          ? resolved.initialMortgagePrincipal + contribA + contribB
-          : contribA + contribB;
-      // Toujours écrire (y compris 0) pour ne pas laisser un prix d'achat stale.
+        explicitPurchase > 0
+          ? explicitPurchase
+          : resolved.initialMortgagePrincipal > 0
+            ? resolved.initialMortgagePrincipal + contribA + contribB
+            : contribA + contribB;
       setFootprintField("purchasePrice", purchasePrice);
 
       if (resolved.mortgageRemaining === 0) {
@@ -344,6 +377,7 @@ function EmpreinteFlow() {
     }
 
     if (screenId === "apports") {
+      setFootprintField("purchasePrice", parseCurrency(activeDraft.purchasePrice ?? ""));
       setFootprintField("contributionA", parseCurrency(activeDraft.contributionA ?? ""));
       setFootprintField("contributionB", parseCurrency(activeDraft.contributionB ?? ""));
       setFootprintField("apportsDeclared", true);
@@ -371,12 +405,13 @@ function EmpreinteFlow() {
     body = (
       <EmpreinteField
         stepKey="location"
-        label="Où est le bien ?"
+        label="Où se trouve le bien ?"
+        description={EMPREINTE_SCREEN_INTENTS.location}
         type="postal"
         value={draft.postalCode}
         onChange={(v) => updateField("postalCode", v)}
         onSubmit={() => goNext()}
-        placeholder="75011"
+        placeholder="74600"
         canContinue={canContinue}
         hint={validationHint ?? undefined}
         progress={progress}
@@ -390,6 +425,7 @@ function EmpreinteFlow() {
         onDraftChange={patchDraft}
         onContinue={() => goNext()}
         canContinue={canContinue}
+        validationHint={validationHint ?? undefined}
         onBack={handleBack}
         progress={progress}
       />
@@ -407,13 +443,35 @@ function EmpreinteFlow() {
       />
     );
   } else if (screenId === "patrimoine") {
+    const currentValue = parseCurrency(draft.propertyValue);
+    const canApplyDvf =
+      dvfEstimate != null &&
+      dvfEstimate.estimatedValue > 0 &&
+      currentValue !== dvfEstimate.estimatedValue;
     body = (
       <ScreenChrome
         screenKey="patrimoine"
-        title="Le patrimoine"
+        title="Le bien aujourd'hui"
+        subtitle={EMPREINTE_SCREEN_INTENTS.patrimoine}
         canContinue={canContinue}
         onContinue={() => goNext()}
-        whisper={dvfLoading ? "Estimation locale en cours…" : (dvfHint ?? undefined)}
+        whisper={
+          dvfLoading
+            ? "Estimation locale en cours…"
+            : (dvfEstimate?.label ?? undefined)
+        }
+        whisperAction={
+          canApplyDvf
+            ? {
+                label: "Utiliser cette estimation",
+                onClick: () =>
+                  updateField(
+                    "propertyValue",
+                    dvfEstimate.estimatedValue.toLocaleString("fr-FR")
+                  ),
+              }
+            : undefined
+        }
         validationHint={validationHint ?? undefined}
         onBack={handleBack}
         progress={progress}
@@ -426,6 +484,7 @@ function EmpreinteFlow() {
           onChange={(v) => updateField("propertySurface", v)}
           placeholder="65"
           suffix="m²"
+          hint="Celle du bien actuel — pas le futur logement solo."
           autoFocus
         />
         <EmpreinteFormRow
@@ -435,6 +494,7 @@ function EmpreinteFlow() {
           value={draft.propertyValue}
           onChange={(v) => updateField("propertyValue", v)}
           placeholder="400 000"
+          hint="Prix de vente réaliste aujourd'hui, pas le prix d'achat."
         />
       </ScreenChrome>
     );

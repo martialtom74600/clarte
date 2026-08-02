@@ -48,10 +48,13 @@ export {
 export type { CompensatoryAllowanceEstimate } from "./compensatory-allowance.js";
 export {
   PRICE_PER_SQM_BY_DEPT,
+  DEPT_SAMPLE_POSTALS,
   pricePerSqmForDept,
   pricePerSqmForPostal,
   deptFromPostal,
+  samplePostalsForDept,
 } from "./market-prices.js";
+export { RENT_PER_SQM_BY_DEPT, rentPerSqmForDept } from "./market-rents.js";
 export { computeRecompenseAmount } from "./soulte-core.js";
 export { BANK_KEEP_LOAN_DISCLAIMER } from "./simulator.js";
 export type { ContributionMode } from "./soulte-core.js";
@@ -70,6 +73,8 @@ export {
   defaultRelocateSurfaceSqm,
   clampRelocateSurfaceSqm,
   relocateTierLabel,
+  buyPriceBandFromMedian,
+  BUY_TIER_COEFF,
 } from "./relocate-housing.js";
 export type { RelocateHousingResult } from "./relocate-housing.js";
 export {

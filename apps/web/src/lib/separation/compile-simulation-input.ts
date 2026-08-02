@@ -206,9 +206,12 @@ function resolveMortgageDurationYears(
 
 /** Fusion footprint + assumptions + leviers actifs → SimulationInput moteur. */
 export function compileSimulationInput(
-  state: Pick<SeparationState, "footprint" | "assumptions" | "lab">
+  state: Pick<SeparationState, "footprint" | "assumptions" | "lab"> & {
+    marketBuy?: SeparationState["marketBuy"];
+    marketRent?: SeparationState["marketRent"];
+  }
 ): SimulationInput {
-  const { footprint, lab } = state;
+  const { footprint, lab, marketBuy = null, marketRent = null } = state;
   const assumptionsFromFootprint = applyFootprintAssumptions(footprint, state.assumptions);
   const merged = mergeAssumptionsWithLevers(assumptionsFromFootprint, lab, footprint);
   const { assets, liabilities } = buildAssetsAndLiabilities(footprint, merged);
@@ -285,6 +288,26 @@ export function compileSimulationInput(
     custodyType: childrenActive ? lab.overrides.children_impact!.custodyType : undefined,
     postalCode: footprint.postalCode,
     propertySurface: surface,
+    ...(marketBuy &&
+    marketBuy.postalCode === footprint.postalCode &&
+    marketBuy.medianPricePerSqm > 0
+      ? {
+          zoneMedianPricePerSqm: marketBuy.medianPricePerSqm,
+          zoneMinPricePerSqm: marketBuy.minPricePerSqm,
+          zoneMaxPricePerSqm: marketBuy.maxPricePerSqm,
+          zonePriceSource: marketBuy.source,
+        }
+      : {}),
+    ...(marketRent &&
+    marketRent.postalCode === footprint.postalCode &&
+    marketRent.medianRentPerSqm > 0
+      ? {
+          zoneRentMedianPerSqm: marketRent.medianRentPerSqm,
+          zoneRentMinPerSqm: marketRent.minRentPerSqm,
+          zoneRentMaxPerSqm: marketRent.maxRentPerSqm,
+          zoneRentSource: marketRent.source,
+        }
+      : {}),
     contributionA: contributionsActive
       ? merged.contributionA
       : footprint.completedAt

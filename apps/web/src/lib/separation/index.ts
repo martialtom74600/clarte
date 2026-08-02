@@ -3,6 +3,8 @@ export type {
   AssumptionsState,
   LabState,
   DerivedState,
+  MarketBuyState,
+  MarketRentState,
   SeparationState,
   LeverOverrides,
   FootprintField,
@@ -20,6 +22,9 @@ export {
   buildAllPortes,
   buildPortePresentation,
   DOOR_ORDER,
+  PORTE_GROUPS,
+  groupPortes,
+  pickFeaturedDoorId,
   isValidDoorId,
 } from "./porte-presenter";
-export type { PortePresentation } from "./porte-presenter";
+export type { PortePresentation, PorteGroup } from "./porte-presenter";

@@ -43,6 +43,8 @@ describe("export-bilan-model", () => {
     footprint,
     assumptions: defaultAssumptions(),
     lab: { ...defaultLabState(), activeDoor: "keep_a" as const },
+    marketBuy: null,
+    marketRent: null,
     derived: { lastInput: null, lastResult: null, doorVerdicts: null, computedAt: null },
     discreteMode: false,
   };

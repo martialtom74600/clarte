@@ -4,9 +4,10 @@ import { cn, formatEuro } from "@/lib/utils";
 import type { LabLedgerModel, LedgerLine } from "@/lib/separation/lab-ledger-model";
 import {
   groupLedgerLines,
-  LEDGER_SECTION_META,
+  resolveLedgerSectionMeta,
   type LedgerSectionId,
 } from "@/lib/separation/lab-ledger-sections";
+import type { DoorId } from "@separation/schemas";
 import {
   debtThresholdMessage,
   formatVerdictLabel,
@@ -44,11 +45,13 @@ function ExportLedgerRow({ line }: { line: LedgerLine }) {
 function ExportLedgerSection({
   sectionId,
   lines,
+  doorId,
 }: {
   sectionId: LedgerSectionId;
   lines: LedgerLine[];
+  doorId: DoorId;
 }) {
-  const meta = LEDGER_SECTION_META[sectionId];
+  const meta = resolveLedgerSectionMeta(sectionId, doorId);
 
   return (
     <div className={cn(styles.ledgerSection, styles[`ledgerSection_${sectionId}`])}>
@@ -78,7 +81,12 @@ export function ExportLedgerDocument({ ledger }: { ledger: LabLedgerModel }) {
       )}
 
       {groups.map((group) => (
-        <ExportLedgerSection key={group.sectionId} sectionId={group.sectionId} lines={group.lines} />
+        <ExportLedgerSection
+          key={group.sectionId}
+          sectionId={group.sectionId}
+          lines={group.lines}
+          doorId={ledger.doorId}
+        />
       ))}
 
       {(ledger.footer || ledger.contextNote || ledger.warningNote) && (

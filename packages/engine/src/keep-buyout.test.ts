@@ -44,10 +44,10 @@ function createInput(overrides: Partial<SimulationInput> = {}): SimulationInput 
 
 describe("computeOccupationIndemnity", () => {
   it("calcule (loyer / 2) × mois", () => {
-    // Paris 65 m² → 22 × 65 = 1430 → demi = 715 → × 8 = 5720
+    // Paris 65 m² → barème 75 × 65 → demi × 8 mois
     const rent = rentPerSqm("75011") * 65;
-    expect(rent).toBe(1430);
-    expect(computeOccupationIndemnity(rent, 8)).toBe(5720);
+    expect(rent).toBe(28 * 65);
+    expect(computeOccupationIndemnity(rent, 8)).toBe((28 * 65) / 2 * 8);
     expect(computeOccupationIndemnity(rent, 0)).toBe(0);
   });
 });

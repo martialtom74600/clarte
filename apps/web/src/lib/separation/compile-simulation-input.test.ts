@@ -43,6 +43,8 @@ function baseState(overrides: Partial<SeparationState> = {}): SeparationState {
     footprint: completeFootprint,
     assumptions: defaultAssumptions(),
     lab: defaultLabState(),
+    marketBuy: null,
+    marketRent: null,
     derived: {
       lastInput: null,
       lastResult: null,
@@ -119,6 +121,47 @@ describe("isFootprintComplete", () => {
 });
 
 describe("compileSimulationInput", () => {
+  it("injecte les prix zone DVF quand marketBuy correspond au CP", () => {
+    const input = compileSimulationInput(
+      baseState({
+        marketBuy: {
+          postalCode: "75011",
+          medianPricePerSqm: 9800,
+          minPricePerSqm: 8330,
+          maxPricePerSqm: 12_250,
+          source: "dvf",
+          transactionCount: 40,
+          fetchedAt: Date.now(),
+        },
+      })
+    );
+    expect(input.zoneMedianPricePerSqm).toBe(9800);
+    expect(input.zoneMinPricePerSqm).toBe(8330);
+    expect(input.zoneMaxPricePerSqm).toBe(12_250);
+    expect(input.zonePriceSource).toBe("dvf");
+  });
+
+  it("injecte les loyers zone quand marketRent correspond au CP", () => {
+    const input = compileSimulationInput(
+      baseState({
+        marketRent: {
+          postalCode: "75011",
+          communeCode: "75111",
+          communeName: "Paris 11e",
+          medianRentPerSqm: 31.72,
+          minRentPerSqm: 25.17,
+          maxRentPerSqm: 39.98,
+          source: "carte_loyers",
+          fetchedAt: Date.now(),
+        },
+      })
+    );
+    expect(input.zoneRentMedianPerSqm).toBe(31.72);
+    expect(input.zoneRentMinPerSqm).toBe(25.17);
+    expect(input.zoneRentMaxPerSqm).toBe(39.98);
+    expect(input.zoneRentSource).toBe("carte_loyers");
+  });
+
   it("compile l'empreinte avec hypothèses standard (concubinage 50/50)", () => {
     const input = compileSimulationInput(baseState());
     expect(input.status).toBe("concubinage");
@@ -129,6 +172,7 @@ describe("compileSimulationInput", () => {
     expect(input.assets[0]?.purchasePrice?.amount).toBe(320000);
     expect(input.contributionA).toBeUndefined();
     expect(input.contributionB).toBeUndefined();
+    expect(input.zoneMedianPricePerSqm).toBeUndefined();
     expect(input.assets[0].ownership).toEqual({
       kind: "indivision",
       shares: { A: 0.5, B: 0.5 },

@@ -29,8 +29,29 @@ function createTestSeparationStore() {
     setFootprintField: (field, value) => {
       set((state) => {
         const footprint = { ...state.footprint, [field]: value };
-        return withRecompute({ footprint }, { ...state, footprint });
+        const marketBuy =
+          field === "postalCode" &&
+          String(value) !== (state.marketBuy?.postalCode ?? "")
+            ? null
+            : state.marketBuy;
+        const marketRent =
+          field === "postalCode" &&
+          String(value) !== (state.marketRent?.postalCode ?? "")
+            ? null
+            : state.marketRent;
+        return withRecompute(
+          { footprint, marketBuy, marketRent },
+          { ...state, footprint, marketBuy, marketRent }
+        );
       });
+    },
+
+    setMarketBuy: (marketBuy) => {
+      set((state) => withRecompute({ marketBuy }, { ...state, marketBuy }));
+    },
+
+    setMarketRent: (marketRent) => {
+      set((state) => withRecompute({ marketRent }, { ...state, marketRent }));
     },
 
     completeFootprint: () => {

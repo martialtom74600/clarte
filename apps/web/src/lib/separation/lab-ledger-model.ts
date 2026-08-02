@@ -611,26 +611,15 @@ function buildSellLedger(
 
   if (asRent) {
     if (tenantRent > 0) {
-      lines.push(
-        {
-          id: "tenant-rent",
-          label: `Loyer cible solo (${housingNote.replace(/^Cible solo ~/, "")})`,
-          amount: tenantRent,
-          tone: "neutral",
-          suffix: "/mois",
-          sectionId: "relogement",
-          hint: "Hypothèse de location après séparation — pas le même bien",
-        },
-        {
-          id: "monthly-balance",
-          label: "Loyer estimé pour vous",
-          amount: tenantRent,
-          tone: "neutral",
-          suffix: "/mois",
-          sectionId: "mensuel",
-          hint: "Charge locative de référence après vente — sans nouveau crédit immobilier",
-        }
-      );
+      lines.push({
+        id: "tenant-rent",
+        label: `Loyer cible solo (${housingNote.replace(/^Cible solo ~/, "")})`,
+        amount: tenantRent,
+        tone: "neutral",
+        suffix: "/mois",
+        sectionId: "relogement",
+        hint: "Hypothèse de location après séparation — pas le même bien",
+      });
     }
   } else if (relocateTargetAmount > 0) {
     lines.push({
@@ -660,41 +649,19 @@ function buildSellLedger(
     });
     if (relocatePaymentYou) lines.push(relocatePaymentYou);
     if (relocatePaymentOther) lines.push(relocatePaymentOther);
-
-    const monthlyYou = relocatePaymentYou?.amount ?? 0;
-    if (monthlyYou > 0) {
-      lines.push({
-        id: "monthly-balance",
-        label: "Mensualité estimée pour vous reloger",
-        amount: monthlyYou,
-        tone: "neutral",
-        suffix: "/mois",
-        sectionId: "mensuel",
-        hint: "Simulation de prêt pour un logement solo dans votre zone",
-      });
-    }
   }
 
   const pension = childSupportLine(footprint, lab);
   if (pension) lines.push(pension);
 
   const relocateVerdict = sell?.relocateVerdictByPerson;
+  // Footer allégé : chiffres déjà dans le ledger, verdict dans contextNote.
   const footerParts = [
     sell?.capitalGainsNote,
     housingNote,
-    relocateVerdict
-      ? asRent
-        ? `Location solo — Vous : ${formatAffordabilityVerdictLabel(relocateVerdict.A)} · Autre : ${formatAffordabilityVerdictLabel(relocateVerdict.B)}.`
-        : `Relogement solo (rachat) — Vous : ${formatAffordabilityVerdictLabel(relocateVerdict.A)} · Autre : ${formatAffordabilityVerdictLabel(relocateVerdict.B)}.`
-      : null,
-    asRent && tenantRent > 0
-      ? `Loyer cible ~${Math.round(tenantRent).toLocaleString("fr-FR")} €/mois.`
-      : !asRent && relocateTargetAmount > 0
-        ? `Cible rachat ~${Math.round(relocateTargetAmount).toLocaleString("fr-FR")} €.`
-        : null,
     negativeEquity
       ? `Dette résiduelle ~${Math.round(Math.abs(saleNet)).toLocaleString("fr-FR")} € à partager.`
-      : `Produit net partagé — Vous : ${Math.round(you).toLocaleString("fr-FR")} € · Autre : ${Math.round(other).toLocaleString("fr-FR")} €.`,
+      : null,
   ].filter(Boolean);
 
   const contextNote = asRent
@@ -841,15 +808,6 @@ function buildRentLedger(
       hint: "Loyer − charges − impôts",
     },
     {
-      id: "monthly-balance",
-      label: "Solde mensuel locatif",
-      amount: netRounded,
-      tone: "total",
-      suffix: "/mois",
-      sectionId: "mensuel",
-      hint: "Ce qu'il reste après crédit, charges et impôts sur le loyer",
-    },
-    {
       id: "relocate-target",
       label: "Prix cible d'un logement solo dans votre zone",
       amount: relocateTargetAmount,
@@ -897,9 +855,9 @@ function buildRentLedger(
   const pension = childSupportLine(footprint, lab);
   if (pension) lines.push(pension);
 
+  // Footer allégé : le verdict est déjà en tête du ledger.
   const footerParts = [
     scenario?.rentOutFormulaDetail,
-    verdict?.headline,
     input.postalCode ? `Zone ${input.postalCode} · ${footprint.propertySurface} m²` : null,
   ].filter(Boolean);
 

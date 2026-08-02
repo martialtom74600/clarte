@@ -3,7 +3,7 @@
 import { motion, useReducedMotion } from "framer-motion";
 import { duration, ease } from "@/lib/motion";
 import { EmpreinteFormRow, EmpreinteStepNav } from "./empreinte-field";
-import type { EmpreinteDraft } from "./empreinte-screens";
+import { EMPREINTE_SCREEN_INTENTS, type EmpreinteDraft } from "./empreinte-screens";
 
 export function EmpreinteRevenusScreen({
   draft,
@@ -47,7 +47,7 @@ export function EmpreinteRevenusScreen({
         Les revenus
       </h1>
       <p className="mb-10 max-w-sm text-sm text-slate-500">
-        Vos salaires nets mensuels — pour estimer ce que chaque scénario vous laisserait vivre.
+        {EMPREINTE_SCREEN_INTENTS.revenus}
       </p>
 
       <div className="flex w-full flex-col gap-8 text-left">
@@ -80,6 +80,7 @@ export function EmpreinteRevenusScreen({
         onBack={onBack}
         onContinue={() => onContinue()}
         canContinue={canContinue}
+        continueLabel="Voir les portes"
         className="mt-10 sm:mt-12"
       />
     </motion.div>

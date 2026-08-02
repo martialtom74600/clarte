@@ -30,12 +30,22 @@ export const EMPREINTE_SCREENS: EmpreinteScreenId[] = [
 
 /** Libellés courts pour la barre de progression (6 étapes). */
 export const EMPREINTE_SCREEN_LABELS: Record<EmpreinteScreenId, string> = {
-  location: "Localisation",
-  patrimoine: "Patrimoine",
-  cadre_juridique: "Cadre juridique",
-  apports: "Apports",
-  financement: "Financement",
+  location: "Lieu",
+  patrimoine: "Le bien",
+  cadre_juridique: "Propriété",
+  apports: "L'achat",
+  financement: "Le crédit",
   revenus: "Revenus",
+};
+
+/** Une phrase d'intention par étape — pourquoi on demande ça. */
+export const EMPREINTE_SCREEN_INTENTS: Record<EmpreinteScreenId, string> = {
+  location: "Pour ancrer les prix du marché autour de vous.",
+  patrimoine: "Ce que vaut le logement aujourd'hui — point de départ de chaque scénario.",
+  cadre_juridique: "Qui possède quoi sur l'acte — indispensable pour calculer la soulte.",
+  apports: "Comment l'achat a été financé — créances d'apport et capital emprunté.",
+  financement: "Ce qu'il reste à rembourser, ou confirmez qu'il n'y a plus de crédit.",
+  revenus: "Ce que chacun gagne — pour juger si une porte est tenable seule.",
 };
 
 export const LEGAL_STATUS_OPTIONS: {
@@ -199,6 +209,9 @@ export type FinancementUiMode = "no_credit" | "estimate";
 export function inferFinancementUiMode(draft: EmpreinteDraft): FinancementUiMode {
   if (draft.financementNoCredit === "1") return "no_credit";
   if (canComputeAmortization(draft)) return "estimate";
+  // Prix d'achat connu → on oriente vers l'estimation (capital prérempli).
+  if (suggestedInitialMortgagePrincipal(draft) > 0) return "estimate";
+  if (parseCurrency(draft.purchasePrice ?? "") > 0) return "estimate";
   return "no_credit";
 }
 
@@ -225,7 +238,37 @@ function isContributionValid(value: string | undefined): boolean {
 }
 
 export function isApportsValid(draft: EmpreinteDraft): boolean {
-  return isContributionValid(draft.contributionA) && isContributionValid(draft.contributionB);
+  const purchase = parseCurrency(draft.purchasePrice ?? "");
+  if (purchase <= 0) return false;
+  if (!isContributionValid(draft.contributionA) || !isContributionValid(draft.contributionB)) {
+    return false;
+  }
+  const apports =
+    parseCurrency(draft.contributionA ?? "") + parseCurrency(draft.contributionB ?? "");
+  return apports <= purchase;
+}
+
+/**
+ * Capital emprunté suggéré : prix d'achat − apports (plancher 0).
+ * Approximation — le prêt réel peut inclure frais de notaire / travaux.
+ */
+export function suggestedInitialMortgagePrincipal(draft: EmpreinteDraft): number {
+  const purchase = parseCurrency(draft.purchasePrice ?? "");
+  if (purchase <= 0) return 0;
+  const contribA = parseCurrency(draft.contributionA ?? "");
+  const contribB = parseCurrency(draft.contributionB ?? "");
+  return Math.max(0, Math.round(purchase - contribA - contribB));
+}
+
+/** Préremplit le capital emprunté s'il est encore vide. */
+export function withSuggestedInitialPrincipal(draft: EmpreinteDraft): EmpreinteDraft {
+  if ((draft.initialMortgagePrincipal ?? "").trim() !== "") return draft;
+  const suggested = suggestedInitialMortgagePrincipal(draft);
+  if (suggested <= 0) return draft;
+  return {
+    ...draft,
+    initialMortgagePrincipal: suggested.toLocaleString("fr-FR"),
+  };
 }
 
 export function isRevenusValid(draft: EmpreinteDraft): boolean {
@@ -324,10 +367,18 @@ export function getScreenValidationHint(
       }
       return "Les deux parts doivent totaliser 100 %.";
     }
-    case "apports":
+    case "apports": {
+      const purchase = parseCurrency(draft.purchasePrice ?? "");
+      if (purchase <= 0) return "Indiquez le prix d'achat notarié du bien.";
+      const apports =
+        parseCurrency(draft.contributionA ?? "") + parseCurrency(draft.contributionB ?? "");
+      if (apports > purchase) {
+        return "Les apports ne peuvent pas dépasser le prix d'achat.";
+      }
       return null;
+    }
     case "financement":
-      return null;
+      return "Complétez les infos du prêt d'origine, ou indiquez qu'il n'y a plus de crédit.";
     case "revenus": {
       const missing: string[] = [];
       if (!isIncomeValid(draft, "incomeA")) missing.push("vos revenus");

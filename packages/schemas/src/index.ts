@@ -218,6 +218,21 @@ export interface SimulationInput {
   /** Empreinte / labo — localisation et surface pour rent_out dynamique. */
   postalCode?: string;
   propertySurface?: number;
+  /**
+   * Prix d'achat zone (€/m²) injectés depuis le web (DVF + fallback).
+   * Le moteur reste sync — pas de fetch ici.
+   */
+  zoneMedianPricePerSqm?: number;
+  zoneMinPricePerSqm?: number;
+  zoneMaxPricePerSqm?: number;
+  /** Provenance indicative : dvf | dvf_dept | fallback. */
+  zonePriceSource?: string;
+  /** Loyers zone (€/m²/mois) — Carte des loyers ANIL injectée côté web. */
+  zoneRentMedianPerSqm?: number;
+  zoneRentMinPerSqm?: number;
+  zoneRentMaxPerSqm?: number;
+  /** Provenance : carte_loyers | fallback. */
+  zoneRentSource?: string;
   /** Apports initiaux : récompense en communauté, ratio/créance en indivision. */
   contributionA?: number;
   contributionB?: number;

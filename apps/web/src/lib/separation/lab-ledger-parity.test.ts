@@ -42,6 +42,8 @@ describe("lab-ledger parity", () => {
     footprint,
     assumptions: defaultAssumptions(),
     lab: { ...defaultLabState(), activeDoor: "keep_a" as const },
+    marketBuy: null,
+    marketRent: null,
     derived: { lastInput: null, lastResult: null, doorVerdicts: null, computedAt: null },
     discreteMode: false,
   };
@@ -64,7 +66,7 @@ describe("lab-ledger parity", () => {
       expect(issues, issues.join("; ")).toEqual([]);
 
       const headlines = pickHeadlineLines(ledger!);
-      expect(headlines).toHaveLength(3);
+      expect(headlines).toHaveLength(LEDGER_HEADLINE_IDS[doorId].length);
       expect(headlines.map((line) => line.id)).toEqual([...LEDGER_HEADLINE_IDS[doorId]]);
     });
   }

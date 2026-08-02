@@ -10,6 +10,7 @@ import { buildLabLedger } from "@/lib/separation/lab-ledger-model";
 import { buildEmpreinteContextLine } from "@/lib/separation/empreinte-context";
 import { LabLedgerDetails, LabLedgerSummary } from "./lab-ledger";
 import { LabLeversPanel } from "./lab-levers-panel";
+import { useMarketBuySync } from "@/lib/market/use-market-buy-sync";
 
 interface LabShellProps {
   doorId: DoorId;
@@ -20,6 +21,7 @@ type MobilePanel = "calcul" | "ajuster";
 export function LabShell({ doorId }: LabShellProps) {
   const router = useRouter();
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>("ajuster");
+  useMarketBuySync();
   const footprint = useSeparationStore((s) => s.footprint);
   const assumptions = useSeparationStore((s) => s.assumptions);
   const lab = useSeparationStore((s) => s.lab);

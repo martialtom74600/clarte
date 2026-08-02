@@ -106,11 +106,40 @@ export interface DerivedState {
   computedAt: number | null;
 }
 
+/** Marché achat zone (DVF) — injecté async côté web, consommé sync par le moteur. */
+export interface MarketBuyState {
+  postalCode: string;
+  medianPricePerSqm: number;
+  minPricePerSqm: number;
+  maxPricePerSqm: number;
+  source: "dvf" | "dvf_dept" | "fallback";
+  transactionCount: number;
+  asOfYear?: number;
+  fetchedAt: number;
+}
+
+/** Marché locatif zone (Carte des loyers ANIL) — injecté async, consommé sync. */
+export interface MarketRentState {
+  postalCode: string;
+  communeCode: string | null;
+  communeName: string | null;
+  medianRentPerSqm: number;
+  minRentPerSqm: number;
+  maxRentPerSqm: number;
+  source: "carte_loyers" | "fallback";
+  asOfYear?: number;
+  fetchedAt: number;
+}
+
 export interface SeparationState {
   stratum: SeparationStratum;
   footprint: FootprintState;
   assumptions: AssumptionsState;
   lab: LabState;
+  /** Snapshot DVF / fallback pour le CP de l'empreinte. */
+  marketBuy: MarketBuyState | null;
+  /** Snapshot Carte des loyers / fallback pour le CP de l'empreinte. */
+  marketRent: MarketRentState | null;
   derived: DerivedState;
   discreteMode: boolean;
 }

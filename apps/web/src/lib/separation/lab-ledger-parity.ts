@@ -8,22 +8,22 @@ import type { FootprintState, LabState } from "./separation-types";
 import { compileSimulationInput, defaultAssumptions } from "./compile-simulation-input";
 import type { LabLedgerModel, LedgerLine } from "./lab-ledger-model";
 
-/** Chips résumé en tête de ledger — même nombre de clés par porte. */
+/** Chips résumé — 2 par porte (le détail porte le reste). */
 export const LEDGER_HEADLINE_IDS: Record<DoorId, readonly string[]> = {
-  keep_a: ["total-cash", "monthly", "soulte"],
-  keep_b: ["soulte", "departure-capital", "monthly"],
-  sell: ["you", "net", "relocate-target"],
-  sell_rent: ["you", "net", "tenant-rent"],
-  rent_out: ["net", "monthly-balance", "relocate-target"],
+  keep_a: ["total-cash", "monthly"],
+  keep_b: ["departure-capital", "monthly"],
+  sell: ["you", "relocate-target"],
+  sell_rent: ["you", "tenant-rent"],
+  rent_out: ["net", "relocate-target"],
 };
 
 /** Sections attendues par porte (hors enfants optionnel). */
 export const LEDGER_REQUIRED_SECTIONS: Record<DoorId, readonly string[]> = {
   keep_a: ["bien", "echange", "relogement", "mensuel"],
   keep_b: ["bien", "echange", "relogement", "mensuel"],
-  sell: ["bien", "echange", "relogement", "mensuel"],
-  sell_rent: ["bien", "echange", "relogement", "mensuel"],
-  rent_out: ["bien", "revenus", "charges", "resultat", "relogement", "mensuel"],
+  sell: ["bien", "echange", "relogement"],
+  sell_rent: ["bien", "echange", "relogement"],
+  rent_out: ["bien", "revenus", "charges", "resultat", "relogement"],
 };
 
 export function pickHeadlineLines(model: LabLedgerModel): LedgerLine[] {
@@ -98,8 +98,11 @@ export function auditLedgerParity(ledger: LabLedgerModel): string[] {
   if (ledger.lines.some((line) => !line.sectionId)) issues.push("sectionId manquant sur une ligne");
   if (ledger.lines.some((line) => !line.hint)) issues.push("hint manquant sur une ligne");
 
+  const expectedHeadlines = LEDGER_HEADLINE_IDS[ledger.doorId];
   const headlines = pickHeadlineLines(ledger);
-  if (headlines.length < 3) issues.push(`headlines incomplets (${headlines.length}/3)`);
+  if (headlines.length !== expectedHeadlines.length) {
+    issues.push(`headlines incomplets (${headlines.length}/${expectedHeadlines.length})`);
+  }
 
   const sections = new Set(ledger.lines.map((line) => line.sectionId));
   for (const required of LEDGER_REQUIRED_SECTIONS[ledger.doorId]) {

@@ -1,3 +1,4 @@
+import type { DoorId } from "@separation/schemas";
 import type { LedgerLine } from "./lab-ledger-model";
 
 export type LedgerSectionId =
@@ -63,7 +64,7 @@ export const LEDGER_SECTION_META: Record<LedgerSectionId, LedgerSectionMeta> = {
   },
   relogement: {
     title: "Relogement",
-    subtitle: "Peut-on se reloger dans le même quartier ?",
+    subtitle: "Peut-on se reloger dans la zone, en solo ?",
     border: "border-l-slate-400",
     bg: "bg-slate-50/80",
     titleColor: "text-slate-800",
@@ -76,6 +77,60 @@ export const LEDGER_SECTION_META: Record<LedgerSectionId, LedgerSectionMeta> = {
     titleColor: "text-pink-950",
   },
 };
+
+/** Libellés adaptés au scénario (partage vente vs soulte rachat). */
+export function resolveLedgerSectionMeta(
+  sectionId: LedgerSectionId,
+  doorId?: DoorId
+): LedgerSectionMeta {
+  const base = LEDGER_SECTION_META[sectionId];
+  if (
+    sectionId === "echange" &&
+    (doorId === "sell" || doorId === "sell_rent")
+  ) {
+    return {
+      ...base,
+      title: "Le partage",
+      subtitle: "Comment se répartit le produit de vente",
+    };
+  }
+  if (sectionId === "mensuel" && (doorId === "keep_a" || doorId === "keep_b")) {
+    return {
+      ...base,
+      subtitle:
+        doorId === "keep_a"
+          ? "Ce que vous remboursez chaque mois en restant"
+          : "Ce que l'autre rembourse chaque mois en restant",
+    };
+  }
+  if (sectionId === "relogement") {
+    if (doorId === "keep_a") {
+      return {
+        ...base,
+        subtitle: "Peut-on se reloger dans la zone ? (celui qui part)",
+      };
+    }
+    if (doorId === "keep_b") {
+      return {
+        ...base,
+        subtitle: "Pouvez-vous vous reloger dans la zone, en solo ?",
+      };
+    }
+    if (doorId === "rent_out") {
+      return {
+        ...base,
+        subtitle: "Chacun doit se loger ailleurs — le bien est loué",
+      };
+    }
+  }
+  if (sectionId === "resultat" && doorId === "rent_out") {
+    return {
+      ...base,
+      subtitle: "Cashflow net après crédit, charges et impôts",
+    };
+  }
+  return base;
+}
 
 export interface LedgerLineGroup {
   sectionId: LedgerSectionId;

@@ -1,4 +1,9 @@
-import { buildAllPortes, buildPortePresentation } from "@/lib/separation/porte-presenter";
+import {
+  buildAllPortes,
+  buildPortePresentation,
+  groupPortes,
+  pickFeaturedDoorId,
+} from "@/lib/separation/porte-presenter";
 import { recomputeSeparationDerived } from "@/lib/separation/recompute-derived";
 import { defaultAssumptions, defaultLabState } from "@/lib/separation/compile-simulation-input";
 import type { FootprintState } from "@/lib/separation/separation-types";
@@ -37,6 +42,8 @@ describe("porte-presenter", () => {
     footprint,
     assumptions: defaultAssumptions(),
     lab: defaultLabState(),
+    marketBuy: null,
+    marketRent: null,
   });
 
   it("produit 5 portes avec titre et verdict", () => {
@@ -47,6 +54,21 @@ describe("porte-presenter", () => {
     expect(portes[3].title).toBe("Vendre puis louer");
     expect(portes[4].title).toBe("Garder et louer");
     expect(["green", "orange", "red"]).toContain(portes[0].verdict);
+  });
+
+  it("groupe les portes et met en avant le meilleur verdict", () => {
+    const portes = buildAllPortes(lastResult, doorVerdicts, footprint);
+    const featuredId = pickFeaturedDoorId(portes);
+    expect(featuredId).toBeTruthy();
+    const featured = portes.find((p) => p.doorId === featuredId)!;
+    for (const other of portes) {
+      const rank = { green: 0, orange: 1, red: 2 } as const;
+      expect(rank[featured.verdict]).toBeLessThanOrEqual(rank[other.verdict]);
+    }
+    const groups = groupPortes(portes, { excludeDoorId: featuredId });
+    expect(groups.length).toBeGreaterThanOrEqual(2);
+    expect(groups.flatMap((g) => g.portes)).toHaveLength(4);
+    expect(groups.every((g) => g.portes.every((p) => p.doorId !== featuredId))).toBe(true);
   });
 
   it("affiche le montant de rachat pour keep_a", () => {

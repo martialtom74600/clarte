@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { Scale, Users } from "lucide-react";
+import { Scale } from "lucide-react";
 import { duration, ease } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { EmpreinteFormRow, EmpreinteStepNav } from "./empreinte-field";
 import { FinancementModeOption } from "./empreinte-financement-card";
 import type { EmpreinteDraft } from "./empreinte-screens";
 import {
+  EMPREINTE_SCREEN_INTENTS,
   LEGAL_STATUS_OPTIONS,
   OWNERSHIP_PRESETS,
   parseSharePercent,
@@ -92,15 +93,14 @@ export function EmpreinteCadreJuridiqueScreen({
       {progress}
 
       <h1 className="mb-3 text-xl font-medium tracking-tight text-slate-800 md:text-2xl">
-        Le cadre juridique
+        La propriété
       </h1>
       <p className="mb-10 max-w-sm text-sm text-slate-500">
-        Votre statut et vos parts sur l&apos;acte de vente — essentiels pour calculer la soulte
-        en cas de rachat.
+        {EMPREINTE_SCREEN_INTENTS.cadre_juridique}
       </p>
 
       <div className="mb-10 w-full text-left">
-        <p className="mb-4 text-sm font-medium text-slate-500">Statut de votre couple</p>
+        <p className="mb-3 text-sm font-medium text-slate-500">Statut du couple</p>
         <div className="flex flex-col">
           {LEGAL_STATUS_OPTIONS.map((option) => (
             <FinancementModeOption
@@ -115,9 +115,9 @@ export function EmpreinteCadreJuridiqueScreen({
       </div>
 
       <div className="w-full text-left">
-        <p className="mb-4 text-sm font-medium text-slate-500">Répartition de la propriété</p>
+        <p className="mb-2 text-sm font-medium text-slate-500">Parts sur l&apos;acte</p>
         <p className="mb-5 text-xs text-slate-400">
-          Regardez votre acte de vente notarié — indivision ou quote-parts indiquées.
+          Indivision ou quote-parts indiquées chez le notaire — pas les apports.
         </p>
 
         <div className="mb-6 flex flex-wrap gap-2">
@@ -180,22 +180,10 @@ export function EmpreinteCadreJuridiqueScreen({
             />
           </motion.div>
         )}
-
-        {!isCustomShare && (
-          <div className="flex items-center gap-2 rounded-lg bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
-            <Users className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
-            <span>
-              Vous <strong className="font-medium text-slate-800">{draft.ownershipShareA} %</strong>
-              {" · "}
-              Autre{" "}
-              <strong className="font-medium text-slate-800">{draft.ownershipShareB} %</strong>
-            </span>
-          </div>
-        )}
       </div>
 
       {!canContinue && validationHint && (
-        <p className="mt-4 max-w-sm text-xs leading-relaxed text-slate-400">{validationHint}</p>
+        <p className="mt-6 max-w-sm text-xs leading-relaxed text-slate-400">{validationHint}</p>
       )}
 
       <EmpreinteStepNav

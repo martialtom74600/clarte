@@ -16,6 +16,12 @@ function derivePurchasePrice(
   footprint: FootprintState,
   resolved: ResolvedFinancementValues
 ): number | null {
+  const explicit =
+    (draft.purchasePrice ?? "").trim() !== ""
+      ? parseCurrency(draft.purchasePrice ?? "")
+      : footprint.purchasePrice;
+  if (explicit > 0) return explicit;
+
   const principal = resolved.initialMortgagePrincipal;
   const contribA =
     (draft.contributionA ?? "").trim() !== ""
@@ -87,7 +93,7 @@ export function EmpreinteRecap({
       className="rounded-xl border border-slate-200/80 bg-white/50 px-4 py-4 text-left"
     >
       <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">
-        Bilan du bien
+        Récapitulatif
       </p>
       <dl className="space-y-2.5">
         <div className="flex items-baseline justify-between gap-4">
@@ -116,7 +122,7 @@ export function EmpreinteRecap({
 
         {purchasePrice != null && purchasePrice > 0 && (
           <div className="flex items-baseline justify-between gap-4">
-            <dt className="text-[11px] text-slate-500">Prix d&apos;achat estimé</dt>
+            <dt className="text-[11px] text-slate-500">Prix d&apos;achat</dt>
             <dd className="text-sm font-medium tabular-nums text-slate-900">
               {formatEuro(purchasePrice)}
             </dd>

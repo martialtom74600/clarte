@@ -27,9 +27,9 @@ describe("computeRentOutCashflowFromParams", () => {
       marginalIncomeTaxRate: 0.3,
     });
 
-    const gross = round(rentPerSqm(postalCode) * surface); // 22 × 65 = 1430
-    expect(gross).toBe(1430);
-    expect(result.breakdown.grossRent.amount).toBe(1430);
+    const gross = round(rentPerSqm(postalCode) * surface); // barème 75 × 65
+    expect(gross).toBe(round(28 * 65));
+    expect(result.breakdown.grossRent.amount).toBe(gross);
 
     const vacancy = round(gross * DEFAULT_VACANCY_RATE); // 85.8
     expect(result.breakdown.vacancyProvision.amount).toBe(vacancy);

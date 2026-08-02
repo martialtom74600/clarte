@@ -48,6 +48,8 @@ describe("buildLabLedger", () => {
     footprint,
     assumptions: defaultAssumptions(),
     lab: { ...defaultLabState(), activeDoor: "keep_a" as const },
+    marketBuy: null,
+    marketRent: null,
     derived: { lastInput: null, lastResult: null, doorVerdicts: null, computedAt: null },
     discreteMode: false,
   };
@@ -174,9 +176,42 @@ describe("buildLabLedger", () => {
     expect(ledger?.lines.find((l) => l.id === "net")?.amount).toBe(178200);
     expect(ledger?.lines.find((l) => l.id === "you")?.amount).toBe(89100);
     expect(ledger?.lines.find((l) => l.id === "other")?.amount).toBe(89100);
-    expect(ledger?.footer).toMatch(/Relogement solo \(rachat\)/i);
     expect(ledger?.footer).toMatch(/Cible solo/i);
+    expect(ledger?.contextNote).toMatch(/relogement solo|parts nettes/i);
+  });
+
+  it("vente : pas de section mensuel dupliquée, footer allégé", () => {
+    const ledger = buildLabLedger({
+      doorId: "sell",
+      footprint,
+      assumptions: defaultAssumptions(),
+      lab: { ...defaultLabState(), activeDoor: "sell" },
+      result: derived.lastResult,
+      doorVerdicts: derived.doorVerdicts,
+    });
+    const groups = groupLedgerLines(ledger!.lines);
+    expect(groups.some((g) => g.sectionId === "mensuel")).toBe(false);
+    expect(groups.some((g) => g.sectionId === "relogement")).toBe(true);
+    expect(ledger?.lines.some((l) => l.id === "monthly-balance")).toBe(false);
+    expect(ledger?.footer).not.toMatch(/Produit net partagé|Relogement solo \(rachat\)/);
     expect(ledger?.contextNote).toBeTruthy();
+  });
+
+  it("rent_out : pas de solde mensuel dupliqué (déjà dans résultat)", () => {
+    const ledger = buildLabLedger({
+      doorId: "rent_out",
+      footprint,
+      assumptions: defaultAssumptions(),
+      lab: { ...defaultLabState(), activeDoor: "rent_out" },
+      result: derived.lastResult,
+      doorVerdicts: derived.doorVerdicts,
+    });
+    const groups = groupLedgerLines(ledger!.lines);
+    expect(groups.some((g) => g.sectionId === "mensuel")).toBe(false);
+    expect(groups.some((g) => g.sectionId === "resultat")).toBe(true);
+    expect(ledger?.lines.some((l) => l.id === "monthly-balance")).toBe(false);
+    expect(ledger?.lines.some((l) => l.id === "net")).toBe(true);
+    expect(ledger?.footer).not.toMatch(/Relogement accessible|Difficile|Serré|Tenable/i);
   });
 
   it("vente : levier relocate_housing recalcule la cible (surface + médian)", () => {

@@ -39,6 +39,68 @@ export interface PortePresentation {
   bilateral?: PorteBilateralShare[];
 }
 
+export interface PorteGroup {
+  id: "keep" | "sell" | "rent_out";
+  title: string;
+  subtitle: string;
+  doorIds: DoorId[];
+}
+
+/** Regroupement UX — qui garde / on vend / on loue le bien. */
+export const PORTE_GROUPS: PorteGroup[] = [
+  {
+    id: "keep",
+    title: "Qui garde le logement ?",
+    subtitle: "L'un rachète la part de l'autre et reste sur place.",
+    doorIds: ["keep_a", "keep_b"],
+  },
+  {
+    id: "sell",
+    title: "On vend",
+    subtitle: "Le bien est liquidé — chacun repart avec sa part nette.",
+    doorIds: ["sell", "sell_rent"],
+  },
+  {
+    id: "rent_out",
+    title: "On garde le bien en location",
+    subtitle: "Personne ne rachète : le logement rapporte un loyer.",
+    doorIds: ["rent_out"],
+  },
+];
+
+const VERDICT_RANK: Record<AffordabilityVerdict, number> = {
+  green: 0,
+  orange: 1,
+  red: 2,
+};
+
+/** Meilleur chemin selon le verdict (vert > orange > rouge), ordre produit en cas d'égalité. */
+export function pickFeaturedDoorId(portes: PortePresentation[]): DoorId | null {
+  if (portes.length === 0) return null;
+  return [...portes].sort((a, b) => {
+    const rank = VERDICT_RANK[a.verdict] - VERDICT_RANK[b.verdict];
+    if (rank !== 0) return rank;
+    return DOOR_ORDER.indexOf(a.doorId) - DOOR_ORDER.indexOf(b.doorId);
+  })[0].doorId;
+}
+
+export function groupPortes(
+  portes: PortePresentation[],
+  options?: { excludeDoorId?: DoorId | null }
+): {
+  group: PorteGroup;
+  portes: PortePresentation[];
+}[] {
+  const byId = new Map(portes.map((p) => [p.doorId, p]));
+  return PORTE_GROUPS.map((group) => ({
+    group,
+    portes: group.doorIds
+      .filter((id) => id !== options?.excludeDoorId)
+      .map((id) => byId.get(id))
+      .filter((p): p is PortePresentation => p != null),
+  })).filter((block) => block.portes.length > 0);
+}
+
 function scenarioFor(result: SimulationResult, doorId: DoorId) {
   return result.scenarios.find((s) => s.scenario === doorId);
 }
