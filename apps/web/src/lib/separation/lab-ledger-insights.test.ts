@@ -26,8 +26,8 @@ describe("lab-ledger-insights", () => {
   });
 
   it("ouvre l'accordéon pour verdict serré ou difficile", () => {
-    expect(shouldOpenLedgerInsights("orange")).toBe(true);
-    expect(shouldOpenLedgerInsights("red")).toBe(true);
+    expect(shouldOpenLedgerInsights("orange")).toBe(false);
+    expect(shouldOpenLedgerInsights("red")).toBe(false);
     expect(shouldOpenLedgerInsights("green")).toBe(false);
   });
 });

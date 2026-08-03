@@ -66,10 +66,11 @@ function ExportLedgerSection({
 
 export function ExportLedgerDocument({ ledger }: { ledger: LabLedgerModel }) {
   const groups = groupLedgerLines(ledger.lines);
+  const voiceDoorId = ledger.sectionVoiceDoorId ?? ledger.doorId;
   const parsed = ledger.footer ? parseFooterBlocks(ledger.footer) : null;
   const debtThreshold =
     parsed?.debtPct != null
-      ? debtThresholdMessage(parsed.debtPct, ledger.doorId)
+      ? debtThresholdMessage(parsed.debtPct, voiceDoorId)
       : undefined;
 
   return (
@@ -85,7 +86,7 @@ export function ExportLedgerDocument({ ledger }: { ledger: LabLedgerModel }) {
           key={group.sectionId}
           sectionId={group.sectionId}
           lines={group.lines}
-          doorId={ledger.doorId}
+          doorId={voiceDoorId}
         />
       ))}
 

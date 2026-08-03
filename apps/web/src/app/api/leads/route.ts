@@ -4,6 +4,7 @@ import type { SimulationInput, SimulationResult } from "@separation/schemas";
 import { saveLead, saveSimulation } from "@/lib/supabase";
 import { publishLeadToMarketplace } from "@/lib/marketplace-publish";
 import { generateSimulationPdf } from "@/lib/pdf";
+import type { ExpertExportPack } from "@/lib/separation/export-bilan-model";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 
@@ -27,7 +28,8 @@ async function sendReportEmail(
   email: string,
   simulation: SimulationInput,
   result: SimulationResult,
-  proofId?: string
+  proofId?: string,
+  pack?: ExpertExportPack | null
 ) {
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) {
@@ -36,21 +38,24 @@ async function sendReportEmail(
   }
 
   const resend = new Resend(resendKey);
-  const pdfBuffer = await generateSimulationPdf(simulation, result, email, proofId);
+  const pdfBuffer = await generateSimulationPdf(simulation, result, email, proofId, pack);
+  const filename = pack?.chapters?.length
+    ? "clarte-bilan-expert.pdf"
+    : "clarte-simulation.pdf";
 
   await resend.emails.send({
     from: process.env.RESEND_FROM_EMAIL ?? "Clarté <noreply@example.com>",
     to: email,
-    subject: "Votre rapport de simulation patrimoniale — Clarté",
+    subject: "Votre bilan de séparation immobilière — Clarté",
     html: `
       <p>Bonjour,</p>
-      <p>Voici votre rapport de simulation patrimoniale en pièce jointe.</p>
+      <p>Voici votre bilan expert de séparation immobilière en pièce jointe (cinq trajectoires comparées).</p>
       <p>Ce document est une simulation indicative. Consultez un notaire ou avocat avant toute décision.</p>
       <p>L'équipe Clarté</p>
     `,
     attachments: [
       {
-        filename: "clarte-simulation.pdf",
+        filename,
         content: pdfBuffer,
       },
     ],
@@ -73,6 +78,7 @@ export async function POST(request: Request) {
       proofId,
       postalCode,
       optInPartnerMatch,
+      pack,
     } = body as {
       email: string;
       phone?: string;
@@ -80,6 +86,7 @@ export async function POST(request: Request) {
       postalCode?: string;
       simulation: SimulationInput;
       result: SimulationResult;
+      pack?: ExpertExportPack;
       urgencyMonths?: number;
       hasMinorChildren?: boolean;
       scenarioPreference?: SimulationInput["options"]["scenario"];
@@ -135,7 +142,7 @@ export async function POST(request: Request) {
       },
     });
 
-    await sendReportEmail(email, simulation, result, proofId);
+    await sendReportEmail(email, simulation, result, proofId, pack);
 
     let marketplaceListed = false;
     let marketplaceMessage: string | undefined;

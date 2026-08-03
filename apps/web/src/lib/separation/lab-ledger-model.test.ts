@@ -176,7 +176,8 @@ describe("buildLabLedger", () => {
     expect(ledger?.lines.find((l) => l.id === "net")?.amount).toBe(178200);
     expect(ledger?.lines.find((l) => l.id === "you")?.amount).toBe(89100);
     expect(ledger?.lines.find((l) => l.id === "other")?.amount).toBe(89100);
-    expect(ledger?.footer).toMatch(/Cible solo/i);
+    expect(ledger?.lines.some((l) => l.id === "relocate-target")).toBe(true);
+    expect(ledger?.footer ?? "").not.toMatch(/Cible solo/i);
     expect(ledger?.contextNote).toMatch(/relogement solo|parts nettes/i);
   });
 
@@ -242,7 +243,9 @@ describe("buildLabLedger", () => {
       ?.relocateTarget?.amount;
     expect(leverTarget).toBeGreaterThan(baseTarget ?? 0);
     expect(ledger?.lines.find((l) => l.id === "relocate-target")?.label).toMatch(/70 m²/);
-    expect(ledger?.footer).toMatch(/médiane de zone/i);
+    expect(ledger?.lines.find((l) => l.id === "relocate-target")?.label).toMatch(
+      /médiane de zone/i
+    );
   });
 
   it("sell_rent : levier relocate_housing recalcule le loyer cible", () => {
@@ -273,7 +276,7 @@ describe("buildLabLedger", () => {
       doorVerdicts: withLever.doorVerdicts,
     });
     expect(ledger?.lines.find((l) => l.id === "tenant-rent")?.label).toMatch(/80 m²/);
-    expect(ledger?.footer).toMatch(/haut de zone/i);
+    expect(ledger?.lines.find((l) => l.id === "tenant-rent")?.label).toMatch(/haut de zone/i);
   });
 
   it("keep_a : expose note de relogement solo sur le scénario", () => {
@@ -329,7 +332,7 @@ describe("buildLabLedger", () => {
     expect(ledger?.footer).toMatch(/L'endettement de l'autre sera/);
   });
 
-  it("keep_a : affiche capital du partant et cible de relogement", () => {
+  it("keep_a : cible de relogement ; capital partant seulement s'il diffère de la soulte", () => {
     const ledger = buildLabLedger({
       doorId: "keep_a",
       footprint,
@@ -338,7 +341,11 @@ describe("buildLabLedger", () => {
       result: derived.lastResult,
       doorVerdicts: derived.doorVerdicts,
     });
-    expect(ledger?.lines.some((l) => l.id === "departure-capital")).toBe(true);
+    const soulte = ledger?.lines.find((l) => l.id === "soulte")?.amount;
+    const departure = ledger?.lines.find((l) => l.id === "departure-capital")?.amount;
+    if (soulte != null && departure != null) {
+      expect(departure).not.toBe(soulte);
+    }
     expect(ledger?.lines.some((l) => l.id === "relocate-target")).toBe(true);
     expect(ledger?.footer).toMatch(/Partant :|relogement solo/i);
     expect(ledger?.footer).not.toMatch(/Relogement du partant :\s*red/i);
@@ -386,7 +393,7 @@ describe("buildLabLedger", () => {
     expect(ledger?.lines.some((l) => l.id === "management")).toBe(true);
     expect(ledger?.lines.some((l) => l.id === "tax")).toBe(true);
     expect(ledger?.lines.find((l) => l.id === "net")?.label).toMatch(/Argent net/i);
-    expect(ledger?.footer).toMatch(/Cashflow|Zone 75011/i);
+    expect(ledger?.footer).toMatch(/Zone 75011/i);
     expect(ledger?.contextNote).toBeTruthy();
     const rentScenario = derived.lastResult?.scenarios.find((s) => s.scenario === "rent_out");
     expect(ledger?.lines.find((l) => l.id === "net")?.amount).toBe(

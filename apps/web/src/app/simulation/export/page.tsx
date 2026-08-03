@@ -15,16 +15,16 @@ export default function ExportBilanPage() {
 
   useEffect(() => {
     if (!hydrated) return;
-    if (!footprint.completedAt) {
+    if (!footprint?.completedAt) {
       router.replace("/simulation");
       return;
     }
     if (!activeDoor) {
       router.replace("/simulation/portes");
     }
-  }, [hydrated, footprint.completedAt, activeDoor, router]);
+  }, [hydrated, footprint?.completedAt, activeDoor, router]);
 
-  if (!hydrated || !footprint.completedAt || !activeDoor) {
+  if (!hydrated || !footprint?.completedAt || !activeDoor) {
     return (
       <div className={`${clarte.mesh} flex min-h-[100dvh] items-center justify-center`}>
         <div className="h-8 w-8 animate-pulse rounded-full bg-slate-200/80" />

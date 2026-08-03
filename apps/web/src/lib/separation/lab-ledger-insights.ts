@@ -4,8 +4,9 @@ import type { LabLedgerModel } from "./lab-ledger-model";
 
 export const HCSF_DEBT_CEILING_PCT = HCSF_MAX_EFFORT_PERCENT;
 
-export function shouldOpenLedgerInsights(verdict: AffordabilityVerdict | undefined): boolean {
-  return verdict === "orange" || verdict === "red";
+/** Toujours replié au chargement — même comportement sur les 5 portes. */
+export function shouldOpenLedgerInsights(_verdict?: AffordabilityVerdict): boolean {
+  return false;
 }
 
 /** Réécrit le détail keep pour la personne qui lit l'app (empreinte = personne A). */
@@ -34,6 +35,7 @@ export function parseFooterBlocks(footer: string) {
   const relocateLine = lines.find(
     (l) =>
       l.startsWith("Partant :") ||
+      l.startsWith("Vous :") ||
       l.startsWith("Relogement dans le quartier") ||
       l.startsWith("Relogement (rachat)") ||
       l.startsWith("Relogement solo") ||

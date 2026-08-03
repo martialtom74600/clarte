@@ -1,7 +1,12 @@
 import { describe, it, expect } from "vitest";
 import type { DoorId } from "@separation/schemas";
 import { buildLabLedger } from "@/lib/separation/lab-ledger-model";
-import { auditLedgerParity, LEDGER_HEADLINE_IDS, pickHeadlineLines } from "@/lib/separation/lab-ledger-parity";
+import {
+  auditLedgerParity,
+  LEDGER_HEADLINE_IDS,
+  linesForLedgerDetail,
+  pickHeadlineLines,
+} from "@/lib/separation/lab-ledger-parity";
 import { recomputeSeparationDerived } from "@/lib/separation/recompute-derived";
 import { defaultAssumptions, defaultLabState } from "@/lib/separation/compile-simulation-input";
 import type { FootprintState } from "@/lib/separation/separation-types";
@@ -68,8 +73,38 @@ describe("lab-ledger parity", () => {
       const headlines = pickHeadlineLines(ledger!);
       expect(headlines).toHaveLength(LEDGER_HEADLINE_IDS[doorId].length);
       expect(headlines.map((line) => line.id)).toEqual([...LEDGER_HEADLINE_IDS[doorId]]);
+
+      const detailIds = new Set(linesForLedgerDetail(ledger!).map((l) => l.id));
+      for (const id of LEDGER_HEADLINE_IDS[doorId]) {
+        expect(detailIds.has(id), `${doorId}: ${id} encore dans le détail`).toBe(false);
+      }
+      // Le détail garde au moins le chemin de calcul (pas un ledger vide).
+      expect(linesForLedgerDetail(ledger!).length).toBeGreaterThan(0);
     });
   }
+
+  it("keep_b : n'affiche pas soulte + capital partant identiques dans le détail", () => {
+    const ledger = buildLabLedger({
+      doorId: "keep_b",
+      footprint,
+      assumptions: defaultAssumptions(),
+      lab: { ...defaultLabState(), activeDoor: "keep_b" },
+      result: derived.lastResult,
+      doorVerdicts: derived.doorVerdicts,
+    });
+    expect(ledger).not.toBeNull();
+    const soulte = ledger!.lines.find((l) => l.id === "soulte");
+    const departure = ledger!.lines.find((l) => l.id === "departure-capital");
+    const detailIds = new Set(linesForLedgerDetail(ledger!).map((l) => l.id));
+    if (
+      soulte &&
+      departure &&
+      Math.round(soulte.amount) === Math.round(departure.amount)
+    ) {
+      expect(detailIds.has("soulte")).toBe(false);
+      expect(detailIds.has("departure-capital")).toBe(false);
+    }
+  });
 
   it("keep_a et keep_b : contextNote pédagogique si verdict vert ou orange", () => {
     for (const doorId of ["keep_a", "keep_b"] as const) {

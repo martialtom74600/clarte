@@ -32,6 +32,37 @@ export function pickHeadlineLines(model: LabLedgerModel): LedgerLine[] {
     .filter((line): line is LedgerLine => line != null);
 }
 
+/**
+ * Lignes du détail labo — passe anti-doublon pour les 5 portes :
+ * 1) retire les KPI déjà en hero ;
+ * 2) retire les lignes « écho » du même montant (ex. soulte = capital partant).
+ */
+export function linesForLedgerDetail(model: LabLedgerModel): LedgerLine[] {
+  const headlineIds = new Set<string>(LEDGER_HEADLINE_IDS[model.doorId]);
+  const byId = new Map(model.lines.map((line) => [line.id, line]));
+
+  // keep_* : soulte et capital partant souvent identiques → une seule lecture suffit.
+  if (model.doorId === "keep_a" || model.doorId === "keep_b") {
+    const soulte = byId.get("soulte");
+    const departure = byId.get("departure-capital");
+    if (
+      soulte &&
+      departure &&
+      Math.round(soulte.amount) === Math.round(departure.amount)
+    ) {
+      if (headlineIds.has("departure-capital")) headlineIds.add("soulte");
+      if (headlineIds.has("total-cash") && !headlineIds.has("departure-capital")) {
+        headlineIds.add("departure-capital");
+      }
+    }
+  }
+
+  // sell_* : si parts 50/50, « votre part » est en hero — garder « part de l'autre » (autre personne).
+  // rent_out : « net » en hero — le détail garde le détail charges/revenus.
+
+  return model.lines.filter((line) => !headlineIds.has(line.id));
+}
+
 export function estimateRelocateTarget(
   footprint: FootprintState,
   lab?: LabState

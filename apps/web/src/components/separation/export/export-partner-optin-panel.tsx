@@ -12,12 +12,14 @@ import styles from "./export-bilan.module.css";
 
 interface ExportPartnerOptInPanelProps {
   result: SimulationResult;
+  compact?: boolean;
 }
 
-export function ExportPartnerOptInPanel({ result }: ExportPartnerOptInPanelProps) {
+export function ExportPartnerOptInPanel({ result, compact }: ExportPartnerOptInPanelProps) {
   const footprint = useSeparationStore((s) => s.footprint);
   const assumptions = useSeparationStore((s) => s.assumptions);
   const lab = useSeparationStore((s) => s.lab);
+  const doorVerdicts = useSeparationStore((s) => s.derived.doorVerdicts);
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -58,6 +60,7 @@ export function ExportPartnerOptInPanel({ result }: ExportPartnerOptInPanelProps
         assumptions,
         lab,
         result,
+        doorVerdicts,
       });
 
       if (!outcome.success) {
@@ -87,16 +90,27 @@ export function ExportPartnerOptInPanel({ result }: ExportPartnerOptInPanelProps
   }
 
   return (
-    <section className={cn(styles.sidePanel, styles.sidePanelPartner)}>
-      <div className={styles.sidePanelIconPartner}>
-        <Briefcase className="h-5 w-5" aria-hidden />
-      </div>
+    <section
+      className={cn(
+        styles.sidePanel,
+        styles.sidePanelPartner,
+        compact && styles.sidePanelCompact
+      )}
+    >
+      {!compact && (
+        <div className={styles.sidePanelIconPartner}>
+          <Briefcase className="h-5 w-5" aria-hidden />
+        </div>
+      )}
       <div className="min-w-0 flex-1">
-        <p className={styles.sidePanelEyebrow}>Passer à l&apos;action</p>
-        <h2 className={styles.sidePanelTitle}>Valider votre projet avec un expert</h2>
+        {!compact && <p className={styles.sidePanelEyebrow}>Passer à l&apos;action</p>}
+        <h2 className={styles.sidePanelTitle}>
+          {compact ? "Être rappelé par un expert" : "Faire vérifier par un pro"}
+        </h2>
         <p className={styles.sidePanelLead}>
-          Vos calculs sont prêts. Souhaitez-vous transmettre ce dossier à un expert (notaire /
-          courtier) partenaire pour valider la faisabilité bancaire et juridique de votre projet ?
+          {compact
+            ? "Un notaire ou un courtier partenaire peut vous dire si c’est jouable chez vous."
+            : "Vos chiffres sont prêts. Un partenaire Clarté (notaire ou courtier) peut les reprendre avec vous pour confirmer si le projet tient — côté banque et côté acte."}
         </p>
 
         {submitted ? (

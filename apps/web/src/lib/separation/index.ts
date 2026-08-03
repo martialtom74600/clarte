@@ -28,3 +28,20 @@ export {
   isValidDoorId,
 } from "./porte-presenter";
 export type { PortePresentation, PorteGroup } from "./porte-presenter";
+export {
+  buildExportBilan,
+  buildExpertExportPack,
+  EXPORT_SCENARIO_TITLES,
+  EXPORT_DISCLAIMER,
+} from "./export-bilan-model";
+export type {
+  ExportBilanModel,
+  ExportDoorChapter,
+  ExpertExportPack,
+  ExportInsight,
+} from "./export-bilan-model";
+export {
+  buildDoorHowItWorks,
+  buildDoorNextSteps,
+  buildMatrixRow,
+} from "./export-door-narrative";

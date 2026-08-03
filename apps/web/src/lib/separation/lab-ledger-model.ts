@@ -33,6 +33,11 @@ export interface LabLedgerModel {
   warningNote?: string;
   /** Message pédagogique court (ex. dépassement 35 %) — affiché dans « Ce que ça signifie ». */
   contextNote?: string;
+  /**
+   * Porte utilisée pour les sous-titres de section / messages d'endettement
+   * (voix destinataire : keep_a ↔ keep_b sans changer les montants).
+   */
+  sectionVoiceDoorId?: DoorId;
 }
 
 const NOTARY_FEES_HINT =
@@ -354,16 +359,25 @@ function buildKeepLedger(
       tone: "highlight",
       sectionId: "echange",
       hint: "Rachat + frais de notaire (+ indemnité d'occupation le cas échéant)",
-    },
-    {
+    }
+  );
+
+  // keep_a : si soulte = capital partant (sans indemnité), la ligne soulte suffit.
+  // keep_b : toujours afficher — c'est le KPI hero du partant.
+  const showDepartureCapital =
+    doorId === "keep_b" ||
+    indemnity > 0 ||
+    Math.round(departureCapital) !== Math.round(soulte);
+  if (showDepartureCapital) {
+    lines.push({
       id: "departure-capital",
       label: doorId === "keep_a" ? "Ce que l'autre repart avec" : "Votre argent récupéré",
       amount: departureCapital,
       tone: "highlight",
       sectionId: "echange",
       hint: "Capital disponible pour se reloger",
-    }
-  );
+    });
+  }
 
   if (relocateTarget > 0) {
     const housingNote = scenario?.relocateHousingNote;
@@ -655,10 +669,9 @@ function buildSellLedger(
   if (pension) lines.push(pension);
 
   const relocateVerdict = sell?.relocateVerdictByPerson;
-  // Footer allégé : chiffres déjà dans le ledger, verdict dans contextNote.
+  // Footer allégé : pas de note de relogement (déjà section Relogement / hero).
   const footerParts = [
     sell?.capitalGainsNote,
-    housingNote,
     negativeEquity
       ? `Dette résiduelle ~${Math.round(Math.abs(saleNet)).toLocaleString("fr-FR")} € à partager.`
       : null,
@@ -855,9 +868,8 @@ function buildRentLedger(
   const pension = childSupportLine(footprint, lab);
   if (pension) lines.push(pension);
 
-  // Footer allégé : le verdict est déjà en tête du ledger.
+  // Footer allégé : formule / cashflow déjà dans les lignes du ledger.
   const footerParts = [
-    scenario?.rentOutFormulaDetail,
     input.postalCode ? `Zone ${input.postalCode} · ${footprint.propertySurface} m²` : null,
   ].filter(Boolean);
 

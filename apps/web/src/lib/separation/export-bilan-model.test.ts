@@ -2,9 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   buildActiveLeverLines,
   buildExportBilan,
+  buildExpertExportPack,
   EXPORT_SCENARIO_TITLES,
   formatExportDate,
 } from "@/lib/separation/export-bilan-model";
+import { DOOR_ORDER } from "@/lib/separation/porte-presenter";
 import { recomputeSeparationDerived } from "@/lib/separation/recompute-derived";
 import { defaultAssumptions, defaultLabState } from "@/lib/separation/compile-simulation-input";
 import type { FootprintState } from "@/lib/separation/separation-types";
@@ -108,7 +110,7 @@ describe("export-bilan-model", () => {
     expect(bilan?.activeLevers).toHaveLength(1);
     expect(bilan?.ledger.lines.some((l) => l.id === "soulte")).toBe(true);
     expect(bilan?.insights.length).toBeGreaterThan(0);
-    expect(bilan?.insights.some((i) => /partant|Synthèse/i.test(i.title))).toBe(true);
+    expect(bilan?.insights.some((i) => /part|En une phrase/i.test(i.title))).toBe(true);
     expect(bilan?.disclaimer).toMatch(/CGI 746/);
     expect(bilan?.disclaimer).toMatch(/1,5 %/);
     expect(bilan?.disclaimer).toMatch(/2026\.6/);
@@ -125,9 +127,9 @@ describe("export-bilan-model", () => {
       result: derived.lastResult,
       doorVerdicts: derived.doorVerdicts,
     });
-    expect(rentBilan?.insights.some((i) => /micro-foncier|fiscal/i.test(i.title))).toBe(
-      true
-    );
+    expect(
+      rentBilan?.insights.some((i) => /résultat mensuel|fiscal|micro-foncier/i.test(i.title))
+    ).toBe(true);
 
     const occLab = {
       ...defaultLabState(),
@@ -148,5 +150,21 @@ describe("export-bilan-model", () => {
     expect(keepBilan?.insights.some((i) => /occupation/i.test(i.title + i.body))).toBe(
       true
     );
+  });
+
+  it("assemble un pack expert multi-portes", () => {
+    const pack = buildExpertExportPack({
+      footprint,
+      assumptions: defaultAssumptions(),
+      lab: { ...defaultLabState(), activeDoor: "keep_a" },
+      result: derived.lastResult,
+      doorVerdicts: derived.doorVerdicts,
+      date: new Date("2026-08-03T12:00:00.000Z"),
+    });
+    expect(pack?.chapters).toHaveLength(DOOR_ORDER.length);
+    expect(pack?.chapters[0].doorId).toBe("keep_a");
+    expect(pack?.matrix).toHaveLength(5);
+    expect(pack?.chapters.every((c) => c.howItWorks.length >= 2)).toBe(true);
+    expect(pack?.chapters.every((c) => c.bilan.ledger.lines.length > 0)).toBe(true);
   });
 });

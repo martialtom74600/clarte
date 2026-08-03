@@ -1,14 +1,14 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { clarte } from "@/lib/clarte-design";
 import { cn } from "@/lib/utils";
 import { useSeparationStore } from "@/store/separation-store";
-import { buildExportBilan } from "@/lib/separation/export-bilan-model";
-import { ExportLedgerDocument } from "./export-ledger-document";
-import { ExportMediationPanel } from "./export-mediation-panel";
-import { ExportPartnerOptInPanel } from "./export-partner-optin-panel";
+import { buildExpertExportPack } from "@/lib/separation/export-bilan-model";
+import { buildEmpreinteContextLine } from "@/lib/separation/empreinte-context";
+import { ExportActionDock } from "./export-action-dock";
+import { ExportBilanDocument } from "./export-bilan-document";
 import styles from "./export-bilan.module.css";
 
 export function ExportBilanShell() {
@@ -18,11 +18,12 @@ export function ExportBilanShell() {
   const lab = useSeparationStore((s) => s.lab);
   const lastResult = useSeparationStore((s) => s.derived.lastResult);
   const doorVerdicts = useSeparationStore((s) => s.derived.doorVerdicts);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
-  const model = useMemo(() => {
-    if (!lab.activeDoor) return null;
-    return buildExportBilan({
-      doorId: lab.activeDoor,
+  const pack = useMemo(() => {
+    if (!footprint || !assumptions || !lab) return null;
+    return buildExpertExportPack({
       footprint,
       assumptions,
       lab,
@@ -31,91 +32,107 @@ export function ExportBilanShell() {
     });
   }, [footprint, assumptions, lab, lastResult, doorVerdicts]);
 
-  if (!model) {
+  const activeChapter = useMemo(() => {
+    if (!pack) return null;
+    const active = lab.activeDoor;
     return (
-      <div className={styles.page}>
-        <div className={styles.document}>
-          <p className="text-sm text-slate-500">Préparation du document…</p>
-        </div>
+      pack.chapters.find((c) => c.doorId === active) ?? pack.chapters[0] ?? null
+    );
+  }, [pack, lab.activeDoor]);
+
+  const contextLine = buildEmpreinteContextLine(footprint);
+
+  const downloadExpertPdf = async () => {
+    if (!pack) return;
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      const res = await fetch("/api/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pack }),
+      });
+      if (!res.ok) throw new Error(`pdf ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "clarte-bilan-expert.pdf";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setDownloadError("Impossible de générer le PDF. Réessayez dans un instant.");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const backToLab = () => {
+    const door = lab.activeDoor;
+    router.push(door ? `/simulation/laboratoire/${door}` : "/simulation/portes");
+  };
+
+  if (!pack || !activeChapter) {
+    return (
+      <div className={`${clarte.mesh} flex min-h-[100dvh] items-center justify-center`}>
+        <div className="h-8 w-8 animate-pulse rounded-full bg-slate-200/80" />
       </div>
     );
   }
 
   return (
-    <div className={styles.page}>
-      <div className={styles.document}>
-        <header className={styles.header}>
-          <h1 className={styles.title}>{model.scenarioTitle}</h1>
-          <p className={styles.date}>{model.dateLabel}</p>
-        </header>
-
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Situation initiale</h2>
-          {model.footprint.map((field) => (
-            <div key={field.label} className={styles.fieldRow}>
-              <span className={styles.fieldLabel}>{field.label}</span>
-              <span className={styles.fieldValue}>{field.value}</span>
-            </div>
-          ))}
-        </section>
-
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Vos ajustements</h2>
-          {model.activeLevers.length === 0 ? (
-            <p className={styles.emptyLevers}>Aucun ajustement — on part des hypothèses standard.</p>
-          ) : (
-            model.activeLevers.map((lever) => (
-              <div key={lever.id} className={styles.leverRow}>
-                <span className={styles.leverLabel}>{lever.label}</span>
-                <span className={styles.leverValue}>{lever.value}</span>
-              </div>
-            ))
-          )}
-        </section>
-
-        {model.insights.length > 0 && (
-          <section className={styles.section}>
-            <h2 className={styles.sectionTitle}>Points d&apos;attention</h2>
-            {model.insights.map((insight) => (
-              <div key={insight.title} className={styles.insightBlock}>
-                <p className={styles.insightTitle}>{insight.title}</p>
-                <p className={styles.insightBody}>{insight.body}</p>
-              </div>
-            ))}
-          </section>
+    <div className={`${clarte.mesh} flex min-h-[100dvh] flex-col`}>
+      <header
+        className={cn(
+          "shrink-0 border-b border-slate-200/60 bg-white/50 px-4 py-3 backdrop-blur-sm md:px-8",
+          styles.noPrint
         )}
-
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Ce que ça donne</h2>
-          <ExportLedgerDocument ledger={model.ledger} />
-        </section>
-
-        <p className={styles.disclaimer}>{model.disclaimer}</p>
-
-        <div className={cn(styles.actions, styles.noPrint)}>
+      >
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <button
             type="button"
-            onClick={() => window.print()}
-            className={cn(clarte.btnPrimary, "px-6 py-3 text-sm")}
+            onClick={backToLab}
+            className="text-sm font-medium text-slate-500 transition-colors hover:text-brand-600"
           >
-            Imprimer / Sauvegarder en PDF
+            ← Retour
           </button>
+
+          <p className="hidden max-w-md truncate text-center text-sm text-slate-400 sm:block">
+            {contextLine || "Bilan de séparation"}
+          </p>
+
           <button
             type="button"
-            onClick={() => router.push(`/simulation/laboratoire/${lab.activeDoor}`)}
-            className={cn(clarte.btnGhost, "px-6 py-3 text-sm")}
+            onClick={() => void downloadExpertPdf()}
+            disabled={downloading}
+            className={cn(clarte.btnPrimary, "px-4 py-2 text-xs sm:text-sm")}
           >
-            ← Retour au scénario
+            {downloading ? "PDF…" : "Télécharger"}
           </button>
+        </div>
+      </header>
+
+      <div className="mx-auto w-full max-w-6xl flex-1 px-5 py-6 lg:px-8 lg:py-8">
+        <div className={cn(styles.page, "mx-auto max-w-3xl")}>
+          <ExportBilanDocument
+            chapter={activeChapter}
+            afterHeader={
+              lastResult ? (
+                <ExportActionDock
+                  scenarioTitle={activeChapter.bilan.scenarioTitle}
+                  result={lastResult}
+                  footprint={footprint}
+                  assumptions={assumptions}
+                  lab={lab}
+                  doorVerdicts={doorVerdicts}
+                />
+              ) : null
+            }
+            onPrint={() => window.print()}
+            downloadError={downloadError}
+          />
         </div>
       </div>
-
-      {lastResult && (
-        <div className={cn(styles.sidePanels, styles.noPrint)}>
-          <ExportMediationPanel scenarioTitle={model.scenarioTitle} />
-          <ExportPartnerOptInPanel result={lastResult} />
-        </div>
-      )}
     </div>
   );
 }

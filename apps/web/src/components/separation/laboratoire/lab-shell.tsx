@@ -98,19 +98,19 @@ export function LabShell({ doorId }: LabShellProps) {
       <div className="mx-auto grid min-h-0 w-full max-w-6xl flex-1 grid-cols-1 lg:grid-cols-2">
         <aside
           className={cn(
-            "flex min-h-0 flex-col border-slate-200/80 bg-white/40 lg:border-r",
+            "flex min-h-0 flex-col border-slate-200/90 bg-white/85 lg:border-r",
             mobilePanel === "calcul" ? "flex" : "hidden lg:flex"
           )}
         >
-          <LabLedgerSummary model={ledger} className="shrink-0 border-b border-slate-200/60 px-5 py-4 lg:px-8" />
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 lg:px-8 lg:py-5">
+          <LabLedgerSummary model={ledger} className="shrink-0 border-b border-slate-200/70 px-5 py-5 lg:px-8" />
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 lg:px-8 lg:py-6">
             <LabLedgerDetails model={ledger} />
           </div>
         </aside>
 
         <main
           className={cn(
-            "min-h-0 overflow-y-auto overscroll-contain px-5 py-6 lg:px-8 lg:py-8",
+            "min-h-0 overflow-y-auto overscroll-contain px-5 py-5 lg:px-8 lg:py-6",
             mobilePanel === "ajuster" ? "block" : "hidden lg:block"
           )}
         >

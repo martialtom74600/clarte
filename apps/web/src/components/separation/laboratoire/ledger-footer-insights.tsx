@@ -76,6 +76,11 @@ export function LedgerFooterInsights({
       };
   const panel = verdict ? VERDICT_PANEL[verdict.verdict] : null;
   const debtThreshold = debtThresholdMessage(debtPct, doorId);
+  // Relogement déjà détaillé dans la section ledger → ne pas le répéter ici.
+  const hasRelocateSection = ledger.lines.some(
+    (l) => l.id === "relocate-target" || l.id === "relocate-monthly" || l.id === "tenant-rent"
+  );
+  const showRelocateInsight = Boolean(relocateLine) && !hasRelocateSection;
 
   return (
     <>
@@ -112,13 +117,9 @@ export function LedgerFooterInsights({
                   <p className={cn("mt-1 text-xs leading-relaxed", panel.text)}>{debtLine}</p>
                   {debtThreshold && (
                     <p className={cn("mt-2 text-xs font-medium leading-relaxed", panel.text)}>
-                      {debtThreshold}
+                      Au-delà du plafond HCSF ({HCSF_DEBT_CEILING_PCT} %).
                     </p>
                   )}
-                  <p className="mt-2 text-[11px] leading-relaxed text-slate-600">
-                    Calcul : mensualités totales ÷ revenus nets mensuels (plafond HCSF{" "}
-                    {HCSF_DEBT_CEILING_PCT} %).
-                  </p>
                 </div>
                 <span
                   className={cn(
@@ -134,7 +135,7 @@ export function LedgerFooterInsights({
             </div>
           )}
 
-          {relocateLine && (
+          {showRelocateInsight && relocateLine && (
             <div className="rounded-lg border border-slate-200 bg-white/70 px-3 py-2">
               <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
                 Relogement

@@ -1,5 +1,6 @@
-import type { DoorId, SimulationInput, SimulationResult } from "@separation/schemas";
+import type { DoorId, DoorVerdictMap, SimulationInput, SimulationResult } from "@separation/schemas";
 import { compileSimulationInput } from "./compile-simulation-input";
+import { buildExpertExportPack, type ExpertExportPack } from "./export-bilan-model";
 import type { AssumptionsState, FootprintState, LabState } from "./separation-types";
 
 export interface SubmitSeparationLeadInput {
@@ -11,6 +12,7 @@ export interface SubmitSeparationLeadInput {
   assumptions: AssumptionsState;
   lab: LabState;
   result: SimulationResult;
+  doorVerdicts?: DoorVerdictMap | null;
 }
 
 export interface SubmitSeparationLeadResult {
@@ -52,6 +54,15 @@ export async function submitSeparationLead(
     return { success: false, error: "Scénario actif manquant." };
   }
 
+  const pack: ExpertExportPack | null = buildExpertExportPack({
+    footprint: params.footprint,
+    assumptions: params.assumptions,
+    lab: params.lab,
+    result: params.result,
+    doorVerdicts: params.doorVerdicts ?? null,
+    email: params.email.trim(),
+  });
+
   const response = await fetch("/api/leads", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -62,6 +73,7 @@ export async function submitSeparationLead(
       postalCode: params.footprint.postalCode,
       simulation,
       result: params.result,
+      pack: pack ?? undefined,
       optInPartnerMatch: params.optInPartnerMatch,
       scenarioPreference: params.lab.activeDoor,
       hasMinorChildren: params.assumptions.hasMinorChildren,

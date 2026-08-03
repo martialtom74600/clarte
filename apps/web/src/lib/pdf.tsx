@@ -1,3 +1,4 @@
+import type { SimulationInput, SimulationResult } from "@separation/schemas";
 import {
   Document,
   Page,
@@ -6,7 +7,11 @@ import {
   StyleSheet,
   pdf,
 } from "@react-pdf/renderer";
-import type { SimulationInput, SimulationResult } from "@separation/schemas";
+import { generateExpertBilanPdf } from "@/lib/expert-bilan-pdf";
+import type { ExpertExportPack } from "@/lib/separation/export-bilan-model";
+
+export { generateExpertBilanPdf } from "@/lib/expert-bilan-pdf";
+export type { ExpertExportPack } from "@/lib/separation/export-bilan-model";
 
 const styles = StyleSheet.create({
   page: { padding: 40, fontFamily: "Helvetica", fontSize: 11 },
@@ -27,6 +32,7 @@ function formatEuro(amount: number) {
   }).format(amount);
 }
 
+/** Fallback léger quand le pack expert n'est pas disponible (ex. leads legacy). */
 function SimulationPdfDocument({
   simulation,
   result,
@@ -63,9 +69,7 @@ function SimulationPdfDocument({
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Situation</Text>
           <Text>Statut : {simulation.status}</Text>
-          {simulation.marriageRegime && (
-            <Text>Régime : {simulation.marriageRegime}</Text>
-          )}
+          {simulation.marriageRegime && <Text>Régime : {simulation.marriageRegime}</Text>}
         </View>
 
         <View style={styles.section}>
@@ -90,12 +94,6 @@ function SimulationPdfDocument({
               {result.soulte.payer} verse à {result.soulte.receiver} pour{" "}
               {result.soulte.assetLabel}
             </Text>
-            {result.soulte.totalCashNeeded && (
-              <Text>
-                Cash total (soulte + droit de partage + émoluments) :{" "}
-                {formatEuro(result.soulte.totalCashNeeded.amount)}
-              </Text>
-            )}
           </View>
         )}
 
@@ -108,65 +106,9 @@ function SimulationPdfDocument({
                 A : {formatEuro(s.netWorthByPerson.A.amount)} • B :{" "}
                 {formatEuro(s.netWorthByPerson.B.amount)}
               </Text>
-              {(s.scenario === "keep_a" || s.scenario === "keep_b") && (
-                <View style={{ marginTop: 4 }}>
-                  {s.departureCapital && (
-                    <Text>
-                      Capital partant : {formatEuro(s.departureCapital.amount)}
-                      {s.departureRelocateVerdict
-                        ? ` — relogement ${s.departureRelocateVerdict}`
-                        : ""}
-                    </Text>
-                  )}
-                  {(s.occupationIndemnity?.amount ?? 0) > 0 && (
-                    <Text>
-                      Indemnité d&apos;occupation ({s.occupationMonths ?? 0} mois) :{" "}
-                      {formatEuro(s.occupationIndemnity!.amount)}
-                    </Text>
-                  )}
-                  {s.soulte && (
-                    <Text>
-                      Soulte : {formatEuro(s.soulte.amount.amount)} ({s.soulte.payer}→
-                      {s.soulte.receiver})
-                    </Text>
-                  )}
-                </View>
-              )}
-              {s.scenario === "rent_out" && s.rentOutBreakdown && (
-                <View style={{ marginTop: 4 }}>
-                  <Text>
-                    Cashflow net : {formatEuro(s.rentOutBreakdown.netCashflow.amount)}/mois
-                  </Text>
-                  <Text>
-                    Loyer {formatEuro(s.rentOutBreakdown.grossRent.amount)} − crédit{" "}
-                    {formatEuro(s.rentOutBreakdown.mortgagePayment.amount)} − TF{" "}
-                    {formatEuro(s.rentOutBreakdown.propertyTaxMonthly.amount)} − impôts{" "}
-                    {formatEuro(s.rentOutBreakdown.incomeTaxEstimate.amount)}
-                  </Text>
-                </View>
-              )}
-              {(s.scenario === "sell" || s.scenario === "sell_rent") && s.saleNetProceeds && (
-                <Text>
-                  Net vendeur : {formatEuro(s.saleNetProceeds.amount)}
-                  {s.capitalGainsNote ? ` — ${s.capitalGainsNote}` : ""}
-                  {s.scenario === "sell_rent" && s.tenantRentMonthly
-                    ? ` — loyer zone ~${formatEuro(s.tenantRentMonthly.amount)}/mois`
-                    : ""}
-                </Text>
-              )}
             </View>
           ))}
         </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Complexité : {result.complexityScore}/100</Text>
-        </View>
-
-        {result.warnings.map((w) => (
-          <Text key={w.code} style={{ fontSize: 10, marginBottom: 4 }}>
-            ⚠ {w.message}
-          </Text>
-        ))}
 
         <View style={styles.disclaimer}>
           {result.disclaimers.map((d, i) => (
@@ -178,12 +120,30 @@ function SimulationPdfDocument({
   );
 }
 
+/** PDF expert multi-portes — chemin principal (écran Export). */
+export async function generateBilanPdfFromPack(pack: ExpertExportPack): Promise<Buffer> {
+  return generateExpertBilanPdf(pack);
+}
+
+/**
+ * Génère un PDF. Si un pack expert est fourni, document multi-portes ;
+ * sinon fallback sommaire (leads sans lab snapshot).
+ */
 export async function generateSimulationPdf(
   simulation: SimulationInput,
   result: SimulationResult,
   email?: string,
-  proofId?: string
+  proofId?: string,
+  pack?: ExpertExportPack | null
 ): Promise<Buffer> {
+  if (pack) {
+    return generateExpertBilanPdf({
+      ...pack,
+      email: email ?? pack.email,
+      proofId: proofId ?? pack.proofId,
+    });
+  }
+
   const generatedAt = new Date().toISOString();
   const doc = (
     <SimulationPdfDocument
